@@ -108,16 +108,29 @@ class ElevationProvider(Protocol):
 
 每步都**先写测试再写实现**，且每步单独提交（铁律 R1）。
 
-| 步 | 内容 | 测试文件 |
-|:--:|---|---|
-| 1 | `physics/payload.py` + `physics/battery.py` + `physics/energy.py` | `tests/test_physics.py` |
-| 2 | `geo/crs.py` | `tests/test_geo.py` |
-| 3 | `geo/dem.py`（含 Provider 协议与解析实现） | `tests/test_geo.py` |
-| 4 | `geo/leg.py` | `tests/test_geo.py` |
-| 5 | `comms/link.py` + `comms/service.py` | `tests/test_comms.py` |
-| 6 | `verify/feasibility.py`（含负样本） | `tests/test_verify.py` |
+| 步 | 内容 | 测试文件 | 状态 |
+|:--:|---|---|:--:|
+| 1 | `physics/payload.py` + `physics/battery.py` + `physics/energy.py` | `tests/test_physics.py` | ✅ 完成 |
+| 2 | `geo/crs.py` | `tests/test_geo.py` | ✅ 完成 |
+| 3 | `geo/dem.py`（含 Provider 协议与解析实现） | `tests/test_geo.py` | ✅ 完成 |
+| 4 | `geo/leg.py` | `tests/test_geo.py` | ✅ 完成 |
+| 5 | `comms/link.py` + `comms/service.py` | `tests/test_comms.py` | ⬜ 待做 |
+| 6 | `verify/feasibility.py`（含负样本） | `tests/test_verify.py` | ⬜ 待做 |
+| 7 | `q0_data/build_processed.py` + `physics/leg_cache.py` | — | ⬜ 待做 |
+| 8 | Q1 求解器 | — | ⬜ 待做 |
 
-> 先做步 1：物理层是**纯函数**、无外部依赖、最容易测，且是 Q1–Q3 的共同基础。
+### 已完成部分的验证结果
+
+- **101 项测试全部通过**（含 3 项读取真实 DEM 的对照测试）
+- 真实数据冒烟（`scripts/smoke_physics_real_data.py`）：
+  - 单向距离 2808 ~ 8079 m，巡航海拔 271 ~ 586 m
+  - 三种机型在全部 15 个服务区**均可行**（无超能量情况）
+  - **A 型 15/15、B 型 14/15、C 型 10/15 个服务区受结构上限 `Q_g` 约束**，
+    仅 S002/S003/S004/S008/S012 对 C 型构成能量约束
+  - `q_max` 反解的能量约束**取等号**（相对偏差 5.6e-15）
+
+> **重要含义**：单点往返场景下**结构载重是主要瓶颈，能量是次要约束**。
+> 这会显著影响 Q1 组批方案的形态（详见 `docs/MODEL_NOTES.md`）。
 
 ---
 

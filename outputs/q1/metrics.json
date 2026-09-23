@@ -1,0 +1,26 @@
+{
+  "question": "q1",
+  "git_commit": "56da704fc1f553e42f72c6e8a9a42cec98b32898",
+  "timestamp": "2026-09-23T21:21:41.030531+08:00",
+  "seed": 42,
+  "data_sources": [
+    "调度中心与服务区.xlsx",
+    "物资需求与配送时限.xlsx",
+    "运输无人机数据.xlsx",
+    "30米DEM.tif"
+  ],
+  "metrics": {
+    "n_service_areas": 15,
+    "n_boxes": 80,
+    "n_uav_types": 3,
+    "chosen_strategy": "single_C",
+    "chosen_n_sorties": 18,
+    "chosen_total_energy_kwh": 75.070591,
+    "chosen_serial_total_time_s": 33729.471,
+    "lower_bound_total_sorties": 18,
+    "n_pareto": 2,
+    "n_strategies": 8,
+    "rho_sweep_points": 21,
+    "runtime_sec": 8.62
+  }
+}

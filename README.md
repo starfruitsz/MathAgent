@@ -1,6 +1,9 @@
 # MathAgent
 
-2026 年中国研究生数学建模竞赛 **F 题**（算力约束下提升大语言模型能力的资源配置建模）的建模工作仓库。
+2026 年中国研究生数学建模竞赛 **D 题**（山区洪涝灾害下无人机运输与通信协同优化）的建模工作仓库。
+
+> 历史：本仓库最初按 **F 题**搭建，后切换至 **D 题**。F 题遗留物（原规范、Q3 预研笔记）
+> 已归档至 `docs/legacy_F题/`，**只读保留，不再维护**。
 
 ---
 
@@ -10,15 +13,13 @@
 # 1. 同步仓库
 git pull --rebase origin main
 
-# 2. 环境
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+# 2. 环境（当前机器已装好全部依赖，可直接跳到第 3 步）
 pip install -r requirements.txt
 python scripts\check_env.py
 
 # 3. 读规范（必做）
-#    OPS_SPEC_F题.md  —— 唯一操作规范
-#    docs\PROGRESS.md —— 当前进度与阻塞项
+#    OPS_SPEC_D题.md   —— 唯一操作规范
+#    docs\PROGRESS.md  —— 当前进度与阻塞项
 ```
 
 ---
@@ -28,12 +29,12 @@ python scripts\check_env.py
 > ## 每次更改代码必须提交仓库
 >
 > 改完即 `commit`，`commit` 即 `push`。禁止累积多次改动后一次性提交。
-> 本仓库的规范文件（`OPS_SPEC_F题.md` 等 `*.md`）修改后同样**必须提交并推送**。
+> 本仓库的规范文件（`OPS_SPEC_D题.md` 等 `*.md`）修改后同样**必须提交并推送**。
 
 标准提交入口：
 
 ```powershell
-.\scripts\commit.ps1 -Scope q2 -Type model -Message "加入 Q=1 退化约束的广义标度律"
+.\scripts\commit.ps1 -Scope q2 -Type model -Message "加入电池充电周转约束"
 ```
 
 收工自检（两条输出都必须为空）：
@@ -43,7 +44,12 @@ git status --porcelain
 git log origin/main..HEAD --oneline
 ```
 
-完整的提交规范、目录结构、四问工作流与验收清单见 **`OPS_SPEC_F题.md`**。
+其余铁律（R3–R10）见 **`OPS_SPEC_D题.md`** 第 0 节。其中两条最容易踩：
+
+- **R4 物理口径唯一**：附录 2/3 的时间、能耗、充电、链路公式只在 `src/physics/`、`src/comms/`
+  实现一次，四个问题共用。各问各写一套 → 口径分叉 → 直接失分。
+- **R8 方案必须过校验器**：每个方案必须通过**独立**的可行性校验器才能写入结果文件；
+  校验器必须有**负样本测试**（能抓出超载/超能量/超时限/充电冲突）。
 
 ---
 
@@ -51,28 +57,38 @@ git log origin/main..HEAD --oneline
 
 ```
 MathAgent/
-├── OPS_SPEC_F题.md          ★ 唯一操作规范（先读这个）
-├── requirements.txt           依赖清单
-├── .gitignore                 提交边界（data/raw 与大数据不入库）
+├── OPS_SPEC_D题.md          ★ 唯一操作规范（先读这个）
+├── requirements.txt           依赖清单（已锁定版本）
+├── .gitignore                 提交边界（data/raw 与 DEM 不入库）
 ├── data/
-│   ├── raw/                   ★ 只读★ 竞赛官方附件（不入库）
+│   ├── raw/                   ★ 只读★ 竞赛官方附件
 │   ├── interim/               清洗后中间数据（不入库）
-│   └── processed/             建模就绪派生数据
-├── src/                       源码（common / q0_data / q1…q4 / report）
-├── outputs/                   ★ 证据链：metrics.json / params.json / 图表
+│   └── processed/             建模就绪派生数据（含 leg_cache.parquet）
+├── src/
+│   ├── common/                配置 / IO / 指标 / 单纯形
+│   ├── q0_data/               数据发现与建模接口构建
+│   ├── physics/               ★ 附录2 唯一实现（航段/能耗/载荷/电池）
+│   ├── geo/                   ★ DEM 采样 / 地形遮挡 / 坐标投影
+│   ├── comms/                 ★ 附录3 唯一实现（链路预算/三态判定）
+│   ├── q1_payload_grouping/   问题一
+│   ├── q2_transport_schedule/ 问题二
+│   ├── q3_comms_relay/        问题三
+│   ├── q4_partitioning/       问题四
+│   ├── verify/                ★ 可行性校验器
+│   └── report/                论文表格与图
+├── outputs/                   ★ 证据链：metrics/params/图表/校验报告
 ├── scripts/
 │   ├── commit.ps1             ★ 一键提交并推送
 │   ├── check_env.py           环境自检
-│   ├── run_all.ps1            端到端复现
-│   └── tools/                 从 GitHub 拉取的外部工具
+│   └── run_all.ps1            端到端复现
 ├── docs/
-│   ├── PROGRESS.md            ★ 进度看板（每次收工更新）
-│   ├── DATA_NOTES.md          数据说明摘录与编号映射
-│   ├── MODEL_NOTES.md         各问数学形式的推导与取舍
+│   ├── PROGRESS.md            ★ 进度看板
+│   ├── DATA_NOTES.md          ★ 附件字段结构实测记录
+│   ├── MODEL_NOTES.md         ★ 各问数学形式与推导
 │   ├── TOOLS.md               外部工具来源/版本/许可证
 │   ├── DECISIONS.md           决策记录（ADR）
-│   └── problem_statement.md   赛题原文存档
-└── tests/                     单元测试
+│   └── legacy_F题/            F 题归档（只读）
+└── tests/                     单元测试（物理公式必须逐条锁死）
 ```
 
 ---
@@ -81,25 +97,43 @@ MathAgent/
 
 | 阶段 | 内容 | 关键产出 |
 |---|---|---|
-| **P0** | 数据发现（★ 阻塞前置） | `outputs/data_inventory.json`、编号↔文件名对照 |
-| **P1 / Q1** | 数据质量评价、冲突消解、17 域配比建模 | 质量分 Q、冲突定义、配比→Loss 模型 |
-| **P2 / Q2** | 广义标度律 L(N,D,Q,p) 与弹性分析 | 参数估计、Q=1 退化验证、替代条件 |
-| **P3 / Q3** | 算力约束下的资源联合优化 | 三档预算最优解、**结构性转移**定义与识别 |
-| **P4 / Q4** | 技术演进分解与前沿预测 | 贡献占比、Loss↔Benchmark 桥接、12/24 月预测 |
+| **P0** | 数据发现 + 航段预计算（★ 阻塞前置） | `data_inventory.json`、`leg_cache.parquet` |
+| **P1 / Q1** | 单点往返最大安全载荷 + 货箱组批 | 3×15 载荷表、组批方案、ρ_g 敏感性 |
+| **P2 / Q2** | 异构无人机多点多架次调度 | 路线+架次+逐箱送达时刻+资源使用 |
+| **P3 / Q3** | 通信约束下的运输与中继联合调度 | 联合方案 + 连续通信保障 |
+| **P4 / Q4** | 任务分区（2 组 / 3 组）与资源配置 | 分区方案 + 冗余 + 资源缺口 |
+
+---
+
+## 关键物理口径（详见规范第 5 节）
+
+| 项 | 口径 |
+|---|---|
+| 巡航海拔 | 航段经过 DEM 像元的**最高地面高程 + 50 m** |
+| 作业高度 | O01 = 地面海拔；服务区 = 地面海拔 **+ 30 m** |
+| 载荷–航程 | `L_g(q) = L_g0 − (L_g0 − L_gF)·(q/Q_g)^(3/2)` |
+| 最大安全载荷 | 能量约束反解（**二分**，非解析） |
+| 航段能耗 | 水平巡航 + 爬升附加；**下降不单独计** |
+| 返航余量 | `E_p^T ≤ (1 − ρ_g)·E_g^use` |
+| 充电 | 两阶段：SOC<90% 占 `T_full` 的 65%，90–100% 占 35% |
+| FSPL | `32.45 + 20log₁₀f(MHz) + 20log₁₀D(km)` |
+| 双向门限 | `min(两方向)` |
+| 通信三态 | 直连 > 中继（两段**同时**可用）> 中断；**不允许多跳** |
 
 ---
 
 ## 当前状态
 
-**⚠️ 阻塞中**：`data/raw/` 为空。F 题所需的 A1–A18 / B1–B12 / C1–C10 全部附件与《数据说明》
-需先从竞赛官方渠道下载。详见 `docs/PROGRESS.md` 的"阻塞项"。
+**⚠️ 阻塞中**：`data/raw/` 为空。D 题所需的 5 个基础参数 xlsx + 30 m DEM +
+《镇龙乡地理空间数据说明.docx》需先从竞赛官方渠道下载。
+详见 `docs/PROGRESS.md` 的"阻塞项"。
 
 ---
 
 ## 学术规范红线（违反即取消参评资格）
 
-1. 不得引入任何其他公开或私有数据集参与训练、微调、调参、阈值选择或结果统计
-2. 不得把 B6–B8 半合成数据表述为直接实验观测
-3. 不得以 AI 输出作为学术依据；公式与结论须引用正式文献或可核验数据
-4. 不得直接复制 AI 生成的建模方案
-5. **论文必须披露 AI 工具使用情况**（工具名、输入、输出处理策略、框架、假设、超参数）
+1. 不得引入其他数据集替换赛题附件
+2. 不得以 AI 输出作为学术依据
+3. 不得直接复制 AI 生成的建模方案
+4. **论文必须披露 AI 工具使用情况**
+5. 提交材料中严禁出现参赛单位、队员姓名、队伍编号

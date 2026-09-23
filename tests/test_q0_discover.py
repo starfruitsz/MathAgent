@@ -13,47 +13,64 @@ from pathlib import Path
 
 import pytest
 
-from src.common.config import L_CTX_CRIT, ETA, CHINCHILLA_COEF, N_DOMAINS, N_QUALITY_INDICATORS
-from src.q0_data.discover import discover, guess_code
+from src.common.config import (
+    CHG_FAST_FRACTION,
+    CHG_FAST_SOC_BOUNDARY,
+    CHG_SLOW_FRACTION,
+    CRUISE_CLEARANCE_M,
+    DEM_RESOLUTION_M,
+    DOWNWARD_ENERGY_EFFICIENCY,
+    FSPL_CONSTANT,
+    M_TO_KM,
+    N_BOXES,
+    N_SERVICE_AREAS,
+    N_TASK_GROUPS,
+    N_UAV_PHYSICAL,
+    N_UAV_TYPES,
+    PAYLOAD_RANGE_EXPONENT,
+    SERVICE_AREA_OP_HEIGHT_M,
+    SOC_INITIAL,
+)
+from src.q0_data.discover import classify_file, discover
 
 
-# ---------------------------------------------------------------- 编号识别
+# ---------------------------------------------------------------- 附件分类（D 题）
 
 @pytest.mark.parametrize(
     ("filename", "expected"),
     [
-        # 单数字编号 + 下划线（回归测试：不能用 \b，下划线属于 \w）
-        ("B1_scaling.csv", "B1"),
-        ("A1_quality.json", "A1"),
-        ("C7_ctx.xlsx", "C7"),
-        # 双数字编号
-        ("A12.xlsx", "A12"),
-        ("A18_verify.csv", "A18"),
-        ("C10.csv", "C10"),
-        ("data_B12_aux.xlsx", "B12"),
-        # 中文前缀
-        ("附件B1.csv", "B1"),
-        # 纯编号
-        ("B1.csv", "B1"),
-        # 不应误匹配
-        ("readme.txt", None),
-        ("abc.csv", None),
-        ("summary.csv", None),
+        # 附录 1 的 5 个基础参数文件
+        ("调度中心与服务区.xlsx", "调度中心与服务区"),
+        ("物资需求与配送时限.xlsx", "物资需求与配送时限"),
+        ("运输无人机数据.xlsx", "运输无人机数据"),
+        ("中继无人机数据.xlsx", "中继无人机数据"),
+        ("通信链路参数.xlsx", "通信链路参数"),
+        # 容错：文件名带前后缀
+        ("附件3-运输无人机数据表.xlsx", "运输无人机数据"),
+        # DEM 栅格的各种扩展名
+        ("zhenlong_dem.tif", "30m DEM"),
+        ("dem.tiff", "30m DEM"),
+        ("copdem_30m.vrt", "30m DEM"),
+        # 地理空间说明文档
+        ("镇龙乡地理空间数据说明.docx", "地理空间数据说明"),
+        # 未分类
+        ("readme.txt", "未分类"),
+        ("random.xlsx", "未分类"),
+        # ★ 回归测试：非 xlsx 的表格/文本文件不得被误判为附件，
+        #    即使文件名含"运输无人机数据"关键词
+        ("运输无人机数据.json", "未分类"),
+        ("运输无人机数据.csv", "未分类"),
+        ("运输无人机数据.txt", "未分类"),
     ],
 )
-def test_guess_code(filename: str, expected: str | None) -> None:
-    assert guess_code(filename) == expected
+def test_classify_file(filename: str, expected: str) -> None:
+    assert classify_file(Path(filename)) == expected
 
 
-def test_guess_code_does_not_match_letters_inside_words() -> None:
-    """'abc.csv' 中的 'b'/'c' 后面没有数字，且前面是字母，不得匹配。"""
-    assert guess_code("abc.csv") is None
-    assert guess_code("summary.csv") is None
-    # 前缀是下划线时应当匹配（下划线不算字母数字）
-    assert guess_code("table_c3.csv") == "C3"
-    # 前缀是数字时不应匹配（避免 '9C3' 这类版本号误判）
-    assert guess_code("x9c3") is None
-    assert guess_code("9C3") is None
+def test_classify_excel_is_not_mistaken_for_dem() -> None:
+    """回归测试：'.tif' 等栅格扩展名判定必须优先于表格判定。"""
+    assert classify_file(Path("dem.tif")) == "30m DEM"
+    assert classify_file(Path("运输无人机数据.xlsx")) == "运输无人机数据"
 
 
 # ---------------------------------------------------------------- 空数据目录
@@ -93,24 +110,33 @@ def test_discover_relative_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
 
 
 def test_discover_parses_csv(tmp_path: Path) -> None:
-    (tmp_path / "B1_scaling.csv").write_text(
-        "N,D,loss\n1e8,1e9,3.2\n2e8,2e9,3.0\n", encoding="utf-8"
+    """CSV 不是附件格式，但结构探测功能本身必须正常。"""
+    (tmp_path / "nodes.csv").write_text(
+        "id,lon,lat,elev\nO01,109.1,22.9,120\n", encoding="utf-8"
     )
     rep = discover(root=tmp_path, out=tmp_path / "inv.json", deep=True)
     assert rep["status"] == "ok"
-    assert rep["code_to_files"]["B1"] == [
-        p for p in rep["code_to_files"]["B1"]
-    ]
     probe = rep["files"][0]["probe"]
     assert probe["kind"] == "table"
-    assert probe["columns"] == ["N", "D", "loss"]
-    assert probe["n_rows_est"] == 2
+    assert probe["columns"] == ["id", "lon", "lat", "elev"]
+    assert probe["n_rows_est"] == 1
+
+
+def test_discover_reports_missing_attachments(tmp_path: Path) -> None:
+    """附录 1 声明的 7 项附件若缺失，必须被如实列出。"""
+    (tmp_path / "运输无人机数据.xlsx").write_text("x", encoding="utf-8")
+    rep = discover(root=tmp_path, out=tmp_path / "inv.json", deep=False)
+    missing = rep["attachments_missing"]
+    assert "30m DEM" in missing
+    assert "通信链路参数" in missing
+    # 已提供的这一项不应出现在缺失列表
+    assert "运输无人机数据" not in missing
 
 
 def test_discover_writes_json(tmp_path: Path) -> None:
-    (tmp_path / "A1_q.json").write_text('{"q": 1}', encoding="utf-8")
+    (tmp_path / "中继无人机数据.xlsx").write_text("x", encoding="utf-8")
     out = tmp_path / "sub" / "inv.json"
-    discover(root=tmp_path, out=out, deep=True)
+    discover(root=tmp_path, out=out, deep=False)
     assert out.exists()
     data = json.loads(out.read_text(encoding="utf-8"))
     assert data["status"] == "ok"
@@ -149,13 +175,34 @@ def test_discover_output_inside_scan_dir_is_not_reproducible(tmp_path: Path) -> 
 
 # ---------------------------------------------------------------- 题目常量（防手误）
 
-def test_ctx_crit_analytic_value() -> None:
-    """L_ctx^crit = 6 / eta = 30000 —— 题目要求解析给出，此处锁定数值。"""
-    assert ETA == pytest.approx(2e-4)
-    assert CHINCHILLA_COEF == pytest.approx(6.0)
-    assert L_CTX_CRIT == pytest.approx(30000.0)
+def test_d_problem_scenario_constants() -> None:
+    """D 题场景规模：1 个调度中心 + 15 服务区 + 80 货箱 + 3 机型 8 架。"""
+    assert N_SERVICE_AREAS == 15
+    assert N_BOXES == 80
+    assert N_UAV_TYPES == 3
+    assert N_UAV_PHYSICAL == 8
+    assert DEM_RESOLUTION_M == 30.0
 
 
-def test_problem_scale_constants() -> None:
-    assert N_DOMAINS == 17
-    assert N_QUALITY_INDICATORS == 22
+def test_d_physics_constants() -> None:
+    """附录 2 的关键口径，锁死防止手误。"""
+    assert CRUISE_CLEARANCE_M == 50.0, "巡航海拔 = 最高地面高程 + 50 m"
+    assert SERVICE_AREA_OP_HEIGHT_M == 30.0, "服务区作业高度 = 地面海拔 + 30 m"
+    assert DOWNWARD_ENERGY_EFFICIENCY == 0.0, "下降能耗效率取 0，不单独计能耗"
+    assert PAYLOAD_RANGE_EXPONENT == 1.5, "载荷-航程关系是 3/2 次幂"
+
+
+def test_d_battery_constants() -> None:
+    """附录 2 的两阶段充电模型常数。"""
+    assert CHG_FAST_SOC_BOUNDARY == 0.90
+    assert CHG_FAST_FRACTION == 0.65
+    assert CHG_SLOW_FRACTION == 0.35
+    assert CHG_FAST_FRACTION + CHG_SLOW_FRACTION == pytest.approx(1.0)
+    assert SOC_INITIAL == 1.0
+
+
+def test_d_comms_constants() -> None:
+    """附录 3 的链路常量与单位换算。"""
+    assert FSPL_CONSTANT == 32.45
+    assert M_TO_KM == 1000.0
+    assert N_TASK_GROUPS == (2, 3), "Q4 要求考察 2 组与 3 组"

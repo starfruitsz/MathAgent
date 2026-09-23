@@ -1,9 +1,10 @@
-"""全局配置与常量。
+"""全局配置与常量 —— D 题。
 
-规范（OPS_SPEC 第 7.1 节）：
+规范（OPS_SPEC_D题 第 7.1 节 / ADR-005）：
     - 所有超参、路径、常量集中在本文件与 configs/*.yaml
     - 代码里禁止硬编码魔法数字
     - 所有随机过程必须使用 SEED
+    - ★ 内部一律使用 SI 单位；单位换算集中在此处定义
 """
 
 from __future__ import annotations
@@ -20,8 +21,9 @@ OUTPUTS = REPO_ROOT / "outputs"
 DOCS = REPO_ROOT / "docs"
 CONFIGS = REPO_ROOT / "configs"
 
-# 竞赛附件根目录（题目所述 real_attachments/）
-REAL_ATTACHMENTS = DATA_RAW / "real_attachments"
+# 竞赛附件根目录（题目所述两个子目录）
+ATTACH_BASE_PARAMS = DATA_RAW / "无人机应急物资运输基础数据"
+ATTACH_GEOSPATIAL = DATA_RAW / "镇龙乡地理空间数据"
 
 
 def outputs_dir(question: str) -> Path:
@@ -37,115 +39,113 @@ SEED = 42
 """全局随机种子。任何随机过程都必须使用它，保证结果可复现。"""
 
 
-# ---------------------------------------------------------------- 题目给定的物理/数学常量
+# ---------------------------------------------------------------- 场景规模（题目正文给定）
 
-# --- 问题三：算力成本模型（题目正文明确给出，不得改动）---
+N_SERVICE_AREAS = 15
+"""服务区数量，编号 S1..S15。"""
 
-CHINCHILLA_COEF = 6.0
-"""C_train = 6 * N * D（Chinchilla 近似）。"""
+N_BOXES = 80
+"""货箱数量（**不可拆分**）。"""
 
-ETA = 2e-4
-"""长文本注意力开销系数：C_attn = eta * N * D * L_ctx。"""
+N_UAV_TYPES = 3
+"""运输无人机机型数。"""
 
-L_CTX_CRIT = CHINCHILLA_COEF / ETA
-"""临界上下文长度：使注意力开销与基础训练开销相当的 L_ctx。
+N_UAV_PHYSICAL = 8
+"""运输无人机实体架数。"""
 
-    eta * N * D * L_ctx = 6 * N * D  =>  L_ctx = 6 / eta = 30000
+DEM_RESOLUTION_M = 30.0
+"""DEM 分辨率（米）。"""
 
-题目明确要求"解析给出"，此为解析结果。
-"""
+DISPATCH_CENTER_ID = "O01"
+"""临时调度中心标识。"""
 
-BUDGETS = (1e19, 1e22, 1e24)
-"""题目建议考察的三档算力预算（FLOPs）。可自行选取其他档位，但至少三个不同量级。"""
-
-BUDGET_SCAN_RANGE = (15.0, 27.0)
-"""结构性转移识别时 log10(C) 的扫描区间。"""
-
-BUDGET_SCAN_STEPS = 241
-"""扫描点数（步长约 0.05 dex）。"""
-
-# --- 附录 B：数据质量成本函数 g(Q) ---
-
-QUALITY_COST_FORMS = {
-    "exponential": {"gamma": 1e7, "lambda": 6.0, "label": "指数型"},
-    "power": {"gamma": 5e9, "lambda": 4.0, "label": "幂函数型"},
-    "log_asymptotic": {"gamma": 2e9, "lambda": 10.0, "label": "对数渐进型"},
-}
-"""附录 B.1 给出的三种 g(Q) 形式及其参数：
-
-    exponential:    g(Q) = gamma * exp(lambda * Q)
-    power:          g(Q) = gamma * Q ** lambda
-    log_asymptotic: g(Q) = gamma * ln(1 + lambda * Q)
-
-成本项为 C_Q = D * [g(Q) - g(Q0)]_+（增量成本形式）。
-"""
-
-QUALITY_BOUNDS = (1e-6, 1.0)
-"""质量 Q 的取值区间 (0, 1]。下界取 1e-6 而非 0，避免 log/幂运算奇异。"""
+GATEWAY_ID = "G01"
+"""固定网关标识（设于 O01）。"""
 
 
-# ---------------------------------------------------------------- 数据编号（题目正文已明确）
+# ---------------------------------------------------------------- 附录 2：航段与作业高度
 
-# 质量信号数据
-A_QUALITY_SAMPLED = ("A1",)
-A_QUALITY_EXTENDED = ("A2", "A3")
-A_QUALITY_ALL = A_QUALITY_SAMPLED + A_QUALITY_EXTENDED
+CRUISE_CLEARANCE_M = 50.0
+"""巡航海拔 = 航段经过 DEM 像元的最高地面高程 + 该高度（米）。"""
 
-# 配方实验数据
-A_MIXTURE_TRAIN = ("A4", "A5")
-A_MIXTURE_TEST = ("A6", "A7", "A8", "A9", "A10", "A11")
-A_MIXTURE_EXTRAP = ("A12", "A13", "A14", "A15")
-A_MIXTURE_ALL = A_MIXTURE_TRAIN + A_MIXTURE_TEST + A_MIXTURE_EXTRAP
+SERVICE_AREA_OP_HEIGHT_M = 30.0
+"""服务区作业高度 = 地面海拔 + 30 m。"""
 
-A_CROSSWALK = "A16"
-"""跨体系域分类参考映射。"""
-A_VERIFY = "A18"
-"""质量评分验算（可选用）。"""
+DOWNWARD_ENERGY_EFFICIENCY = 0.0
+"""下降能耗效率取 0 → **不单独计算下降附加能耗**（题目明确）。"""
 
-# 标度律数据
-B_MAIN_FIT = "B1"
-B_TRAJECTORY = ("B2", "B3")
-"""模型族外 / 插值轨迹验证，须使用其中之一。"""
-B_CROSSFAMILY = ("B4", "B5")
-"""跨族 / 文献验证。"""
-B_SEMISYNTH = ("B6", "B7", "B8")
-"""半合成补充集 —— 可用于补充分析，但不得表述为直接实验观测。"""
-B_EXTRAPOLATION = ("B9", "B10")
-"""百亿参数以上外推讨论，须标注可信度边界。"""
-B_AUX = ("B11", "B12")
-
-# 评测与桥接数据
-C_EVAL_PRIMARY = ("C1", "C2")
-C_EVAL_META = "C3"
-C_MODEL_META = "C4"
-"""含算力、数据量、开源权重等字段。"""
-C_BRIDGE = ("C5", "C6")
-"""Loss–Benchmark 桥接数据，须按可比性等级区分使用。"""
-C_CTX_LENGTH = "C7"
-"""★ 上下文长度 L_ctx 的可行取值依据。Q3 中 L_ctx 外生给定，可行取值必须依据 C7。"""
-C_PERTASK = "C8"
-"""逐任务评测明细 —— Q4 须做至少一项逐任务分析，不得仅用汇总表。"""
-C_10 = "C10"
-
-# ---------------------------------------------------------------- 可信度等级
-
-CREDIBILITY_LEVELS = {
-    "measured": "直接实验观测",
-    "semi_synthetic": "半合成（基于真实数据校准）—— 可补充分析，不得表述为直接观测",
-    "estimated": "估算/外推 —— 须标注边界",
-}
+PAYLOAD_RANGE_EXPONENT = 1.5
+"""载荷-航程关系的指数：L_g(q) = L_g0 − (L_g0−L_gF)·(q/Q_g)^(3/2)。"""
 
 
-# ---------------------------------------------------------------- 领域与指标规模
+# ---------------------------------------------------------------- 附录 2：两阶段充电模型
 
-N_DOMAINS = 17
-"""17 个训练领域（The Pile 子领域）。配比 p 是 17 维单纯形上的点。"""
+CHG_FAST_SOC_BOUNDARY = 0.90
+"""快速/慢速阶段分界 SOC。"""
 
-N_QUALITY_INDICATORS = 22
-"""22 个质量指标，方向须全部统一为"越高越好"。"""
+CHG_FAST_FRACTION = 0.65
+"""0% → 90% 占等效完全充电时间的比例。"""
+
+CHG_SLOW_FRACTION = 0.35
+"""90% → 100% 占等效完全充电时间的比例。"""
+
+SOC_INITIAL = 1.0
+"""所有能源资源初始 SOC = 100%。"""
+
+SOC_TOL = 1e-6
+"""SOC 比较容差。"""
+
+
+# ---------------------------------------------------------------- 附录 3：通信链路
+
+FSPL_CONSTANT = 32.45
+"""FSPL 常数项：L = 32.45 + 20log10(f_MHz) + 20log10(D_km)。"""
+
+M_TO_KM = 1000.0
+"""★ 单位换算：内部距离单位是 m，代入 FSPL 前必须除以该值。"""
+
+OBSTRUCTION_ADDITIONAL_LOSS_DB = None
+"""地形遮挡附加损耗 L_obs，**取值见通信链路参数.xlsx**，由 P0 阶段回填。"""
 
 
 # ---------------------------------------------------------------- 数值容差
 
+PAYLOAD_ROOT_TOL = 1e-6
+"""最大安全载荷反解（brentq）的收敛容差。"""
+
 SIMPLEX_TOL = 1e-6
-"""判断 sum(p) == 1 的容差。"""
+"""判断成分/配比之和等于 1 的容差（`src/common/simplex.py` 使用）。
+
+D 题本身不需要单纯形运算，但该工具保留以便处理"占比/份额"类指标
+（如各组工作量占比、资源占比）。
+"""
+
+ENERGY_FEASIBILITY_TOL = 1e-6
+"""能量约束回代验证的相对容差。"""
+
+TIME_TOL = 1e-6
+"""时间比较容差（秒）。"""
+
+
+# ---------------------------------------------------------------- 连续通信判定
+
+COMM_SAMPLE_DT_S = 1.0
+"""连续通信判定的采样步长（秒）。
+
+★ 题目要求运输无人机在爬升/巡航/下降/投送**全程**保持通信，
+  因此必须沿航段逐时刻采样（ADR-007）。该步长须做**敏感性分析**，
+  并在论文中说明取值依据与对结论的影响。
+"""
+
+COMM_SAMPLE_DISTANCE_M = 50.0
+"""备选采样方式：按航段距离步长采样（米）。
+
+当航段很长而速度较慢时，按距离采样比按时间采样更节省计算量。
+实现时二者取其一，并在论文中说明。
+"""
+
+
+# ---------------------------------------------------------------- 问题规模提示
+
+N_TASK_GROUPS = (2, 3)
+"""Q4 要求考察的任务分组数。"""

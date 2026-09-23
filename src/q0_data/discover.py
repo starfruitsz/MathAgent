@@ -1,14 +1,17 @@
-"""第 0 步：数据发现（★ 阻塞性前置任务）。
+"""第 0 步：数据发现（★ D 题阻塞性前置任务）。
 
 用途：
     在 data/raw/ 下清点竞赛官方附件，解析结构化文件的字段结构，
-    生成"编号 ↔ 实际文件名"对照表，并输出 data_inventory.json。
+    生成"附件类别 ↔ 实际文件名"对照表，并输出 data_inventory.json。
 
 为什么必须先做：
-    题目原文声明"若清单与实际磁盘文件不一致，以实际文件为准"。
-    因此 A1–A18 / B1–B12 / C1–C10 的真实文件名、字段名、形状
-    必须以实测为准；尤其 C7（决定 Q3 中 L_ctx 的可行取值）与
-    C5/C6（决定 Q4 桥接映射的分层方式）必须在此阶段确认。
+    附录 1 只给了**文件名**，没有给字段名。以下关键项必须以实测为准：
+      - 坐标是经纬度还是投影坐标（决定 src/geo/crs.py 的实现）
+      - DEM 的 CRS / 分辨率 / nodata / 高程基准（决定地形与遮挡计算）
+      - 3 种机型的全部参数列名与单位
+      - 8 架实体无人机在 3 种机型间如何分配
+      - 货箱体积单位是否与机型装载体积上限一致
+      - 链路预算参数在各主体（G01 / 运输机 / 中继机）间是否分别给值
 
 用法：
     python -m src.q0_data.discover
@@ -27,7 +30,8 @@ from pathlib import Path
 from typing import Any
 
 from src.common.config import (
-    CREDIBILITY_LEVELS,
+    ATTACH_BASE_PARAMS,
+    ATTACH_GEOSPATIAL,
     DATA_RAW,
     OUTPUTS,
     REPO_ROOT,
@@ -40,24 +44,51 @@ except Exception:
     pass
 
 
-# ---------------------------------------------------------------- 编号识别
+# ---------------------------------------------------------------- D 题附件识别
 
-# 附件编号形如 A1 / A12 / B6 / C10，可能出现在文件名任意位置（如 "B1_scaling.csv"）。
-# 注意：不能用 \b —— 下划线属于 \w，`B1_x` 中 1 与 _ 之间没有单词边界，会漏匹配。
-# 因此改用显式 lookaround，只要求两侧不是字母数字。
-_CODE_RE = re.compile(r"(?<![A-Za-z0-9])([ABC])(\d{1,2})(?![0-9])", re.IGNORECASE)
+# 附录 1 明确给出的 5 个基础参数文件（用关键词模糊匹配真实文件名）
+BASE_PARAM_FILES = {
+    "调度中心与服务区": ["调度中心", "服务区"],
+    "物资需求与配送时限": ["物资需求", "配送时限"],
+    "运输无人机数据": ["运输无人机"],
+    "中继无人机数据": ["中继无人机"],
+    "通信链路参数": ["通信链路", "链路参数"],
+}
+
+# 地理空间与 DEM
+GEOSPATIAL_KEYWORDS = {
+    "DEM": [".tif", ".tiff", ".hgt", ".asc", ".img", ".vrt", ".dem"],
+    "地理空间数据说明": ["说明"],
+}
 
 
-def guess_code(name: str) -> str | None:
-    """从文件名中推测附件编号（A1–A18 / B1–B12 / C1–C10）。
+def classify_file(path: Path) -> str:
+    """按附录 1 的清单把文件归类。返回中文类别名或 '未分类'。"""
+    name = path.name
+    suffix = path.suffix.lower()
 
-    只取第一个匹配；无法判断时返回 None，交由人工核对。
-    """
-    m = _CODE_RE.search(name)
-    if not m:
-        return None
-    return f"{m.group(1).upper()}{int(m.group(2))}"
+    # ① 栅格优先判定（★ 不能放在表格判定之后，否则 .tif 会被误判）
+    if suffix in GEOSPATIAL_KEYWORDS["DEM"]:
+        return "30m DEM"
 
+    # ② 地理空间说明文档
+    if suffix in {".docx", ".doc"} and "说明" in name:
+        return "地理空间数据说明"
+
+    # ③ 基础参数只能是表格类文件（★ 排除 .json/.txt/.csv 等非附件格式）
+    if suffix in {".xlsx", ".xls"}:
+        for label, keys in BASE_PARAM_FILES.items():
+            if all(k in name for k in keys):
+                return label
+        # 容错：部分关键词命中即可
+        for label, keys in BASE_PARAM_FILES.items():
+            if any(k in name for k in keys):
+                return f"{label}（模糊匹配）"
+
+    return "未分类"
+
+
+# ---------------------------------------------------------------- 文件名工具
 
 def file_sha256(path: Path, chunk: int = 1 << 20) -> str:
     """计算文件 sha256（用于可追溯性与去重）。"""
@@ -176,6 +207,64 @@ def probe_npz(path: Path) -> dict[str, Any]:
         return {"error": f"{type(e).__name__}: {e}"}
 
 
+def probe_raster(path: Path) -> dict[str, Any]:
+    """探测 DEM 栅格：CRS、分辨率、范围、nodata、高程统计（★ D 题关键）。"""
+    try:
+        import rasterio
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"rasterio 不可用: {type(e).__name__}: {e}"}
+
+    try:
+        with rasterio.open(path) as src:
+            info: dict[str, Any] = {
+                "kind": "raster",
+                "crs": str(src.crs) if src.crs else None,
+                "crs_epsg": src.crs.to_epsg() if src.crs else None,
+                "width": src.width,
+                "height": src.height,
+                "n_bands": src.count,
+                "dtype": str(src.dtypes[0]),
+                "nodata": src.nodata,
+                # 分辨率：★ 若 CRS 是经纬度，单位是度，需换算成米（约 ×111320）
+                "res": [float(r) for r in src.res],
+                "bounds": {
+                    "left": src.bounds.left,
+                    "bottom": src.bounds.bottom,
+                    "right": src.bounds.right,
+                    "top": src.bounds.top,
+                },
+                "is_geographic": bool(src.crs.is_geographic) if src.crs else None,
+            }
+            # 抽样读取以控制内存（大步长降采样）
+            step = max(1, min(src.height, src.width) // 512)
+            arr = src.read(
+                1,
+                out_shape=(max(1, src.height // step), max(1, src.width // step)),
+            )
+            import numpy as np
+
+            valid = arr[arr != src.nodata] if src.nodata is not None else arr
+            if valid.size:
+                info["elevation_stats"] = {
+                    "min": float(np.min(valid)),
+                    "max": float(np.max(valid)),
+                    "mean": float(np.mean(valid)),
+                    "sampled_pixels": int(valid.size),
+                    "nodata_fraction": float(1 - valid.size / arr.size),
+                }
+            # 经纬度栅格的分辨率换算提示
+            if info["is_geographic"] and info["res"]:
+                deg = info["res"][0]
+                info["res_approx_m"] = round(deg * 111320.0, 2)
+                info["WARNING"] = (
+                    "CRS 是地理坐标系（经纬度），分辨率单位是度；"
+                    "计算水平距离前必须先投影到米制 CRS（见 OPS_SPEC 2.3 节 / ADR-011）"
+                )
+            return info
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"{type(e).__name__}: {e}"}
+
+
 PROBES = {
     ".csv": probe_csv,
     ".tsv": probe_csv,
@@ -185,6 +274,12 @@ PROBES = {
     ".pkl": probe_pickle,
     ".pickle": probe_pickle,
     ".npz": probe_npz,
+    ".tif": probe_raster,
+    ".tiff": probe_raster,
+    ".img": probe_raster,
+    ".vrt": probe_raster,
+    ".hgt": probe_raster,
+    ".asc": probe_raster,
 }
 
 
@@ -249,27 +344,25 @@ def discover(root: Path, out: Path, deep: bool = True) -> dict[str, Any]:
             "name": p.name,
             "suffix": p.suffix.lower(),
             "size_bytes": p.stat().st_size,
-            "guessed_code": guess_code(p.name),
+            "attachment_class": classify_file(p),
             "sha256": file_sha256(p) if p.stat().st_size < 50 * 1024 * 1024 else "skipped(large)",
         }
         if deep and p.suffix.lower() in PROBES:
             rec["probe"] = PROBES[p.suffix.lower()](p)
         records.append(rec)
 
-    # 编号 → 文件 对照表
-    code_map: dict[str, list[str]] = {}
+    # 类别 → 文件 对照表
+    class_map: dict[str, list[str]] = {}
     for r in records:
-        if r["guessed_code"]:
-            code_map.setdefault(r["guessed_code"], []).append(r["path"])
+        class_map.setdefault(r["attachment_class"], []).append(r["path"])
 
-    # 题目正文声明必须存在的编号（用于完整性检查）
-    expected = (
-        [f"A{i}" for i in range(1, 19)]
-        + [f"B{i}" for i in range(1, 13)]
-        + [f"C{i}" for i in range(1, 11)]
-    )
-    missing = [c for c in expected if c not in code_map]
-    ambiguous = {c: v for c, v in code_map.items() if len(v) > 1}
+    # 附录 1 声明必须存在的附件（用于完整性检查）
+    expected = list(BASE_PARAM_FILES.keys()) + ["30m DEM", "地理空间数据说明"]
+    missing = [
+        c
+        for c in expected
+        if not any(k.startswith(c) for k in class_map)
+    ]
 
     report = {
         "status": "ok",
@@ -278,10 +371,8 @@ def discover(root: Path, out: Path, deep: bool = True) -> dict[str, Any]:
         "root": _rel_to_repo(root),
         "n_files": len(records),
         "total_bytes": sum(r["size_bytes"] for r in records),
-        "code_to_files": code_map,
-        "codes_missing": missing,
-        "codes_ambiguous": ambiguous,
-        "credibility_levels": CREDIBILITY_LEVELS,
+        "class_to_files": class_map,
+        "attachments_missing": missing,
         "files": records,
     }
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -290,7 +381,9 @@ def discover(root: Path, out: Path, deep: bool = True) -> dict[str, Any]:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="F 题数据发现（P0 阻塞性前置任务）")
+    ap = argparse.ArgumentParser(
+        description="D 题数据发现（P0 阻塞性前置任务）"
+    )
     ap.add_argument("--root", type=Path, default=DATA_RAW, help="原始数据根目录")
     ap.add_argument(
         "--out",
@@ -303,9 +396,9 @@ def main() -> int:
 
     rep = discover(args.root, args.out, deep=not args.shallow)
 
-    print("=" * 68)
-    print("P0 数据发现")
-    print("=" * 68)
+    print("=" * 70)
+    print("D 题 · P0 数据发现")
+    print("=" * 70)
     print(f"根目录   : {rep.get('root')}")
     print(f"状态     : {rep['status']}")
     print(f"文件数   : {rep.get('n_files', 0)}")
@@ -321,25 +414,29 @@ def main() -> int:
         return 1
 
     print()
-    print("编号 → 文件 对照：")
-    for code in sorted(rep["code_to_files"], key=lambda c: (c[0], int(c[1:]))):
-        for f in rep["code_to_files"][code]:
-            print(f"  {code:<4} {f}")
+    print("附件类别 → 文件：")
+    for cls in sorted(rep["class_to_files"]):
+        for f in rep["class_to_files"][cls]:
+            print(f"  [{cls:<22}] {f}")
 
-    if rep["codes_ambiguous"]:
+    if rep["attachments_missing"]:
         print()
-        print("⚠️  编号歧义（同一编号匹配到多个文件，需人工核对）：")
-        for c, v in rep["codes_ambiguous"].items():
-            print(f"  {c}: {v}")
+        print(f"⚠️  附录 1 声明但未匹配到的附件（{len(rep['attachments_missing'])} 项）：")
+        for c in rep["attachments_missing"]:
+            print(f"   - {c}")
+        print("   注：文件名可能不含预期关键词，请人工核对 docs/DATA_NOTES.md")
 
-    if rep["codes_missing"]:
-        print()
-        print(f"⚠️  题目声明但未匹配到的编号（{len(rep['codes_missing'])} 个）：")
-        print("   " + " ".join(rep["codes_missing"]))
-        print("   注：文件名可能不含编号，请人工核对 docs/DATA_NOTES.md")
+    # DEM 是地理坐标系的警告要显式提示（★ 单位陷阱）
+    for r in rep["files"]:
+        probe = r.get("probe") or {}
+        if probe.get("kind") == "raster" and probe.get("WARNING"):
+            print()
+            print("⚠️  DEM 警告：")
+            print(f"   {r['name']}: {probe['WARNING']}")
 
     print()
-    print("下一步：把实测字段结构回填到 docs/DATA_NOTES.md，并确认 C7 / C5 / C6 的具体内容。")
+    print("下一步：把实测字段结构回填到 docs/DATA_NOTES.md，")
+    print("        并确认坐标 CRS、8 架机的机型分配、货箱体积单位等未决项。")
     return 0
 
 

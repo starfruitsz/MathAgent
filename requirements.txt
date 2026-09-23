@@ -1,7 +1,7 @@
-# F 题依赖清单（锁定为当前环境实测通过的精确版本）
-# 环境：Python 3.13.7 / Windows 11 / AMD64，全部 20 个包安装 + 导入验证通过
-# 规范（OPS_SPEC 第 2.2 节）：必须锁定版本（==），禁止使用 >= 或未固定版本
-# 完整依赖树（含传递依赖）见 requirements.lock.txt
+# D 题依赖清单（山区洪涝灾害下无人机运输与通信协同优化）
+# 环境：Python 3.13.7 / Windows 11 / AMD64，全部安装 + 导入验证通过
+# 规范（OPS_SPEC_D题 第 2.2 节）：必须锁定版本（==），禁止使用 >= 或未固定版本
+# 完整依赖树见 requirements.lock.txt
 
 # ---- 数值与数据 ----
 numpy==2.4.4
@@ -9,33 +9,37 @@ scipy==1.17.1
 pandas==3.0.2
 pyarrow==25.0.1
 
-# ---- 统计建模与回归 ----
+# ---- 地理空间（D题核心） ----
+rasterio==1.5.1
+geopandas==1.1.4
+shapely==2.1.2
+pyproj==3.8.0
+scikit-image==0.26.0
+
+# ---- 运筹与优化（D题核心） ----
+ortools==9.15.6755
+pymoo==0.6.2
+cvxpy==1.9.3
+networkx==3.7
+
+# ---- 统计与不确定 ----
 statsmodels==0.15.0
 scikit-learn==1.8.0
 lmfit==1.3.4
 iminuit==2.33.0
-
-# ---- 优化 ----
-pymoo==0.6.2
-cvxpy==1.9.3
-
-# ---- 不确定性与因果 ----
+mapie==1.5.0
 dowhy==0.14
 econml==0.17.0
-mapie==1.5.0
-
-# ---- 幂律/标度律专用 ----
 powerlaw==2.0.0
 
 # ---- 可视化 ----
 matplotlib==3.10.9
 seaborn==0.13.2
+folium==0.20.0
 
-# ---- 实验管理 ----
+# ---- 工程与测试 ----
 PyYAML==6.0.3
 tqdm==4.70.1
 joblib==1.5.3
-
-# ---- 测试 ----
 pytest==9.1.1
 

@@ -50,6 +50,7 @@ def line_of_sight_margin(
     alt2_m: float,
     sample_step_m: float = DEM_RESOLUTION_M,
     clearance_m: float = 0.0,
+    plane: object = None,
 ) -> LosResult:
     """沿视线采样并返回最差余量。
 
@@ -58,6 +59,8 @@ def line_of_sight_margin(
     alt1_m, alt2_m : 两端点的**绝对高程**（m）
     sample_step_m  : 采样步长（m）
     clearance_m    : 视线额外抬高量（m），用于保守判定；0 表示严格几何视线
+    plane          : 预先构造的局部切平面。★ 性能：高频调用时应由调用方
+                     预构造一次并复用，避免每次重复计算曲率半径与三角函数。
     """
     import math
 
@@ -66,9 +69,10 @@ def line_of_sight_margin(
     if sample_step_m <= 0:
         raise ValueError("采样步长必须为正")
 
-    plane = make_local_plane(center=((lon1 + lon2) / 2, (lat1 + lat2) / 2))
-    x1, y1 = plane.to_xy(lon1, lat1)
-    x2, y2 = plane.to_xy(lon2, lat2)
+    if plane is None:
+        plane = make_local_plane(center=((lon1 + lon2) / 2, (lat1 + lat2) / 2))
+    x1, y1 = plane.to_xy(lon1, lat1)  # type: ignore[attr-defined]
+    x2, y2 = plane.to_xy(lon2, lat2)  # type: ignore[attr-defined]
     length = math.hypot(x2 - x1, y2 - y1)
     n = max(1, int(math.ceil(length / sample_step_m)))
 
@@ -76,17 +80,18 @@ def line_of_sight_margin(
     worst_frac = 0.0
     n_valid = 0
     n_skipped = 0
+    dl = (lon2 - lon1) / n
+    da = (alt2_m - alt1_m) / n
+    dlat = (lat2 - lat1) / n
     for i in range(n + 1):
         frac = i / n
-        lon = lon1 + (lon2 - lon1) * frac
-        lat = lat1 + (lat2 - lat1) * frac
         try:
-            z_ground = provider.elevation_at(lon, lat)
+            z_ground = provider.elevation_at(lon1 + dl * i, lat1 + dlat * i)
         except OutOfBoundsError:
             n_skipped += 1
             continue
         n_valid += 1
-        z_los = alt1_m + (alt2_m - alt1_m) * frac + clearance_m
+        z_los = alt1_m + da * i + clearance_m
         margin = z_ground - z_los
         if margin > worst:
             worst = margin
@@ -115,10 +120,12 @@ def terrain_obstruction(
     alt2_m: float,
     sample_step_m: float = DEM_RESOLUTION_M,
     clearance_m: float = 0.0,
+    plane: object = None,
 ) -> tuple[float, bool]:
     """返回 (最差遮挡余量, 是否有遮挡)。"""
     r = line_of_sight_margin(
-        provider, lon1, lat1, alt1_m, lon2, lat2, alt2_m, sample_step_m, clearance_m
+        provider, lon1, lat1, alt1_m, lon2, lat2, alt2_m, sample_step_m, clearance_m,
+        plane=plane,
     )
     return r.worst_margin_m, r.obstructed
 
@@ -133,8 +140,10 @@ def has_terrain_obstruction(
     alt2_m: float,
     sample_step_m: float = DEM_RESOLUTION_M,
     clearance_m: float = 0.0,
+    plane: object = None,
 ) -> bool:
     """是否存在地形遮挡（b_ijt = 1）。"""
     return terrain_obstruction(
-        provider, lon1, lat1, alt1_m, lon2, lat2, alt2_m, sample_step_m, clearance_m
+        provider, lon1, lat1, alt1_m, lon2, lat2, alt2_m, sample_step_m, clearance_m,
+        plane=plane,
     )[1]

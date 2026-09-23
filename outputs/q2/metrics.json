@@ -1,7 +1,7 @@
 {
   "question": "q2",
-  "git_commit": "37b909c76d7a484b4cd3b6242d2b0a01390536cf",
-  "timestamp": "2026-09-23T21:57:24.915211+08:00",
+  "git_commit": "40004f0cc0124342c087187f34b30ec530bea601",
+  "timestamp": "2026-09-23T22:17:33.733443+08:00",
   "seed": 42,
   "data_sources": [
     "物资需求与配送时限.xlsx",
@@ -10,22 +10,23 @@
     "30米DEM.tif"
   ],
   "metrics": {
-    "n_sorties": 35,
+    "n_sorties": 22,
     "n_boxes": 80,
-    "total_energy_kwh": 83.010022,
-    "makespan_s": 35219.3,
-    "makespan_h": 9.783,
-    "violations_first_batch": 23,
-    "violations_expected": 49,
-    "on_time_rate": 0.3875,
-    "max_lateness_s": 31174.5,
-    "objective_penalty": 6229693.598,
-    "runtime_sec": 0.67,
-    "iterations": 2,
+    "total_energy_kwh": 75.061449,
+    "makespan_s": 14537.0,
+    "makespan_h": 4.038,
+    "violations_first_batch": 16,
+    "violations_expected": 30,
+    "on_time_rate": 0.625,
+    "max_lateness_s": 4360.4,
+    "objective_penalty": 377622.125,
+    "runtime_sec": 3092.59,
+    "iterations": 8,
     "feasible_by_verifier": false,
-    "n_verifier_violations": 49,
+    "n_verifier_violations": 124,
     "type_usage": {
-      "B": 35
+      "B": 15,
+      "C": 7
     }
   }
 }

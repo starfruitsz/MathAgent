@@ -594,21 +594,37 @@ def _check_resources(
 
 
 def _check_comms(plan: TransportPlan, rep: VerifyReport) -> None:
-    """每个通信中断时段必须被某个中继架次**完整覆盖**。"""
+    """每个通信中断时段都必须被中继架次**完整覆盖**。
+
+    ★ 支持**多架中继接力**：把同一运输架次的全部中继窗口合并，
+      若其并集能覆盖中断区间，则视为已保障。
+      这对应题目"运输机在任一时刻只能由 G01 或**一架**中继保障" ——
+      同一时刻只需一架，但不同时刻可以由不同中继接力。
+    """
     for s in plan.sorties:
         if not s.outage_windows:
             continue
+        windows = sorted(
+            (r.start_s, r.end_s)
+            for r in plan.relays
+            if s.sortie_id in r.sortie_ids
+        )
+        # 合并窗口
+        merged: list[list[float]] = []
+        for a, b in windows:
+            if merged and a <= merged[-1][1] + 1e-9:
+                merged[-1][1] = max(merged[-1][1], b)
+            else:
+                merged.append([a, b])
+
         for (t0, t1) in s.outage_windows:
-            covered = False
-            for r in plan.relays:
-                if s.sortie_id in r.sortie_ids and r.start_s <= t0 + 1e-9 and r.end_s >= t1 - 1e-9:
-                    covered = True
-                    break
+            covered = any(a <= t0 + 1e-9 and b >= t1 - 1e-9 for a, b in merged)
             if not covered:
                 rep.violations.append(
                     Violation(
                         ViolationType.COMMS_UNSUPPORTED, s.sortie_id,
-                        f"中断时段 [{t0:.1f}, {t1:.1f}] 未被任何中继架次完整覆盖",
+                        f"中断时段 [{t0:.1f}, {t1:.1f}] 未被中继完整覆盖"
+                        + (f"（已有窗口 {len(merged)} 个）" if merged else "（无中继）"),
                     )
                 )
 

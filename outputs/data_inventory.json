@@ -1,67 +1,1467 @@
 {
   "status": "ok",
-  "timestamp": "2026-09-23T16:13:58.125087+08:00",
-  "git_commit": "725a0927e5aa5805d3f4c732de9134e21fcf998e",
-  "root": "data/raw",
-  "n_files": 1,
-  "total_bytes": 0,
-  "code_to_files": {},
-  "codes_missing": [
-    "A1",
-    "A2",
-    "A3",
-    "A4",
-    "A5",
-    "A6",
-    "A7",
-    "A8",
-    "A9",
-    "A10",
-    "A11",
-    "A12",
-    "A13",
-    "A14",
-    "A15",
-    "A16",
-    "A17",
-    "A18",
-    "B1",
-    "B2",
-    "B3",
-    "B4",
-    "B5",
-    "B6",
-    "B7",
-    "B8",
-    "B9",
-    "B10",
-    "B11",
-    "B12",
-    "C1",
-    "C2",
-    "C3",
-    "C4",
-    "C5",
-    "C6",
-    "C7",
-    "C8",
-    "C9",
-    "C10"
-  ],
-  "codes_ambiguous": {},
-  "credibility_levels": {
-    "measured": "直接实验观测",
-    "semi_synthetic": "半合成（基于真实数据校准）—— 可补充分析，不得表述为直接观测",
-    "estimated": "估算/外推 —— 须标注边界"
+  "timestamp": "2026-09-23T20:53:31.074075+08:00",
+  "git_commit": "8b8fb06555110bd7fcf2632a9b55abcc6a4d5ed6",
+  "root": "data/raw/D题",
+  "n_files": 19,
+  "total_bytes": 29342790,
+  "class_to_files": {
+    "未分类": [
+      "data/raw/D题/山区洪涝灾害下无人机运输与通信协同优化.docx",
+      "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/数字高程模型数据（DEM）/镇龙乡及周边30米DEM.mat",
+      "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/村镇点位/镇龙乡及周边村镇点位.csv",
+      "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/村镇点位/镇龙乡及周边村镇点位.mat",
+      "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/水体（面）/镇龙乡及周边水体.csv",
+      "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/水体（面）/镇龙乡及周边水体.mat",
+      "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/水系（线）/镇龙乡及周边水系.csv",
+      "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/水系（线）/镇龙乡及周边水系.mat",
+      "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/道路/镇龙乡及周边道路.csv",
+      "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/道路/镇龙乡及周边道路.mat",
+      "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡地理空间数据说明.pdf",
+      "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡地理空间详情地图.html",
+      "data/raw/D题/结果提交模板.xlsx"
+    ],
+    "中继无人机数据": [
+      "data/raw/D题/数据/无人机应急物资运输基础数据/中继无人机数据.xlsx"
+    ],
+    "物资需求与配送时限": [
+      "data/raw/D题/数据/无人机应急物资运输基础数据/物资需求与配送时限.xlsx"
+    ],
+    "调度中心与服务区": [
+      "data/raw/D题/数据/无人机应急物资运输基础数据/调度中心与服务区.xlsx"
+    ],
+    "运输无人机数据": [
+      "data/raw/D题/数据/无人机应急物资运输基础数据/运输无人机数据.xlsx"
+    ],
+    "通信链路参数": [
+      "data/raw/D题/数据/无人机应急物资运输基础数据/通信链路参数.xlsx"
+    ],
+    "30m DEM": [
+      "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/数字高程模型数据（DEM）/镇龙乡及周边30米DEM.tif"
+    ]
   },
+  "attachments_missing": [
+    "地理空间数据说明"
+  ],
   "files": [
     {
-      "path": "data/raw/.gitkeep",
-      "name": ".gitkeep",
-      "suffix": "",
-      "size_bytes": 0,
-      "guessed_code": null,
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      "path": "data/raw/D题/山区洪涝灾害下无人机运输与通信协同优化.docx",
+      "name": "山区洪涝灾害下无人机运输与通信协同优化.docx",
+      "suffix": ".docx",
+      "size_bytes": 6971534,
+      "attachment_class": "未分类",
+      "sha256": "0a4f507b91a02a0ea4264973dd432cdcb5b8916c61c24214719665f326d57685"
+    },
+    {
+      "path": "data/raw/D题/数据/无人机应急物资运输基础数据/中继无人机数据.xlsx",
+      "name": "中继无人机数据.xlsx",
+      "suffix": ".xlsx",
+      "size_bytes": 11082,
+      "attachment_class": "中继无人机数据",
+      "sha256": "be52643ff29419233e6a141dca03a04160a8af551cab36d8c49b51bb836bea04",
+      "probe": {
+        "kind": "excel",
+        "n_sheets": 1,
+        "sheets": {
+          "数据": {
+            "n_cols": 19,
+            "columns": [
+              "中继机型参数",
+              "Unnamed: 1",
+              "Unnamed: 2",
+              "Unnamed: 3",
+              "Unnamed: 4",
+              "Unnamed: 5",
+              "Unnamed: 6",
+              "Unnamed: 7",
+              "Unnamed: 8",
+              "Unnamed: 9",
+              "Unnamed: 10",
+              "Unnamed: 11",
+              "Unnamed: 12",
+              "Unnamed: 13",
+              "Unnamed: 14",
+              "Unnamed: 15",
+              "Unnamed: 16",
+              "Unnamed: 17",
+              "Unnamed: 18"
+            ],
+            "dtypes": {
+              "中继机型参数": "str",
+              "Unnamed: 1": "object",
+              "Unnamed: 2": "object",
+              "Unnamed: 3": "object",
+              "Unnamed: 4": "object",
+              "Unnamed: 5": "object",
+              "Unnamed: 6": "object",
+              "Unnamed: 7": "object",
+              "Unnamed: 8": "object",
+              "Unnamed: 9": "object",
+              "Unnamed: 10": "object",
+              "Unnamed: 11": "object",
+              "Unnamed: 12": "object",
+              "Unnamed: 13": "object",
+              "Unnamed: 14": "object",
+              "Unnamed: 15": "object",
+              "Unnamed: 16": "object",
+              "Unnamed: 17": "object",
+              "Unnamed: 18": "object"
+            },
+            "missing_rate": {
+              "中继机型参数": 0.181818,
+              "Unnamed: 1": 0.363636,
+              "Unnamed: 2": 0.363636,
+              "Unnamed: 3": 0.818182,
+              "Unnamed: 4": 0.818182,
+              "Unnamed: 5": 0.818182,
+              "Unnamed: 6": 0.818182,
+              "Unnamed: 7": 0.818182,
+              "Unnamed: 8": 0.818182,
+              "Unnamed: 9": 0.818182,
+              "Unnamed: 10": 0.818182,
+              "Unnamed: 11": 0.818182,
+              "Unnamed: 12": 0.818182,
+              "Unnamed: 13": 0.818182,
+              "Unnamed: 14": 0.818182,
+              "Unnamed: 15": 0.818182,
+              "Unnamed: 16": 0.818182,
+              "Unnamed: 17": 0.818182,
+              "Unnamed: 18": 0.818182
+            },
+            "head": [
+              {
+                "中继机型参数": "机型编号",
+                "Unnamed: 1": "机型名称",
+                "Unnamed: 2": "含能源组件空载总质量（kg）",
+                "Unnamed: 3": "中继通信模块质量（kg）",
+                "Unnamed: 4": "计划起飞总质量（kg）",
+                "Unnamed: 5": "计划巡航速度（m/s）",
+                "Unnamed: 6": "巡航功率（kW）",
+                "Unnamed: 7": "能源组件可用能量（kWh）",
+                "Unnamed: 8": "返航电量下限（%）",
+                "Unnamed: 9": "工位固定准备时间（s）",
+                "Unnamed: 10": "建链时间（s）",
+                "Unnamed: 11": "架次周转时间（s）",
+                "Unnamed: 12": "最大爬升速度（m/s）",
+                "Unnamed: 13": "最大下降速度（m/s）",
+                "Unnamed: 14": "爬升能耗效率",
+                "Unnamed: 15": "下降能耗效率",
+                "Unnamed: 16": "悬停功率（kW）",
+                "Unnamed: 17": "通信附加功率（kW）",
+                "Unnamed: 18": "最大悬停离地高度（m）"
+              },
+              {
+                "中继机型参数": "R",
+                "Unnamed: 1": "中继标准测试多旋翼",
+                "Unnamed: 2": 21,
+                "Unnamed: 3": 2.5,
+                "Unnamed: 4": 23.5,
+                "Unnamed: 5": 15,
+                "Unnamed: 6": 1.15,
+                "Unnamed: 7": 3.2,
+                "Unnamed: 8": 20,
+                "Unnamed: 9": 180,
+                "Unnamed: 10": 30,
+                "Unnamed: 11": 300,
+                "Unnamed: 12": 4,
+                "Unnamed: 13": 3,
+                "Unnamed: 14": 0.72,
+                "Unnamed: 15": 0,
+                "Unnamed: 16": 1.05,
+                "Unnamed: 17": 0.05,
+                "Unnamed: 18": 300
+              },
+              {
+                "中继机型参数": null,
+                "Unnamed: 1": null,
+                "Unnamed: 2": null,
+                "Unnamed: 3": null,
+                "Unnamed: 4": null,
+                "Unnamed: 5": null,
+                "Unnamed: 6": null,
+                "Unnamed: 7": null,
+                "Unnamed: 8": null,
+                "Unnamed: 9": null,
+                "Unnamed: 10": null,
+                "Unnamed: 11": null,
+                "Unnamed: 12": null,
+                "Unnamed: 13": null,
+                "Unnamed: 14": null,
+                "Unnamed: 15": null,
+                "Unnamed: 16": null,
+                "Unnamed: 17": null,
+                "Unnamed: 18": null
+              },
+              {
+                "中继机型参数": "逐架中继无人机清单",
+                "Unnamed: 1": null,
+                "Unnamed: 2": null,
+                "Unnamed: 3": null,
+                "Unnamed: 4": null,
+                "Unnamed: 5": null,
+                "Unnamed: 6": null,
+                "Unnamed: 7": null,
+                "Unnamed: 8": null,
+                "Unnamed: 9": null,
+                "Unnamed: 10": null,
+                "Unnamed: 11": null,
+                "Unnamed: 12": null,
+                "Unnamed: 13": null,
+                "Unnamed: 14": null,
+                "Unnamed: 15": null,
+                "Unnamed: 16": null,
+                "Unnamed: 17": null,
+                "Unnamed: 18": null
+              },
+              {
+                "中继机型参数": "中继无人机编号",
+                "Unnamed: 1": "机型编号",
+                "Unnamed: 2": "初始位置",
+                "Unnamed: 3": null,
+                "Unnamed: 4": null,
+                "Unnamed: 5": null,
+                "Unnamed: 6": null,
+                "Unnamed: 7": null,
+                "Unnamed: 8": null,
+                "Unnamed: 9": null,
+                "Unnamed: 10": null,
+                "Unnamed: 11": null,
+                "Unnamed: 12": null,
+                "Unnamed: 13": null,
+                "Unnamed: 14": null,
+                "Unnamed: 15": null,
+                "Unnamed: 16": null,
+                "Unnamed: 17": null,
+                "Unnamed: 18": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "path": "data/raw/D题/数据/无人机应急物资运输基础数据/物资需求与配送时限.xlsx",
+      "name": "物资需求与配送时限.xlsx",
+      "suffix": ".xlsx",
+      "size_bytes": 17474,
+      "attachment_class": "物资需求与配送时限",
+      "sha256": "5a3346159ceddcf585859d270b8f62114b388a1f737fbe64ffde0ee1fdc8170a",
+      "probe": {
+        "kind": "excel",
+        "n_sheets": 2,
+        "sheets": {
+          "数据": {
+            "n_cols": 9,
+            "columns": [
+              "服务区编号",
+              "物资类型",
+              "总需求箱数",
+              "首批必须送达箱数",
+              "单箱质量（kg）",
+              "单箱体积（m³）",
+              "应急优先系数",
+              "首批截止时间（s）",
+              "期望送达时间（s）"
+            ],
+            "dtypes": {
+              "服务区编号": "str",
+              "物资类型": "str",
+              "总需求箱数": "int64",
+              "首批必须送达箱数": "int64",
+              "单箱质量（kg）": "int64",
+              "单箱体积（m³）": "float64",
+              "应急优先系数": "int64",
+              "首批截止时间（s）": "float64",
+              "期望送达时间（s）": "int64"
+            },
+            "missing_rate": {
+              "服务区编号": 0.0,
+              "物资类型": 0.0,
+              "总需求箱数": 0.0,
+              "首批必须送达箱数": 0.0,
+              "单箱质量（kg）": 0.0,
+              "单箱体积（m³）": 0.0,
+              "应急优先系数": 0.0,
+              "首批截止时间（s）": 0.433962,
+              "期望送达时间（s）": 0.0
+            },
+            "head": [
+              {
+                "服务区编号": "S001",
+                "物资类型": "医疗物资",
+                "总需求箱数": 2,
+                "首批必须送达箱数": 1,
+                "单箱质量（kg）": 3,
+                "单箱体积（m³）": 0.012,
+                "应急优先系数": 24,
+                "首批截止时间（s）": 3600.0,
+                "期望送达时间（s）": 3600
+              },
+              {
+                "服务区编号": "S001",
+                "物资类型": "饮用水",
+                "总需求箱数": 8,
+                "首批必须送达箱数": 1,
+                "单箱质量（kg）": 14,
+                "单箱体积（m³）": 0.027,
+                "应急优先系数": 12,
+                "首批截止时间（s）": 3600.0,
+                "期望送达时间（s）": 3600
+              },
+              {
+                "服务区编号": "S001",
+                "物资类型": "应急食品",
+                "总需求箱数": 3,
+                "首批必须送达箱数": 0,
+                "单箱质量（kg）": 8,
+                "单箱体积（m³）": 0.028,
+                "应急优先系数": 10,
+                "首批截止时间（s）": null,
+                "期望送达时间（s）": 7200
+              },
+              {
+                "服务区编号": "S001",
+                "物资类型": "生活卫生用品",
+                "总需求箱数": 2,
+                "首批必须送达箱数": 0,
+                "单箱质量（kg）": 6,
+                "单箱体积（m³）": 0.035,
+                "应急优先系数": 8,
+                "首批截止时间（s）": null,
+                "期望送达时间（s）": 10800
+              },
+              {
+                "服务区编号": "S002",
+                "物资类型": "医疗物资",
+                "总需求箱数": 1,
+                "首批必须送达箱数": 1,
+                "单箱质量（kg）": 3,
+                "单箱体积（m³）": 0.012,
+                "应急优先系数": 24,
+                "首批截止时间（s）": 3600.0,
+                "期望送达时间（s）": 3600
+              }
+            ]
+          },
+          "逐箱货箱清单": {
+            "n_cols": 9,
+            "columns": [
+              "货箱编号",
+              "服务区编号",
+              "物资类型",
+              "单箱质量（kg）",
+              "单箱体积（m³）",
+              "是否首批保障",
+              "首批截止时间（s）",
+              "期望送达时间（s）",
+              "应急优先系数"
+            ],
+            "dtypes": {
+              "货箱编号": "str",
+              "服务区编号": "str",
+              "物资类型": "str",
+              "单箱质量（kg）": "int64",
+              "单箱体积（m³）": "float64",
+              "是否首批保障": "str",
+              "首批截止时间（s）": "float64",
+              "期望送达时间（s）": "int64",
+              "应急优先系数": "int64"
+            },
+            "missing_rate": {
+              "货箱编号": 0.0,
+              "服务区编号": 0.0,
+              "物资类型": 0.0,
+              "单箱质量（kg）": 0.0,
+              "单箱体积（m³）": 0.0,
+              "是否首批保障": 0.0,
+              "首批截止时间（s）": 0.625,
+              "期望送达时间（s）": 0.0,
+              "应急优先系数": 0.0
+            },
+            "head": [
+              {
+                "货箱编号": "S001-MED-01",
+                "服务区编号": "S001",
+                "物资类型": "医疗物资",
+                "单箱质量（kg）": 3,
+                "单箱体积（m³）": 0.012,
+                "是否首批保障": "是",
+                "首批截止时间（s）": 3600.0,
+                "期望送达时间（s）": 3600,
+                "应急优先系数": 24
+              },
+              {
+                "货箱编号": "S001-MED-02",
+                "服务区编号": "S001",
+                "物资类型": "医疗物资",
+                "单箱质量（kg）": 3,
+                "单箱体积（m³）": 0.012,
+                "是否首批保障": "否",
+                "首批截止时间（s）": null,
+                "期望送达时间（s）": 3600,
+                "应急优先系数": 24
+              },
+              {
+                "货箱编号": "S001-WAT-01",
+                "服务区编号": "S001",
+                "物资类型": "饮用水",
+                "单箱质量（kg）": 14,
+                "单箱体积（m³）": 0.027,
+                "是否首批保障": "是",
+                "首批截止时间（s）": 3600.0,
+                "期望送达时间（s）": 3600,
+                "应急优先系数": 12
+              },
+              {
+                "货箱编号": "S001-WAT-02",
+                "服务区编号": "S001",
+                "物资类型": "饮用水",
+                "单箱质量（kg）": 14,
+                "单箱体积（m³）": 0.027,
+                "是否首批保障": "否",
+                "首批截止时间（s）": null,
+                "期望送达时间（s）": 3600,
+                "应急优先系数": 12
+              },
+              {
+                "货箱编号": "S001-WAT-03",
+                "服务区编号": "S001",
+                "物资类型": "饮用水",
+                "单箱质量（kg）": 14,
+                "单箱体积（m³）": 0.027,
+                "是否首批保障": "否",
+                "首批截止时间（s）": null,
+                "期望送达时间（s）": 3600,
+                "应急优先系数": 12
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "path": "data/raw/D题/数据/无人机应急物资运输基础数据/调度中心与服务区.xlsx",
+      "name": "调度中心与服务区.xlsx",
+      "suffix": ".xlsx",
+      "size_bytes": 11017,
+      "attachment_class": "调度中心与服务区",
+      "sha256": "541a7af1ded08c9a3ff448480332cb5f6a54902f0afa6e9bcd50c1d2b2b34e38",
+      "probe": {
+        "kind": "excel",
+        "n_sheets": 1,
+        "sheets": {
+          "数据": {
+            "n_cols": 6,
+            "columns": [
+              "调度中心",
+              "Unnamed: 1",
+              "Unnamed: 2",
+              "Unnamed: 3",
+              "Unnamed: 4",
+              "Unnamed: 5"
+            ],
+            "dtypes": {
+              "调度中心": "str",
+              "Unnamed: 1": "str",
+              "Unnamed: 2": "object",
+              "Unnamed: 3": "object",
+              "Unnamed: 4": "object",
+              "Unnamed: 5": "object"
+            },
+            "missing_rate": {
+              "调度中心": 0.05,
+              "Unnamed: 1": 0.1,
+              "Unnamed: 2": 0.1,
+              "Unnamed: 3": 0.1,
+              "Unnamed: 4": 0.1,
+              "Unnamed: 5": 0.2
+            },
+            "head": [
+              {
+                "调度中心": "调度中心编号",
+                "Unnamed: 1": "调度中心名称",
+                "Unnamed: 2": "经度（°）",
+                "Unnamed: 3": "纬度（°）",
+                "Unnamed: 4": "海拔（m）",
+                "Unnamed: 5": null
+              },
+              {
+                "调度中心": "O01",
+                "Unnamed: 1": "凤丹村无人机调度中心",
+                "Unnamed: 2": 109.2308517,
+                "Unnamed: 3": 23.0085095,
+                "Unnamed: 4": 127.7,
+                "Unnamed: 5": null
+              },
+              {
+                "调度中心": null,
+                "Unnamed: 1": null,
+                "Unnamed: 2": null,
+                "Unnamed: 3": null,
+                "Unnamed: 4": null,
+                "Unnamed: 5": null
+              },
+              {
+                "调度中心": "服务区",
+                "Unnamed: 1": null,
+                "Unnamed: 2": null,
+                "Unnamed: 3": null,
+                "Unnamed: 4": null,
+                "Unnamed: 5": null
+              },
+              {
+                "调度中心": "服务区编号",
+                "Unnamed: 1": "服务区名称",
+                "Unnamed: 2": "经度（°）",
+                "Unnamed: 3": "纬度（°）",
+                "Unnamed: 4": "海拔（m）",
+                "Unnamed: 5": "本次需保障人口（人）"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "path": "data/raw/D题/数据/无人机应急物资运输基础数据/运输无人机数据.xlsx",
+      "name": "运输无人机数据.xlsx",
+      "suffix": ".xlsx",
+      "size_bytes": 11746,
+      "attachment_class": "运输无人机数据",
+      "sha256": "9296a657c07e042afba6aeea7999665d9cd24e00b592fd6c269de6e338480dcb",
+      "probe": {
+        "kind": "excel",
+        "n_sheets": 1,
+        "sheets": {
+          "数据": {
+            "n_cols": 18,
+            "columns": [
+              "三类机型参数",
+              "Unnamed: 1",
+              "Unnamed: 2",
+              "Unnamed: 3",
+              "Unnamed: 4",
+              "Unnamed: 5",
+              "Unnamed: 6",
+              "Unnamed: 7",
+              "Unnamed: 8",
+              "Unnamed: 9",
+              "Unnamed: 10",
+              "Unnamed: 11",
+              "Unnamed: 12",
+              "Unnamed: 13",
+              "Unnamed: 14",
+              "Unnamed: 15",
+              "Unnamed: 16",
+              "Unnamed: 17"
+            ],
+            "dtypes": {
+              "三类机型参数": "str",
+              "Unnamed: 1": "object",
+              "Unnamed: 2": "object",
+              "Unnamed: 3": "object",
+              "Unnamed: 4": "object",
+              "Unnamed: 5": "object",
+              "Unnamed: 6": "object",
+              "Unnamed: 7": "object",
+              "Unnamed: 8": "object",
+              "Unnamed: 9": "object",
+              "Unnamed: 10": "object",
+              "Unnamed: 11": "object",
+              "Unnamed: 12": "object",
+              "Unnamed: 13": "object",
+              "Unnamed: 14": "object",
+              "Unnamed: 15": "object",
+              "Unnamed: 16": "object",
+              "Unnamed: 17": "object"
+            },
+            "missing_rate": {
+              "三类机型参数": 0.095238,
+              "Unnamed: 1": 0.190476,
+              "Unnamed: 2": 0.190476,
+              "Unnamed: 3": 0.809524,
+              "Unnamed: 4": 0.809524,
+              "Unnamed: 5": 0.809524,
+              "Unnamed: 6": 0.809524,
+              "Unnamed: 7": 0.809524,
+              "Unnamed: 8": 0.809524,
+              "Unnamed: 9": 0.809524,
+              "Unnamed: 10": 0.809524,
+              "Unnamed: 11": 0.809524,
+              "Unnamed: 12": 0.809524,
+              "Unnamed: 13": 0.809524,
+              "Unnamed: 14": 0.809524,
+              "Unnamed: 15": 0.809524,
+              "Unnamed: 16": 0.809524,
+              "Unnamed: 17": 0.809524
+            },
+            "head": [
+              {
+                "三类机型参数": "机型编号",
+                "Unnamed: 1": "机型名称",
+                "Unnamed: 2": "含电池空载总质量（kg）",
+                "Unnamed: 3": "最大载货质量（kg）",
+                "Unnamed: 4": "可用装载体积（m³）",
+                "Unnamed: 5": "计划巡航速度（m/s）",
+                "Unnamed: 6": "空载标准航程（m）",
+                "Unnamed: 7": "满载标准航程（m）",
+                "Unnamed: 8": "电池可用能量（kWh）",
+                "Unnamed: 9": "返航电量下限（%）",
+                "Unnamed: 10": "工位固定准备时间（s）",
+                "Unnamed: 11": "每箱装载时间（s）",
+                "Unnamed: 12": "接收点基础交接时间（s）",
+                "Unnamed: 13": "每箱增加交接时间（s）",
+                "Unnamed: 14": "最大爬升速度（m/s）",
+                "Unnamed: 15": "最大下降速度（m/s）",
+                "Unnamed: 16": "爬升能耗效率",
+                "Unnamed: 17": "下降能耗效率"
+              },
+              {
+                "三类机型参数": "A",
+                "Unnamed: 1": "中轻载标准测试多旋翼",
+                "Unnamed: 2": 70,
+                "Unnamed: 3": 25,
+                "Unnamed: 4": 0.06,
+                "Unnamed: 5": 12,
+                "Unnamed: 6": 25000,
+                "Unnamed: 7": 20000,
+                "Unnamed: 8": 4.5,
+                "Unnamed: 9": 20,
+                "Unnamed: 10": 300,
+                "Unnamed: 11": 30,
+                "Unnamed: 12": 150,
+                "Unnamed: 13": 30,
+                "Unnamed: 14": 3,
+                "Unnamed: 15": 2.5,
+                "Unnamed: 16": 0.72,
+                "Unnamed: 17": 0
+              },
+              {
+                "三类机型参数": "B",
+                "Unnamed: 1": "中载标准测试多旋翼",
+                "Unnamed: 2": 65,
+                "Unnamed: 3": 30,
+                "Unnamed: 4": 0.073,
+                "Unnamed: 5": 15,
+                "Unnamed: 6": 28000,
+                "Unnamed: 7": 16000,
+                "Unnamed: 8": 4,
+                "Unnamed: 9": 20,
+                "Unnamed: 10": 300,
+                "Unnamed: 11": 30,
+                "Unnamed: 12": 150,
+                "Unnamed: 13": 30,
+                "Unnamed: 14": 3,
+                "Unnamed: 15": 2.5,
+                "Unnamed: 16": 0.72,
+                "Unnamed: 17": 0
+              },
+              {
+                "三类机型参数": "C",
+                "Unnamed: 1": "重载标准测试多旋翼",
+                "Unnamed: 2": 69.9,
+                "Unnamed: 3": 80,
+                "Unnamed: 4": 0.25,
+                "Unnamed: 5": 15,
+                "Unnamed: 6": 26000,
+                "Unnamed: 7": 12000,
+                "Unnamed: 8": 8,
+                "Unnamed: 9": 20,
+                "Unnamed: 10": 300,
+                "Unnamed: 11": 30,
+                "Unnamed: 12": 180,
+                "Unnamed: 13": 36,
+                "Unnamed: 14": 2.5,
+                "Unnamed: 15": 2,
+                "Unnamed: 16": 0.72,
+                "Unnamed: 17": 0
+              },
+              {
+                "三类机型参数": null,
+                "Unnamed: 1": null,
+                "Unnamed: 2": null,
+                "Unnamed: 3": null,
+                "Unnamed: 4": null,
+                "Unnamed: 5": null,
+                "Unnamed: 6": null,
+                "Unnamed: 7": null,
+                "Unnamed: 8": null,
+                "Unnamed: 9": null,
+                "Unnamed: 10": null,
+                "Unnamed: 11": null,
+                "Unnamed: 12": null,
+                "Unnamed: 13": null,
+                "Unnamed: 14": null,
+                "Unnamed: 15": null,
+                "Unnamed: 16": null,
+                "Unnamed: 17": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "path": "data/raw/D题/数据/无人机应急物资运输基础数据/通信链路参数.xlsx",
+      "name": "通信链路参数.xlsx",
+      "suffix": ".xlsx",
+      "size_bytes": 10485,
+      "attachment_class": "通信链路参数",
+      "sha256": "1860d153199e7ae460ba36e83b673374e640e19de91ea167f2877271001f5f81",
+      "probe": {
+        "kind": "excel",
+        "n_sheets": 1,
+        "sheets": {
+          "数据": {
+            "n_cols": 5,
+            "columns": [
+              "通信系统与端点参数",
+              "Unnamed: 1",
+              "Unnamed: 2",
+              "Unnamed: 3",
+              "Unnamed: 4"
+            ],
+            "dtypes": {
+              "通信系统与端点参数": "str",
+              "Unnamed: 1": "str",
+              "Unnamed: 2": "float64",
+              "Unnamed: 3": "str",
+              "Unnamed: 4": "object"
+            },
+            "missing_rate": {
+              "通信系统与端点参数": 0.0,
+              "Unnamed: 1": 0.0,
+              "Unnamed: 2": 1.0,
+              "Unnamed: 3": 0.0,
+              "Unnamed: 4": 0.0
+            },
+            "head": [
+              {
+                "通信系统与端点参数": "参数类别",
+                "Unnamed: 1": "参数名称",
+                "Unnamed: 2": null,
+                "Unnamed: 3": "符号",
+                "Unnamed: 4": "参数值"
+              },
+              {
+                "通信系统与端点参数": "传播参数",
+                "Unnamed: 1": "载波频率（MHz）",
+                "Unnamed: 2": null,
+                "Unnamed: 3": "f",
+                "Unnamed: 4": 2400
+              },
+              {
+                "通信系统与端点参数": "传播参数",
+                "Unnamed: 1": "系统损耗（dB）",
+                "Unnamed: 2": null,
+                "Unnamed: 3": "Lsys",
+                "Unnamed: 4": 3
+              },
+              {
+                "通信系统与端点参数": "传播参数",
+                "Unnamed: 1": "地形遮挡附加损耗（dB）",
+                "Unnamed: 2": null,
+                "Unnamed: 3": "Lobs",
+                "Unnamed: 4": 10
+              },
+              {
+                "通信系统与端点参数": "接收参数",
+                "Unnamed: 1": "接收灵敏度（dBm）",
+                "Unnamed: 2": null,
+                "Unnamed: 3": "Psens",
+                "Unnamed: 4": -98
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "path": "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/数字高程模型数据（DEM）/镇龙乡及周边30米DEM.mat",
+      "name": "镇龙乡及周边30米DEM.mat",
+      "suffix": ".mat",
+      "size_bytes": 6746494,
+      "attachment_class": "未分类",
+      "sha256": "c68703e0cc8f94f4bd52ff6e9974b66a2dae33865f0723ad71c04b6694bf4fbf"
+    },
+    {
+      "path": "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/数字高程模型数据（DEM）/镇龙乡及周边30米DEM.tif",
+      "name": "镇龙乡及周边30米DEM.tif",
+      "suffix": ".tif",
+      "size_bytes": 7867096,
+      "attachment_class": "30m DEM",
+      "sha256": "741fe6de0b2bcaffd0f4007f574ee698d46197094f52cc954b532c4f90fc7c03",
+      "probe": {
+        "kind": "raster",
+        "crs": "EPSG:4326",
+        "crs_epsg": 4326,
+        "width": 1486,
+        "height": 1309,
+        "n_bands": 1,
+        "dtype": "float32",
+        "nodata": null,
+        "res": [
+          0.00027777777777777393,
+          0.0002777777777777777
+        ],
+        "bounds": {
+          "left": 109.0326388888889,
+          "bottom": 22.86125,
+          "right": 109.44541666666667,
+          "top": 23.22486111111111
+        },
+        "is_geographic": true,
+        "elevation_stats": {
+          "min": 41.68907928466797,
+          "max": 1132.8560791015625,
+          "mean": 173.6685791015625,
+          "sampled_pixels": 485922,
+          "nodata_fraction": 0.0
+        },
+        "res_approx_m": 30.92,
+        "WARNING": "CRS 是地理坐标系（经纬度），分辨率单位是度；计算水平距离前必须先投影到米制 CRS（见 OPS_SPEC 2.3 节 / ADR-011）"
+      }
+    },
+    {
+      "path": "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/村镇点位/镇龙乡及周边村镇点位.csv",
+      "name": "镇龙乡及周边村镇点位.csv",
+      "suffix": ".csv",
+      "size_bytes": 9569,
+      "attachment_class": "未分类",
+      "sha256": "b6e2ffc0b728fb33c532e471b6f27dcb54ff70a9a2025546539eea97e5232d6f",
+      "probe": {
+        "kind": "table",
+        "n_rows_est": 166,
+        "n_cols": 7,
+        "columns": [
+          "点位编号",
+          "名称",
+          "类别",
+          "OSM编号",
+          "位置",
+          "经度",
+          "纬度"
+        ],
+        "dtypes": {
+          "点位编号": "str",
+          "名称": "str",
+          "类别": "str",
+          "OSM编号": "int64",
+          "位置": "str",
+          "经度": "float64",
+          "纬度": "float64"
+        },
+        "missing_rate": {
+          "点位编号": 0.0,
+          "名称": 0.0,
+          "类别": 0.0,
+          "OSM编号": 0.0,
+          "位置": 0.0,
+          "经度": 0.0,
+          "纬度": 0.0
+        },
+        "head": [
+          {
+            "点位编号": "ST001",
+            "名称": "黎塘镇",
+            "类别": "乡镇",
+            "OSM编号": 621892885,
+            "位置": "乡外",
+            "经度": 109.129485,
+            "纬度": 23.20284
+          },
+          {
+            "点位编号": "ST002",
+            "名称": "三里镇",
+            "类别": "乡镇",
+            "OSM编号": 3155700108,
+            "位置": "乡外",
+            "经度": 109.3917952,
+            "纬度": 23.0561446
+          },
+          {
+            "点位编号": "ST003",
+            "名称": "云表镇",
+            "类别": "乡镇",
+            "OSM编号": 3155700111,
+            "位置": "乡外",
+            "经度": 109.3858039,
+            "纬度": 22.9062875
+          },
+          {
+            "点位编号": "ST004",
+            "名称": "五里镇",
+            "类别": "乡镇",
+            "OSM编号": 3155700112,
+            "位置": "乡外",
+            "经度": 109.3938582,
+            "纬度": 22.9618298
+          },
+          {
+            "点位编号": "ST005",
+            "名称": "黄练镇",
+            "类别": "乡镇",
+            "OSM编号": 3722472095,
+            "位置": "乡外",
+            "经度": 109.3118097,
+            "纬度": 23.1581487
+          }
+        ]
+      }
+    },
+    {
+      "path": "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/村镇点位/镇龙乡及周边村镇点位.mat",
+      "name": "镇龙乡及周边村镇点位.mat",
+      "suffix": ".mat",
+      "size_bytes": 119280,
+      "attachment_class": "未分类",
+      "sha256": "61419e92447ada38c56b7f64f04e4aada2eb1ed076ae33e95f1cbc69f3514beb"
+    },
+    {
+      "path": "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/水体（面）/镇龙乡及周边水体.csv",
+      "name": "镇龙乡及周边水体.csv",
+      "suffix": ".csv",
+      "size_bytes": 279146,
+      "attachment_class": "未分类",
+      "sha256": "4d72a2b46d893701da635ac1b083539568ad3a8b9ffb1b28b09c06bf8af74324",
+      "probe": {
+        "kind": "table",
+        "n_rows_est": 4229,
+        "n_cols": 9,
+        "columns": [
+          "水体要素编号",
+          "多边形编号",
+          "环编号",
+          "点序号",
+          "名称",
+          "水体类型",
+          "OSM编号",
+          "经度",
+          "纬度"
+        ],
+        "dtypes": {
+          "水体要素编号": "str",
+          "多边形编号": "int64",
+          "环编号": "int64",
+          "点序号": "int64",
+          "名称": "str",
+          "水体类型": "str",
+          "OSM编号": "int64",
+          "经度": "float64",
+          "纬度": "float64"
+        },
+        "missing_rate": {
+          "水体要素编号": 0.0,
+          "多边形编号": 0.0,
+          "环编号": 0.0,
+          "点序号": 0.0,
+          "名称": 0.0,
+          "水体类型": 0.0,
+          "OSM编号": 0.0,
+          "经度": 0.0,
+          "纬度": 0.0
+        },
+        "head": [
+          {
+            "水体要素编号": "WS001",
+            "多边形编号": 1,
+            "环编号": 1,
+            "点序号": 1,
+            "名称": "未记录",
+            "水体类型": "一般水体",
+            "OSM编号": 387829312,
+            "经度": 109.0568256,
+            "纬度": 22.8872183
+          },
+          {
+            "水体要素编号": "WS001",
+            "多边形编号": 1,
+            "环编号": 1,
+            "点序号": 2,
+            "名称": "未记录",
+            "水体类型": "一般水体",
+            "OSM编号": 387829312,
+            "经度": 109.0562078,
+            "纬度": 22.8867344
+          },
+          {
+            "水体要素编号": "WS001",
+            "多边形编号": 1,
+            "环编号": 1,
+            "点序号": 3,
+            "名称": "未记录",
+            "水体类型": "一般水体",
+            "OSM编号": 387829312,
+            "经度": 109.0559838,
+            "纬度": 22.8871258
+          },
+          {
+            "水体要素编号": "WS001",
+            "多边形编号": 1,
+            "环编号": 1,
+            "点序号": 4,
+            "名称": "未记录",
+            "水体类型": "一般水体",
+            "OSM编号": 387829312,
+            "经度": 109.0556671,
+            "纬度": 22.8875029
+          },
+          {
+            "水体要素编号": "WS001",
+            "多边形编号": 1,
+            "环编号": 1,
+            "点序号": 5,
+            "名称": "未记录",
+            "水体类型": "一般水体",
+            "OSM编号": 387829312,
+            "经度": 109.0552655,
+            "纬度": 22.8877021
+          }
+        ]
+      }
+    },
+    {
+      "path": "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/水体（面）/镇龙乡及周边水体.mat",
+      "name": "镇龙乡及周边水体.mat",
+      "suffix": ".mat",
+      "size_bytes": 179705,
+      "attachment_class": "未分类",
+      "sha256": "b79df14bdc0b22811f5c219897a66775d8879a93c4a865e455d8c43ab099b50a"
+    },
+    {
+      "path": "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/水系（线）/镇龙乡及周边水系.csv",
+      "name": "镇龙乡及周边水系.csv",
+      "suffix": ".csv",
+      "size_bytes": 297223,
+      "attachment_class": "未分类",
+      "sha256": "3502b997e000e8043e36b7159202bafb12a0c21d23a8b5ad4ec6877bad580a65",
+      "probe": {
+        "kind": "table",
+        "n_rows_est": 4570,
+        "n_cols": 8,
+        "columns": [
+          "水系要素编号",
+          "点序号",
+          "名称",
+          "水系类型",
+          "OSM编号",
+          "长度_km",
+          "经度",
+          "纬度"
+        ],
+        "dtypes": {
+          "水系要素编号": "str",
+          "点序号": "int64",
+          "名称": "str",
+          "水系类型": "str",
+          "OSM编号": "int64",
+          "长度_km": "float64",
+          "经度": "float64",
+          "纬度": "float64"
+        },
+        "missing_rate": {
+          "水系要素编号": 0.0,
+          "点序号": 0.0,
+          "名称": 0.0,
+          "水系类型": 0.0,
+          "OSM编号": 0.0,
+          "长度_km": 0.0,
+          "经度": 0.0,
+          "纬度": 0.0
+        },
+        "head": [
+          {
+            "水系要素编号": "WY001",
+            "点序号": 1,
+            "名称": "镇龙江",
+            "水系类型": "河流",
+            "OSM编号": 42367634,
+            "长度_km": 3.713,
+            "经度": 109.4093216,
+            "纬度": 22.8741428
+          },
+          {
+            "水系要素编号": "WY001",
+            "点序号": 2,
+            "名称": "镇龙江",
+            "水系类型": "河流",
+            "OSM编号": 42367634,
+            "长度_km": 3.713,
+            "经度": 109.4108236,
+            "纬度": 22.8750918
+          },
+          {
+            "水系要素编号": "WY001",
+            "点序号": 3,
+            "名称": "镇龙江",
+            "水系类型": "河流",
+            "OSM编号": 42367634,
+            "长度_km": 3.713,
+            "经度": 109.4135702,
+            "纬度": 22.877306
+          },
+          {
+            "水系要素编号": "WY001",
+            "点序号": 4,
+            "名称": "镇龙江",
+            "水系类型": "河流",
+            "OSM编号": 42367634,
+            "长度_km": 3.713,
+            "经度": 109.4147383,
+            "纬度": 22.8780609
+          },
+          {
+            "水系要素编号": "WY001",
+            "点序号": 5,
+            "名称": "镇龙江",
+            "水系类型": "河流",
+            "OSM编号": 42367634,
+            "长度_km": 3.713,
+            "经度": 109.4159735,
+            "纬度": 22.8782549
+          }
+        ]
+      }
+    },
+    {
+      "path": "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/水系（线）/镇龙乡及周边水系.mat",
+      "name": "镇龙乡及周边水系.mat",
+      "suffix": ".mat",
+      "size_bytes": 179598,
+      "attachment_class": "未分类",
+      "sha256": "b89f4f294bf771962676009fa9044f46ef26a06613fb6f91e2c6f9ccd430f8e8"
+    },
+    {
+      "path": "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/道路/镇龙乡及周边道路.csv",
+      "name": "镇龙乡及周边道路.csv",
+      "suffix": ".csv",
+      "size_bytes": 1423481,
+      "attachment_class": "未分类",
+      "sha256": "adcd23b4ae2c28475412fc2c8a3c0504b2a293ac2ec25faa1da2fe3c3d063ebe",
+      "probe": {
+        "kind": "table",
+        "n_rows_est": 21015,
+        "n_cols": 7,
+        "columns": [
+          "道路要素编号",
+          "点序号",
+          "名称",
+          "道路类型",
+          "OSM编号",
+          "经度",
+          "纬度"
+        ],
+        "dtypes": {
+          "道路要素编号": "str",
+          "点序号": "int64",
+          "名称": "str",
+          "道路类型": "str",
+          "OSM编号": "int64",
+          "经度": "float64",
+          "纬度": "float64"
+        },
+        "missing_rate": {
+          "道路要素编号": 0.0,
+          "点序号": 0.0,
+          "名称": 0.0,
+          "道路类型": 0.0,
+          "OSM编号": 0.0,
+          "经度": 0.0,
+          "纬度": 0.0
+        },
+        "head": [
+          {
+            "道路要素编号": "RD0001",
+            "点序号": 1,
+            "名称": "柳南高速",
+            "道路类型": "高速公路",
+            "OSM编号": 49177928,
+            "经度": 109.0378916,
+            "纬度": 23.1863366
+          },
+          {
+            "道路要素编号": "RD0001",
+            "点序号": 2,
+            "名称": "柳南高速",
+            "道路类型": "高速公路",
+            "OSM编号": 49177928,
+            "经度": 109.0377114,
+            "纬度": 23.1858923
+          },
+          {
+            "道路要素编号": "RD0001",
+            "点序号": 3,
+            "名称": "柳南高速",
+            "道路类型": "高速公路",
+            "OSM编号": 49177928,
+            "经度": 109.037064,
+            "纬度": 23.1841633
+          },
+          {
+            "道路要素编号": "RD0001",
+            "点序号": 4,
+            "名称": "柳南高速",
+            "道路类型": "高速公路",
+            "OSM编号": 49177928,
+            "经度": 109.0364936,
+            "纬度": 23.1826466
+          },
+          {
+            "道路要素编号": "RD0002",
+            "点序号": 1,
+            "名称": "未记录",
+            "道路类型": "高速公路匝道",
+            "OSM编号": 184466570,
+            "经度": 109.0404506,
+            "纬度": 23.1930965
+          }
+        ]
+      }
+    },
+    {
+      "path": "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡及周边地理数据/道路/镇龙乡及周边道路.mat",
+      "name": "镇龙乡及周边道路.mat",
+      "suffix": ".mat",
+      "size_bytes": 399882,
+      "attachment_class": "未分类",
+      "sha256": "c868717284d8aee60157e3bc9b20e18a81b26fde3d75fc7d80317ef877af9849"
+    },
+    {
+      "path": "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡地理空间数据说明.pdf",
+      "name": "镇龙乡地理空间数据说明.pdf",
+      "suffix": ".pdf",
+      "size_bytes": 85812,
+      "attachment_class": "未分类",
+      "sha256": "6d1522c6832a5d91a108dae0d07954845025c0dabd44af8ee78c7860d7c405e4"
+    },
+    {
+      "path": "data/raw/D题/数据/镇龙乡地理空间数据/镇龙乡地理空间详情地图.html",
+      "name": "镇龙乡地理空间详情地图.html",
+      "suffix": ".html",
+      "size_bytes": 4701273,
+      "attachment_class": "未分类",
+      "sha256": "5bb8082f4f5913e6787f86fa9dd3b6f8cbcfa309359f222f57355d1ae991b452"
+    },
+    {
+      "path": "data/raw/D题/结果提交模板.xlsx",
+      "name": "结果提交模板.xlsx",
+      "suffix": ".xlsx",
+      "size_bytes": 20893,
+      "attachment_class": "未分类",
+      "sha256": "16f521f29a7103c4ff7c3709ce1696bb9fffa18ce741895e45b7bc7afaf3320a",
+      "probe": {
+        "kind": "excel",
+        "n_sheets": 6,
+        "sheets": {
+          "Q1_单点组批": {
+            "n_cols": 9,
+            "columns": [
+              "架次编号",
+              "服务区编号",
+              "机型编号",
+              "货箱编号列表",
+              "总质量（kg）",
+              "总体积（m³）",
+              "往返时间（s）",
+              "架次能耗（kWh）",
+              "返航SOC（%）"
+            ],
+            "dtypes": {
+              "架次编号": "object",
+              "服务区编号": "object",
+              "机型编号": "object",
+              "货箱编号列表": "object",
+              "总质量（kg）": "object",
+              "总体积（m³）": "object",
+              "往返时间（s）": "object",
+              "架次能耗（kWh）": "object",
+              "返航SOC（%）": "object"
+            },
+            "missing_rate": {
+              "架次编号": NaN,
+              "服务区编号": NaN,
+              "机型编号": NaN,
+              "货箱编号列表": NaN,
+              "总质量（kg）": NaN,
+              "总体积（m³）": NaN,
+              "往返时间（s）": NaN,
+              "架次能耗（kWh）": NaN,
+              "返航SOC（%）": NaN
+            },
+            "head": []
+          },
+          "Q2_运输架次": {
+            "n_cols": 8,
+            "columns": [
+              "架次编号",
+              "无人机编号",
+              "机型编号",
+              "电池编号",
+              "开始时刻（s）",
+              "访问服务区顺序",
+              "返回O01时刻（s）",
+              "架次能耗（kWh）"
+            ],
+            "dtypes": {
+              "架次编号": "object",
+              "无人机编号": "object",
+              "机型编号": "object",
+              "电池编号": "object",
+              "开始时刻（s）": "object",
+              "访问服务区顺序": "object",
+              "返回O01时刻（s）": "object",
+              "架次能耗（kWh）": "object"
+            },
+            "missing_rate": {
+              "架次编号": NaN,
+              "无人机编号": NaN,
+              "机型编号": NaN,
+              "电池编号": NaN,
+              "开始时刻（s）": NaN,
+              "访问服务区顺序": NaN,
+              "返回O01时刻（s）": NaN,
+              "架次能耗（kWh）": NaN
+            },
+            "head": []
+          },
+          "Q2_逐箱交付": {
+            "n_cols": 4,
+            "columns": [
+              "货箱编号",
+              "架次编号",
+              "服务区编号",
+              "交付完成时刻（s）"
+            ],
+            "dtypes": {
+              "货箱编号": "object",
+              "架次编号": "object",
+              "服务区编号": "object",
+              "交付完成时刻（s）": "object"
+            },
+            "missing_rate": {
+              "货箱编号": NaN,
+              "架次编号": NaN,
+              "服务区编号": NaN,
+              "交付完成时刻（s）": NaN
+            },
+            "head": []
+          },
+          "Q3_中继架次": {
+            "n_cols": 11,
+            "columns": [
+              "中继架次编号",
+              "中继无人机编号",
+              "能源组件编号",
+              "开始时刻（s）",
+              "悬停经度（°）",
+              "悬停纬度（°）",
+              "悬停海拔（m）",
+              "建链完成时刻（s）",
+              "服务结束时刻（s）",
+              "返回O01时刻（s）",
+              "架次能耗（kWh）"
+            ],
+            "dtypes": {
+              "中继架次编号": "object",
+              "中继无人机编号": "object",
+              "能源组件编号": "object",
+              "开始时刻（s）": "object",
+              "悬停经度（°）": "object",
+              "悬停纬度（°）": "object",
+              "悬停海拔（m）": "object",
+              "建链完成时刻（s）": "object",
+              "服务结束时刻（s）": "object",
+              "返回O01时刻（s）": "object",
+              "架次能耗（kWh）": "object"
+            },
+            "missing_rate": {
+              "中继架次编号": NaN,
+              "中继无人机编号": NaN,
+              "能源组件编号": NaN,
+              "开始时刻（s）": NaN,
+              "悬停经度（°）": NaN,
+              "悬停纬度（°）": NaN,
+              "悬停海拔（m）": NaN,
+              "建链完成时刻（s）": NaN,
+              "服务结束时刻（s）": NaN,
+              "返回O01时刻（s）": NaN,
+              "架次能耗（kWh）": NaN
+            },
+            "head": []
+          },
+          "Q3_通信保障": {
+            "n_cols": 6,
+            "columns": [
+              "运输架次编号",
+              "通信阶段",
+              "开始时刻（s）",
+              "结束时刻（s）",
+              "保障方式",
+              "中继架次编号"
+            ],
+            "dtypes": {
+              "运输架次编号": "object",
+              "通信阶段": "object",
+              "开始时刻（s）": "object",
+              "结束时刻（s）": "object",
+              "保障方式": "object",
+              "中继架次编号": "object"
+            },
+            "missing_rate": {
+              "运输架次编号": NaN,
+              "通信阶段": NaN,
+              "开始时刻（s）": NaN,
+              "结束时刻（s）": NaN,
+              "保障方式": NaN,
+              "中继架次编号": NaN
+            },
+            "head": []
+          },
+          "Q4_分区配置": {
+            "n_cols": 11,
+            "columns": [
+              "K（2或3）",
+              "任务组编号",
+              "服务区列表",
+              "A型运输无人机数",
+              "B型运输无人机数",
+              "C型运输无人机数",
+              "A型电池组数",
+              "B型电池组数",
+              "C型电池组数",
+              "中继无人机数",
+              "中继能源组件数"
+            ],
+            "dtypes": {
+              "K（2或3）": "object",
+              "任务组编号": "object",
+              "服务区列表": "object",
+              "A型运输无人机数": "object",
+              "B型运输无人机数": "object",
+              "C型运输无人机数": "object",
+              "A型电池组数": "object",
+              "B型电池组数": "object",
+              "C型电池组数": "object",
+              "中继无人机数": "object",
+              "中继能源组件数": "object"
+            },
+            "missing_rate": {
+              "K（2或3）": NaN,
+              "任务组编号": NaN,
+              "服务区列表": NaN,
+              "A型运输无人机数": NaN,
+              "B型运输无人机数": NaN,
+              "C型运输无人机数": NaN,
+              "A型电池组数": NaN,
+              "B型电池组数": NaN,
+              "C型电池组数": NaN,
+              "中继无人机数": NaN,
+              "中继能源组件数": NaN
+            },
+            "head": []
+          }
+        }
+      }
     }
   ]
 }

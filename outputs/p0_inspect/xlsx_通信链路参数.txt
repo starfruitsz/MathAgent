@@ -1,0 +1,27 @@
+### 通信链路参数.xlsx
+
+sheets = ['数据']
+
+==============================================================================
+-- sheet: 数据   shape=(16, 5)   (header=None 原样输出)
+==============================================================================
+            0             1   2      3     4
+0   通信系统与端点参数           NaN NaN    NaN   NaN
+1        参数类别          参数名称 NaN     符号   参数值
+2        传播参数     载波频率（MHz） NaN      f  2400
+3        传播参数      系统损耗（dB） NaN   Lsys     3
+4        传播参数  地形遮挡附加损耗（dB） NaN   Lobs    10
+5        接收参数    接收灵敏度（dBm） NaN  Psens   -98
+6        接收参数      衰落裕量（dB） NaN      M     8
+7       运输无人机     发射功率（dBm） NaN     Pt    20
+8       运输无人机     天线增益（dBi） NaN      G     3
+9       中继接入端     发射功率（dBm） NaN     Pt    20
+10      中继接入端     天线增益（dBi） NaN      G     6
+11      中继回传端     发射功率（dBm） NaN     Pt    19
+12      中继回传端     天线增益（dBi） NaN      G     8
+13   固定网关 G01     发射功率（dBm） NaN     Pt    27
+14   固定网关 G01     天线增益（dBi） NaN      G    12
+15   固定网关 G01     天线离地高度（m） NaN     hG    20
+
+-- 按默认表头解析: columns = ['通信系统与端点参数', 'Unnamed: 1', 'Unnamed: 2', 'Unnamed: 3', 'Unnamed: 4']
+   dtypes = {'通信系统与端点参数': 'str', 'Unnamed: 1': 'str', 'Unnamed: 2': 'float64', 'Unnamed: 3': 'str', 'Unnamed: 4': 'object'}

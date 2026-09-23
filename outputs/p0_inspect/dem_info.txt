@@ -1,0 +1,14 @@
+### 镇龙乡及周边30米DEM.tif
+CRS        = EPSG:4326
+EPSG       = 4326
+is_geographic = True
+size       = 1486 x 1309
+res        = (0.00027777777777777393, 0.0002777777777777777)  (单位: 度, 因为是地理坐标系)
+res_approx_m = 30.92 m (经度方向, 赤道附近近似)
+nodata     = None
+bounds     = BoundingBox(left=109.0326388888889, bottom=22.86125, right=109.44541666666667, top=23.22486111111111)
+dtype      = float32
+n_bands    = 1
+
+高程统计: min=41.69  max=1132.86  mean=173.62  std=133.59
+有效像元 = 1945174 / 1945174 (nodata 占比 0.0000%)

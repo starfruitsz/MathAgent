@@ -23,6 +23,26 @@
 - [x] 写入操作规范 `OPS_SPEC_F题.md` v1.0
 - [x] 写入一键提交脚本 `scripts/commit.ps1`
 - [x] 写入环境自检脚本 `scripts/check_env.py`
+- [x] 环境探测完成 → `outputs/env_report.json`
+
+## 环境探测结果（自动生成）
+
+| 项 | 值 |
+|---|---|
+| Python | 3.13.7 (CPython)，`D:\python\python.exe` |
+| 平台 | Windows 11 / AMD64 |
+| CPU 核数 | 24 |
+| 已安装 | numpy 2.4.4、scipy 1.17.1、pandas 3.0.2、scikit-learn 1.8.0、matplotlib 3.10.9、joblib 1.5.3 |
+| 缺失 | pyarrow、statsmodels、lmfit、iminuit、pymoo、cvxpy、dowhy、econml、mapie、powerlaw、seaborn、PyYAML、tqdm、pytest |
+
+**行动项**：环境当前为 `incomplete`。开工前先执行
+```powershell
+pip install -r requirements.txt
+python scripts\check_env.py     # 期望 status: ok
+```
+若某个库在 Python 3.13 下安装失败（如 `cvxpy`/`dowhy`/`econml` 的兼容性），
+**必须在 `OPS_SPEC_F题.md` 第 9 节登记替代方案**，不得静默跳过。
+
 
 ## 进行中
 

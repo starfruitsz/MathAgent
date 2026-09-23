@@ -1,0 +1,41 @@
+{
+  "timestamp": "2026-09-23T16:09:08.706289+08:00",
+  "git_commit": "13475dfe38e0cac62d0dbbe8a726c1ff67075f85",
+  "python": {
+    "version": "3.13.7",
+    "implementation": "CPython",
+    "executable": "D:\\python\\python.exe"
+  },
+  "platform": {
+    "system": "Windows",
+    "release": "11",
+    "machine": "AMD64"
+  },
+  "cpu_count": 24,
+  "packages_found": {
+    "numpy": "2.4.4",
+    "scipy": "1.17.1",
+    "pandas": "3.0.2",
+    "sklearn": "1.8.0",
+    "matplotlib": "3.10.9",
+    "joblib": "1.5.3"
+  },
+  "packages_missing": [
+    "pyarrow",
+    "statsmodels",
+    "lmfit",
+    "iminuit",
+    "pymoo",
+    "cvxpy",
+    "dowhy",
+    "econml",
+    "mapie",
+    "powerlaw",
+    "seaborn",
+    "PyYAML",
+    "tqdm",
+    "pytest"
+  ],
+  "status": "incomplete",
+  "memory_total_gb": null
+}

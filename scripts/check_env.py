@@ -13,6 +13,13 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Windows 控制台默认 GBK，中文输出会乱码 —— 强制 UTF-8
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+    sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+except Exception:
+    pass
+
 # OPS_SPEC 第 2.2 节列出的核心栈
 REQUIRED = [
     "numpy",

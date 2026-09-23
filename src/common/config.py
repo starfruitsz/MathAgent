@@ -113,13 +113,6 @@ OBSTRUCTION_ADDITIONAL_LOSS_DB = None
 PAYLOAD_ROOT_TOL = 1e-6
 """最大安全载荷反解（brentq）的收敛容差。"""
 
-SIMPLEX_TOL = 1e-6
-"""判断成分/配比之和等于 1 的容差（`src/common/simplex.py` 使用）。
-
-D 题本身不需要单纯形运算，但该工具保留以便处理"占比/份额"类指标
-（如各组工作量占比、资源占比）。
-"""
-
 ENERGY_FEASIBILITY_TOL = 1e-6
 """能量约束回代验证的相对容差。"""
 

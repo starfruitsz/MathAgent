@@ -1,6 +1,6 @@
 # D 题进度看板
 
-最后更新：F 题 → D 题切换 | 当前 HEAD：`<见 git log>`
+最后更新：归档目录更名为 `docs/legacy_D题/` | 当前 HEAD：`<见 git log>`
 
 > **接手步骤**：`git pull --rebase origin main` → 读本文件 → 读 `OPS_SPEC_D题.md`
 
@@ -26,15 +26,17 @@
 - [x] `scripts/check_env.py` —— 环境自检，输出 `outputs/env_report.json`
 - [x] `scripts/run_all.ps1` —— 端到端复现骨架
 - [x] **`OPS_SPEC_D题.md` v2.0** —— D 题操作规范（含铁律 R1–R10、物理口径章、四问验收清单）
-- [x] F 题遗留物归档至 `docs/legacy_F题/`
+- [x] 归档目录 `docs/legacy_D题/` 建立（含归档规范，用于存放被推翻的 D 题方案）
 
 ### 公共层（可复用，已测试）
-- [x] `src/common/config.py` —— 路径 / SEED / 全局常量
+- [x] `src/common/config.py` —— 路径 / SEED / 全局常量（含 D 题附录 2/3 的关键口径常量）
 - [x] `src/common/io_utils.py` —— 统一读写 + 结果溯源（自动记录 git commit 与 seed）
 - [x] `src/common/metrics.py` —— R²/调整R²/RMSE/MAE/AIC/BIC/F1/区间覆盖率
-- [x] `src/common/simplex.py` —— CLR/ALR/ILR 变换（D 题一般用不到，保留备选）
-- [x] `src/q0_data/discover.py` —— 数据发现脚本（已通过空数据 + 正常数据冒烟测试）
-- [x] 测试 **45 项全部通过**
+- [x] `src/q0_data/discover.py` —— 数据发现脚本（按附录 1 分类附件 + DEM 栅格探测 + CRS 单位告警）
+- [x] 测试 **40 项全部通过**
+
+> 已移除 `src/common/simplex.py`（CLR/ALR/ILR 成分数据变换）：那是上一版赛题的遗留，
+> D 题不需要单纯形运算，且该模块已无任何调用方，属于孤儿模块，故连同其测试一并删除。
 
 ### 环境（已验证，无需重装）
 - [x] 依赖栈全部安装并导入通过（含 `rasterio` / `geopandas` / `ortools` 等 D 题新增项）
@@ -124,4 +126,4 @@
   → `verify/feasibility.py` → Q1 → Q2 → Q3 → Q4
 - **物理公式先写测试**：新增/修改 `src/physics/`、`src/comms/` 的任何公式，
   必须同步补 `tests/test_physics.py`（规范 7.3 节给出了必测清单）
-- F 题的历史决策在 `docs/legacy_F题/`，**仅作参考，不要套用**
+- 被推翻的 D 题方案必须归档到 `docs/legacy_D题/`，并说明**为何弃用**，不要就地删除

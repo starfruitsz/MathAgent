@@ -132,5 +132,5 @@ Remove-Item -Recurse -Force <repo>\.git   # 避免嵌套仓库
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
-| v1.0 | （F 题）建立工具清单骨架 | `725a092` |
-| **v2.0** | **由 F 题改写为 D 题**：登记地理空间栈（rasterio/geopandas/shapely/pyproj/scikit-image）与运筹栈（ortools/networkx/pymoo/cvxpy），新增"明确不采用的工具及理由"一节 | 本次提交 |
+| v2.0 | 建立 D 题工具清单：登记地理空间栈（rasterio/geopandas/shapely/pyproj/scikit-image）与运筹栈（ortools/networkx/pymoo/cvxpy），新增"明确不采用的工具及理由"一节 | `9f6201a` |
+| **v2.1** | 归档目录更名为 `docs/legacy_D题/`，本文件随规范同步（工具清单本身无变化） | 本次提交 |

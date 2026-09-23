@@ -24,6 +24,8 @@
 - [x] 写入一键提交脚本 `scripts/commit.ps1`
 - [x] 写入环境自检脚本 `scripts/check_env.py`
 - [x] 环境探测完成 → `outputs/env_report.json`
+- [x] **依赖栈全部安装并导入验证通过**（20/20，Python 3.13.7）
+- [x] `requirements.txt` 锁定精确版本 + `requirements.lock.txt` 完整依赖树
 
 ## 环境探测结果（自动生成）
 
@@ -32,16 +34,32 @@
 | Python | 3.13.7 (CPython)，`D:\python\python.exe` |
 | 平台 | Windows 11 / AMD64 |
 | CPU 核数 | 24 |
-| 已安装 | numpy 2.4.4、scipy 1.17.1、pandas 3.0.2、scikit-learn 1.8.0、matplotlib 3.10.9、joblib 1.5.3 |
-| 缺失 | pyarrow、statsmodels、lmfit、iminuit、pymoo、cvxpy、dowhy、econml、mapie、powerlaw、seaborn、PyYAML、tqdm、pytest |
+| 状态 | ✅ `status: ok` —— 全部核心依赖就绪（20/20 导入通过） |
 
-**行动项**：环境当前为 `incomplete`。开工前先执行
+**已锁定版本**（详见 `requirements.txt`）：
+
+| 包 | 版本 | 包 | 版本 |
+|---|---|---|---|
+| numpy | 2.4.4 | pandas | 3.0.2 |
+| scipy | 1.17.1 | pyarrow | 25.0.1 |
+| statsmodels | 0.15.0 | scikit-learn | 1.8.0 |
+| lmfit | 1.3.4 | iminuit | 2.33.0 |
+| pymoo | 0.6.2 | cvxpy | 1.9.3 |
+| dowhy | 0.14 | econml | 0.17.0 |
+| mapie | 1.5.0 | powerlaw | 2.0.0 |
+| matplotlib | 3.10.9 | seaborn | 0.13.2 |
+| PyYAML | 6.0.3 | tqdm | 4.70.1 |
+| joblib | 1.5.3 | pytest | 9.1.1 |
+
+> **重要结论**：`dowhy`、`econml`、`cvxpy`、`pymoo` 这些偏冷门的库在 **Python 3.13 下均可正常安装与导入**，
+> 无需降级 Python 或替换工具。环境层无阻塞项。
+
+**接手动作**：环境已就绪，**无需重新安装**。如需在干净机器上重建：
 ```powershell
 pip install -r requirements.txt
 python scripts\check_env.py     # 期望 status: ok
 ```
-若某个库在 Python 3.13 下安装失败（如 `cvxpy`/`dowhy`/`econml` 的兼容性），
-**必须在 `OPS_SPEC_F题.md` 第 9 节登记替代方案**，不得静默跳过。
+
 
 
 ## 进行中

@@ -26,6 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
+from src.physics.battery import charging_time as _default_charging_time
 from src.physics.battery import soc_after_energy
 from src.physics.energy import Segment, segment_energy_kwh, segment_time_s
 from src.physics.payload import UAVType
@@ -69,8 +70,22 @@ class BoxBatch:
 
 
 @dataclass(frozen=True)
+class Leg:
+    """一个航段的几何量（多点串飞架次应**逐段**给出）。"""
+
+    distance_m: float
+    climb_m: float = 0.0
+    descent_m: float = 0.0
+
+
+@dataclass(frozen=True)
 class Sortie:
-    """一个运输架次（单点往返；多点访问时按顺序累加航段）。"""
+    """一个运输架次。
+
+    ★ 多点串飞用 `legs` 给出**逐段**几何（含回程）；否则用标量字段表示单点往返。
+      逐段建模是必须的：能耗**不是**距离的线性函数，
+      把多段距离相加当成一段会明显改变结果（爬升项 + 载荷递减）。
+    """
 
     sortie_id: str
     uav_id: str
@@ -79,8 +94,8 @@ class Sortie:
     start_s: float
     service_sequence: tuple[str, ...]
     box_ids: tuple[str, ...]
-    leg_distance_m: float
-    """**单个**航段的水平距离（O01→S_i 或 S_i→S_{i+1}）。"""
+    leg_distance_m: float = 0.0
+    """单点往返的水平距离（`legs` 为空时使用）。"""
     climb_out_m: float = 0.0
     descent_out_m: float = 0.0
     reported_energy_kwh: float | None = None
@@ -89,6 +104,19 @@ class Sortie:
     """{服务区: 交付完成时刻(s)}；None 表示不校验时间。"""
     outage_windows: tuple[tuple[float, float], ...] = ()
     """该架次的通信中断时段（绝对时刻，s）；Q3 用于检查中继覆盖。"""
+    legs: tuple[Leg, ...] = ()
+    """逐段几何（含回程）；非空时优先于标量字段。"""
+    boxes_per_stop: dict[str, int] | None = None
+    """{服务区: 投送箱数}，用于按段递减载荷；None 时按箱数均分估算。"""
+
+    def effective_legs(self) -> tuple[Leg, ...]:
+        """实际使用的航段序列。"""
+        if self.legs:
+            return self.legs
+        return (
+            Leg(self.leg_distance_m, self.climb_out_m, self.descent_out_m),
+            Leg(self.leg_distance_m, self.descent_out_m, self.climb_out_m),
+        )
 
 
 @dataclass(frozen=True)
@@ -117,6 +145,15 @@ class TransportPlan:
     """共享电池编号集合；None 表示不校验编号合法性。"""
     uav_id_to_type: dict[str, str] | None = None
     """{无人机编号: 机型}；提供时会校验无人机与机型是否一致。"""
+    battery_charge_s: dict[str, float] | None = None
+    """{机型: 等效完全充电时间 T_full(s)}。
+
+    ★ 提供时，电池资源的下一次占用只需在**充电完成之后**开始，
+      即占用间隙 ≥ `charging_time(soc_end, T_full)`。
+      不提供则退化为"任意重叠都算冲突"（更严格但会误报正常周转）。
+    """
+    charging_time_fn: object = None
+    """充电时间函数 `(soc, t_full) -> seconds`；None 时用 `physics.battery.charging_time`。"""
 
 
 @dataclass(frozen=True)
@@ -169,23 +206,42 @@ class VerifyReport:
 def _sortie_energy(
     uav: UAVType, s: Sortie, d: SortieDerived
 ) -> tuple[float, float, float]:
-    """重算架次的 (总能耗 kWh, 去程能耗 kWh, 总飞行时间 s)。
+    """重算架次的 (总能耗 kWh, 首段能耗 kWh, 总飞行时间 s)。
 
-    单点往返模型：去程载货、回程空载，各飞一次 `leg_distance_m`。
-    多点访问时按"每段几何相同、去程各段均按该架次总载荷计"的**保守**口径
-    （偏保守 = 能耗估高 = 不会放过违规方案）。
+    ★ **逐段**计算，载荷按投送递减：
+      第 m 段机上载荷 = 尚未投送的箱质量之和。
+      单点往返时退化为"去程载货、回程空载"。
+
+    载荷分配：
+      - 已知 `boxes_per_stop` 时按其递减；
+      - 否则按"去程各段均按总载荷"（保守，高估能耗）；
+      - **回程段一律空载**（题目：完成投送后返回 O01）。
     """
-    seg_out = Segment(s.leg_distance_m, s.climb_out_m, s.descent_out_m)
-    seg_back = Segment(s.leg_distance_m, s.descent_out_m, s.climb_out_m)
+    legs = s.effective_legs()
+    n_legs = len(legs)
+    n_out = max(1, n_legs - 1)  # 最后一段为回程
 
-    payload = min(d.total_mass_kg, uav.max_payload_kg)
-    e_out = segment_energy_kwh(uav, seg_out, payload)
-    e_back = segment_energy_kwh(uav, seg_back, 0.0)
+    total = 0.0
+    t_fly = 0.0
+    first_leg_energy = 0.0
+    remaining = d.total_mass_kg
 
-    n_legs = max(1, len(s.service_sequence))
-    energy = (e_out + e_back) * n_legs
-    t_fly = (segment_time_s(uav, seg_out) + segment_time_s(uav, seg_back)) * n_legs
-    return energy, e_out, t_fly
+    for i, lg in enumerate(legs):
+        seg = Segment(lg.distance_m, lg.climb_m, lg.descent_m)
+        # 最后一段是回程；单段情形（i=0 且 n_legs=1）视为唯一一段载货
+        is_return = i >= n_out and n_legs > 1
+        payload = 0.0 if is_return else min(remaining, uav.max_payload_kg)
+        e = segment_energy_kwh(uav, seg, payload)
+        total += e
+        t_fly += segment_time_s(uav, seg)
+        if i == 0:
+            first_leg_energy = e
+        # ★ 在第 (i+1) 个服务区投送后，后续航段才减去它的质量
+        if not is_return and i < len(s.service_sequence):
+            remaining = max(
+                0.0, remaining - d.mass_by_stop.get(s.service_sequence[i], 0.0)
+            )
+    return total, first_leg_energy, t_fly
 
 
 def _compute_derived(
@@ -199,6 +255,11 @@ def _compute_derived(
         d = store.get(s.sortie_id)
         d.total_mass_kg = sum(boxes[b].mass_kg for b in s.box_ids if b in boxes)
         d.total_volume_m3 = sum(boxes[b].volume_m3 for b in s.box_ids if b in boxes)
+        d.mass_by_stop = {}
+        for _bid in s.box_ids:
+            if _bid in boxes:
+                _svc = boxes[_bid].service_id
+                d.mass_by_stop[_svc] = d.mass_by_stop.get(_svc, 0.0) + boxes[_bid].mass_kg
         uav = uav_types.get(s.type_code)
         if uav is None:
             continue
@@ -341,10 +402,24 @@ def _check_energy(
 
 
 def _sortie_end_s(s: Sortie, uav: UAVType, d: SortieDerived) -> float:
-    """架次结束时刻 = 开始 + 准备 + 装载 + 飞行 + 交接。"""
+    """架次结束时刻 = 开始 + 准备 + 装载 + 飞行 + **逐站交接**。
+
+    ★ 交接时间必须**按站累加**：
+      `Σ_stops (基础交接 + 每箱增加 × 该站箱数)`
+      而不是 `(基础交接 + 每箱增加 × 总箱数) × 站数` —— 后者会把基础交接
+      重复乘上总箱数，长时间窗被高估，导致资源冲突误报。
+    """
     n_boxes = len(s.box_ids)
-    t_handover = (uav.handover_base_s + uav.handover_per_box_s * n_boxes) * max(
-        1, len(s.service_sequence)
+    if s.boxes_per_stop:
+        counts = [s.boxes_per_stop.get(st, 0) for st in s.service_sequence]
+    elif s.service_sequence:
+        # 未给出逐站箱数：按站数均分估算（仅用于粗校验）
+        base, rem = divmod(n_boxes, len(s.service_sequence))
+        counts = [base + (1 if i < rem else 0) for i in range(len(s.service_sequence))]
+    else:
+        counts = [n_boxes]
+    t_handover = sum(
+        uav.handover_base_s + uav.handover_per_box_s * k for k in counts
     )
     return (
         s.start_s
@@ -416,7 +491,7 @@ def _check_resources(
     rep: VerifyReport,
 ) -> None:
     # 1) 资源时段不重叠 + 机型/电池一致性 + 编号合法性
-    by_resource: dict[str, list[tuple[float, float, str]]] = {}
+    by_resource: dict[str, list[tuple[float, float, str, float]]] = {}
     for s in plan.sorties:
         uav = uav_types.get(s.type_code)
         if uav is None:
@@ -451,10 +526,10 @@ def _check_resources(
             )
 
         by_resource.setdefault(f"UAV:{s.uav_id}", []).append(
-            (s.start_s, d.end_s, s.sortie_id)
+            (s.start_s, d.end_s, s.sortie_id, 1.0)
         )
         by_resource.setdefault(f"BAT:{s.battery_id}", []).append(
-            (s.start_s, d.end_s, s.sortie_id)
+            (s.start_s, d.end_s, s.sortie_id, d.return_soc)
         )
         if s.battery_id and "-" in s.battery_id:
             bat_type = s.battery_id.split("-")[0]
@@ -468,13 +543,22 @@ def _check_resources(
 
     for res, spans in by_resource.items():
         spans.sort()
-        for (s1, e1, id1), (s2, e2, id2) in zip(spans, spans[1:]):
-            if s2 < e1 - 1e-9:
+        is_battery = res.startswith("BAT:")
+        # 电池编号形如 "A-B01" → 机型取 '-' 前的部分
+        code = res.split(":", 1)[1].split("-")[0] if is_battery else ""
+        t_full = (plan.battery_charge_s or {}).get(code) if is_battery else None
+        fn = plan.charging_time_fn or _default_charging_time
+
+        for (s1, e1, id1, soc1), (s2, e2, id2, _soc2) in zip(spans, spans[1:]):
+            # ★ 电池资源：任务结束后需充满才能再次占用，因此允许存在充电间隙
+            required_gap = float(fn(soc1, t_full)) if t_full else 0.0  # type: ignore[operator]
+            if s2 < e1 + required_gap - 1e-9:
                 rep.violations.append(
                     Violation(
                         ViolationType.RESOURCE_TIME_OVERLAP, id2,
                         f"资源 {res} 在 [{s2:.1f}, {e2:.1f}] 与架次 {id1} "
-                        f"的 [{s1:.1f}, {e1:.1f}] 重叠",
+                        f"的 [{s1:.1f}, {e1:.1f}] 冲突"
+                        + (f"（需 {required_gap:.0f}s 充电间隙）" if required_gap else ""),
                     )
                 )
 

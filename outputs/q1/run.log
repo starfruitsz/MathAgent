@@ -38,3 +38,11 @@
 21:21:32 [INFO] 选定方案 single_C：18 架次 / 75.071 kWh / 33729.5 s
 21:21:32 [INFO] (4) ρ_g 敏感性扫描：21 个取值（0 → 0.50）
 21:21:41 [INFO] 完成，用时 8.6 s；输出目录 C:\Users\28447\Desktop\数学建模\MathAgent\outputs\q1
+21:57:30 [INFO] 载入输入 ...
+21:57:30 [INFO] 服务区 15 个 / 货箱 80 个 / 机型 ['A', 'B', 'C'] / 航段缓存 240 条
+21:57:30 [INFO] (1) 最大安全载荷表：45 行（15 服务区 × 3 机型）
+21:57:30 [INFO] (2) 可行策略：['single_A', 'single_B', 'single_C', 'ffd_volume', 'ffd_mass', 'nf_as_given', 'mixed_best_fit', 'mixed_largest_first']
+21:57:30 [INFO] (3) Pareto 非支配解 2 个：['single_C', 'single_B']
+21:57:30 [INFO] 选定方案 single_C：18 架次 / 75.071 kWh / 33729.5 s
+21:57:30 [INFO] (4) ρ_g 敏感性扫描：21 个取值（0 → 0.50）
+21:57:31 [INFO] 完成，用时 0.8 s；输出目录 C:\Users\28447\Desktop\数学建模\MathAgent\outputs\q1

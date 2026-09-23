@@ -15,7 +15,7 @@ Q1 要 3 机型 × 15 服务区、Q2/Q3 还要跨服务区组合，重复计算�
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pandas as pd
@@ -54,34 +54,44 @@ def provider_id(provider: ElevationProvider, sample_step_m: float) -> str:
 
 @dataclass
 class LegCache:
-    """航段几何的查表封装。"""
+    """航段几何的查表封装。
+
+    ★ 性能：内部把 DataFrame 转成 **`(from_id, to_id) → dict` 的哈希索引**。
+      求解器对航段的查询是高频操作（Q2 构造过程约 4 万次），
+      用 pandas 布尔掩码每次都要全表扫描，会把运行时间从秒级推到分钟级。
+    """
 
     df: pd.DataFrame
     provider_fingerprint: str
     sample_step_m: float
+    _index: dict[tuple[str, str], dict[str, float]] = field(
+        default=None, repr=False, compare=False
+    )
+
+    def __post_init__(self) -> None:
+        if self._index is None:
+            self._index = {}
+            cols = ("distance_m", "climb_m", "descent_m", "cruise_alt_m",
+                    "op_from_m", "op_to_m", "max_ground_elev_m")
+            f = self.df["from_id"].to_numpy()
+            t = self.df["to_id"].to_numpy()
+            arr = {c: self.df[c].to_numpy() for c in cols if c in self.df.columns}
+            for i in range(len(self.df)):
+                self._index[(f[i], t[i])] = {c: float(arr[c][i]) for c in arr}
 
     def get(self, from_id: str, to_id: str) -> dict[str, float]:
-        """取单个航段的几何量。"""
-        row = self.df[(self.df["from_id"] == from_id) & (self.df["to_id"] == to_id)]
-        if row.empty:
-            raise KeyError(f"缓存中没有航段 {from_id} → {to_id}")
-        r = row.iloc[0]
-        return {
-            "distance_m": float(r["distance_m"]),
-            "climb_m": float(r["climb_m"]),
-            "descent_m": float(r["descent_m"]),
-            "cruise_alt_m": float(r["cruise_alt_m"]),
-            "op_from_m": float(r["op_from_m"]),
-            "op_to_m": float(r["op_to_m"]),
-            "max_ground_elev_m": float(r["max_ground_elev_m"]),
-        }
+        """取单个航段的几何量（O(1)）。"""
+        try:
+            return self._index[(from_id, to_id)]
+        except KeyError:
+            raise KeyError(f"缓存中没有航段 {from_id} → {to_id}") from None
 
     def distance(self, from_id: str, to_id: str) -> float:
-        return float(self.get(from_id, to_id)["distance_m"])
+        return self._index[(from_id, to_id)]["distance_m"]
 
     @property
     def n_legs(self) -> int:
-        return len(self.df)
+        return len(self._index)
 
 
 def _build_all_legs(

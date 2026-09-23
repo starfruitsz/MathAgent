@@ -28,7 +28,33 @@
 - [x] `requirements.txt` 锁定精确版本 + `requirements.lock.txt` 完整依赖树
 - [x] `src/common/config.py`：全局路径/种子/题目常量（含 `L_CTX_CRIT = 30000`）
 - [x] `src/q0_data/discover.py`：数据发现脚本（已通过空数据 + 正常数据两类冒烟测试）
-- [x] `tests/test_q0_discover.py`：23 项测试全部通过
+- [x] `src/common/simplex.py`：CLR/ALR/ILR 变换 + 零值替换 + Aitchison 距离（Q1/Q3 基础）
+- [x] `src/common/metrics.py`：R²/调整R²/RMSE/MAE/AIC/BIC/F1/区间覆盖率
+- [x] `src/common/io_utils.py`：统一读写 + 结果溯源（自动记录 git commit 与 seed）
+- [x] 测试 **45 项全部通过**（`tests/test_q0_discover.py` + `tests/test_common.py`）
+
+## 已就绪 / 待实现
+
+| 模块 | 状态 |
+|---|---|
+| `src/common/config.py` | ✅ 完成（含题目常量与 `L_CTX_CRIT=30000`） |
+| `src/common/simplex.py` | ✅ 完成 |
+| `src/common/metrics.py` | ✅ 完成 |
+| `src/common/io_utils.py` | ✅ 完成 |
+| `src/common/plotting.py` | ⬜ 待实现（论文统一出图风格） |
+| `src/common/registry.py` | ⬜ 待实现（运行记录与哈希） |
+| `src/q0_data/discover.py` | ✅ 完成 |
+| `src/q0_data/validate.py` | ⬜ 待实现（形状/缺失/重复/范围校验） |
+| `src/q0_data/map_codes.py` | ⬜ 待实现（A/B/C 编号映射） |
+| `src/q1_quality_mixture/*` | ⬜ 待实现 |
+| `src/q2_scaling_law/*` | ⬜ 待实现 |
+| `src/q3_optimization/*` | ⬜ 待实现（**先读 `docs/MODEL_NOTES.md` 第 3.6 节的陷阱**） |
+| `src/q4_frontier/*` | ⬜ 待实现 |
+| `src/report/*` | ⬜ 待实现 |
+
+> ⚠️ `scripts/run_all.ps1` 会依次调用 q1–q4 的入口，这些入口**尚未实现**，
+> 因此该脚本目前只能跑到「数据发现」一步就会失败。这是预期状态 ——
+> 数据未到位前不应继续，实现顺序应是 **P0 → P1 → P2 → P3 → P4**。
 
 ## 环境探测结果（自动生成）
 

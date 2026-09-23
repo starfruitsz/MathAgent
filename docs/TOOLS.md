@@ -9,24 +9,33 @@
 
 | 工具 | 来源 URL | 版本 | 许可证 | 用途 | 对应问题 | 是否改源码 |
 |---|---|---|---|---|---|---|
-| numpy | https://github.com/numpy/numpy | 待 `pip freeze` 填充 | BSD-3 | 数值计算 | 全部 | 否 |
-| scipy | https://github.com/scipy/scipy | 待填充 | BSD-3 | 优化/拟合/统计 | Q2 Q3 | 否 |
-| pandas | https://github.com/pandas-dev/pandas | 待填充 | BSD-3 | 数据处理 | 全部 | 否 |
-| statsmodels | https://github.com/statsmodels/statsmodels | 待填充 | BSD-3 | 回归诊断/假设检验 | Q2 Q4 | 否 |
-| scikit-learn | https://github.com/scikit-learn/scikit-learn | 待填充 | BSD-3 | 回归/交叉验证/度量 | Q1 Q2 | 否 |
-| lmfit | https://github.com/lmfit/lmfit-py | 待填充 | BSD-3 | 非线性最小二乘 + 参数置信区间 | Q2 | 否 |
-| iminuit | https://github.com/scikit-hep/iminuit | 待填充 | MIT | Hessian 误差估计（备选） | Q2 | 否 |
-| pymoo | https://github.com/anyoptimization/pymoo | 待填充 | Apache-2.0 | 多目标/全局优化 | Q3 | 否 |
-| cvxpy | https://github.com/cvxpy/cvxpy | 待填充 | Apache-2.0 | 凸优化与 KKT 检验 | Q3 | 否 |
-| dowhy | https://github.com/py-why/dowhy | 待填充 | MIT | 因果图与效应识别 | Q4 | 否 |
-| econml | https://github.com/py-why/econml | 待填充 | MIT | 双重机器学习（DML） | Q4 | 否 |
-| mapie | https://github.com/scikit-learn-contrib/MAPIE | 待填充 | BSD-3 | 保形预测区间 | Q4 | 否 |
-| powerlaw | https://github.com/jeffalstott/powerlaw | 待填充 | MIT | 幂律拟合与拟合优度比较 | Q2 | 否 |
-| matplotlib | https://github.com/matplotlib/matplotlib | 待填充 | PSF-based | 绘图 | 全部 | 否 |
-| seaborn | https://github.com/mwaskom/seaborn | 待填充 | BSD-3 | 统计可视化 | 全部 | 否 |
-| pytest | https://github.com/pytest-dev/pytest | 待填充 | MIT | 单元测试 | 全部 | 否 |
+| numpy | https://github.com/numpy/numpy | 2.4.4 | BSD-3 | 数值计算 | 全部 | 否 |
+| scipy | https://github.com/scipy/scipy | 1.17.1 | BSD-3 | 优化/拟合/统计 | Q2 Q3 | 否 |
+| pandas | https://github.com/pandas-dev/pandas | 3.0.2 | BSD-3 | 数据处理 | 全部 | 否 |
+| pyarrow | https://github.com/apache/arrow | 25.0.1 | Apache-2.0 | Parquet/列式存储 | 全部 | 否 |
+| statsmodels | https://github.com/statsmodels/statsmodels | 0.15.0 | BSD-3 | 回归诊断/假设检验 | Q2 Q4 | 否 |
+| scikit-learn | https://github.com/scikit-learn/scikit-learn | 1.8.0 | BSD-3 | 回归/交叉验证/度量 | Q1 Q2 | 否 |
+| lmfit | https://github.com/lmfit/lmfit-py | 1.3.4 | BSD-3 | 非线性最小二乘 + 参数置信区间 | Q2 | 否 |
+| iminuit | https://github.com/scikit-hep/iminuit | 2.33.0 | MIT | Hessian 误差估计（备选） | Q2 | 否 |
+| pymoo | https://github.com/anyoptimization/pymoo | 0.6.2 | Apache-2.0 | 多目标/全局优化 | Q3 | 否 |
+| cvxpy | https://github.com/cvxpy/cvxpy | 1.9.3 | Apache-2.0 | 凸优化与 KKT 检验 | Q3 | 否 |
+| dowhy | https://github.com/py-why/dowhy | 0.14 | MIT | 因果图与效应识别 | Q4 | 否 |
+| econml | https://github.com/py-why/econml | 0.17.0 | MIT | 双重机器学习（DML） | Q4 | 否 |
+| mapie | https://github.com/scikit-learn-contrib/MAPIE | 1.5.0 | BSD-3 | 保形预测区间 | Q4 | 否 |
+| powerlaw | https://github.com/jeffalstott/powerlaw | 2.0.0 | MIT | 幂律拟合与拟合优度比较 | Q2 | 否 |
+| matplotlib | https://github.com/matplotlib/matplotlib | 3.10.9 | PSF-based | 绘图 | 全部 | 否 |
+| seaborn | https://github.com/mwaskom/seaborn | 0.13.2 | BSD-3 | 统计可视化 | 全部 | 否 |
+| PyYAML | https://github.com/yaml/pyyaml | 6.0.3 | MIT | 配置文件 | 全部 | 否 |
+| tqdm | https://github.com/tqdm/tqdm | 4.70.1 | MIT/MPL-2.0 | 进度条 | 全部 | 否 |
+| joblib | https://github.com/joblib/joblib | 1.5.3 | BSD-3 | 并行与缓存 | 全部 | 否 |
+| pytest | https://github.com/pytest-dev/pytest | 9.1.1 | MIT | 单元测试 | 全部 | 否 |
 
-**填充方式**：安装完成后执行 `pip freeze > requirements.lock.txt`，把精确版本回填到本表并提交（铁律 R1）。
+**验证状态**：以上 20 个包已在 **Python 3.13.7 / Windows 11 / AMD64** 环境下
+**全部安装成功且导入通过**（`python scripts/check_env.py` 返回 `status: ok`）。
+精确版本已锁进 `requirements.txt`，完整依赖树见 `requirements.lock.txt`。
+
+> **重要结论**：`dowhy` / `econml` / `cvxpy` / `pymoo` 这几个偏冷门的库
+> 在 Python 3.13 下均**无需降级 Python 或替换工具**，环境层无阻塞项。
 
 ---
 

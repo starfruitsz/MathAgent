@@ -1,0 +1,37 @@
+# ---- 环境 ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+.env
+
+# ---- 原始与中间数据（体积大，不入库）----
+data/raw/**
+data/interim/**
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+
+# ---- 大体积产物 ----
+*.pkl
+*.h5
+*.hdf5
+*.pt
+*.pth
+*.ckpt
+*.parquet
+*.zip
+*.7z
+large_files/
+
+# ---- 规范：outputs 中的小文件要入库，大文件不入库 ----
+outputs/**/*.tmp
+
+# ---- 嵌套仓库（scripts/tools 下拉取的上游工具）----
+scripts/tools/*/.git/
+
+# ---- 编辑器/系统 ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

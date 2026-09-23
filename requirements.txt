@@ -1,0 +1,41 @@
+# F 题依赖清单
+# 规范：必须锁定版本（==），禁止使用 >= 或未固定版本
+# 生成方式：pip freeze > requirements.lock.txt（lock 文件另行提交）
+# 说明：以下为按 OPS_SPEC 第 2.2 节列出的核心栈；
+#      实际安装后请用 `pip freeze` 覆盖为精确版本并提交（铁律 R1）。
+
+# ---- 数值与数据 ----
+numpy
+scipy
+pandas
+pyarrow
+
+# ---- 统计建模与回归 ----
+statsmodels
+scikit-learn
+lmfit
+iminuit
+
+# ---- 优化 ----
+pymoo
+cvxpy
+
+# ---- 不确定性与因果 ----
+dowhy
+econml
+mapie
+
+# ---- 幂律/标度律专用 ----
+powerlaw
+
+# ---- 可视化 ----
+matplotlib
+seaborn
+
+# ---- 实验管理 ----
+pyyaml
+tqdm
+joblib
+
+# ---- 测试 ----
+pytest

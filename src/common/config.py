@@ -92,6 +92,9 @@ CHG_SLOW_FRACTION = 0.35
 SOC_INITIAL = 1.0
 """所有能源资源初始 SOC = 100%。"""
 
+DEFAULT_RESERVE_RATIO = 0.20
+"""返航电量下限 ρ_g（小数）—— 附件实测三种运输机型与中继机均为 20%（ADR-017）。"""
+
 SOC_TOL = 1e-6
 """SOC 比较容差。"""
 

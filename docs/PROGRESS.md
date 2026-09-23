@@ -26,6 +26,9 @@
 - [x] 环境探测完成 → `outputs/env_report.json`
 - [x] **依赖栈全部安装并导入验证通过**（20/20，Python 3.13.7）
 - [x] `requirements.txt` 锁定精确版本 + `requirements.lock.txt` 完整依赖树
+- [x] `src/common/config.py`：全局路径/种子/题目常量（含 `L_CTX_CRIT = 30000`）
+- [x] `src/q0_data/discover.py`：数据发现脚本（已通过空数据 + 正常数据两类冒烟测试）
+- [x] `tests/test_q0_discover.py`：23 项测试全部通过
 
 ## 环境探测结果（自动生成）
 

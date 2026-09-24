@@ -31,6 +31,8 @@ from src.q1_payload_grouping.grouping import Box
 from src.q2_transport_schedule.models import CENTER_ID
 from src.q2_transport_schedule.schedule import build_pools, schedule_dispatch
 from src.q2_transport_schedule.solver import (
+    DEFAULT_WEIGHTS,
+    Q2Weights,
     Deadline,
     Q2Result,
     clear_caches,
@@ -110,6 +112,66 @@ def load_inputs():
     return boxes, uav_types, fleet, bat_inv, t_full, deadlines, bdf
 
 
+def schedule_score(
+    sched,
+    boxes_by_id: dict[str, Box],
+    deadlines: dict[str, Deadline],
+    weights: Q2Weights = DEFAULT_WEIGHTS,
+) -> tuple[float, dict]:
+    """★ 基于**真实调度结果**的多目标评分（题目要求的四个目标都进来）。
+
+    为什么必须用真实调度
+    -------------------
+    早期版本用"假想同时开工"（`start_s = 0`）估计交付时刻，导致：
+      · 得分里 **违规箱数恒为 0**（假想开工时每个架次都"及时"）；
+      · 完工时间被估成 0.75~1.2 h（真实是 5.7~9.8 h，因为只有 2 架机、4 组电池）；
+      · 于是目标实际退化成"只看能耗"，把 **B 型 35 架次 / 9.78 h / 准时 38.8%**
+        排在了 **C 型 16 架次 / 5.73 h / 准时 51.2% / 更省电** 的前面。
+
+    本函数只用调度器的真实输出计算，因此四个目标可比较、可解释。
+    """
+    n_late = 0
+    n_late_fb = 0
+    late_s = 0.0
+    n_on_time = 0
+    n_total = 0
+    for s in sched:
+        for svc, t in s.delivery_times.items():
+            for bid in s.boxes_by_stop.get(svc, ()):
+                dl = deadlines.get(bid)
+                if dl is None:
+                    continue
+                n_total += 1
+                if t <= dl.expected_s + 1e-6:
+                    n_on_time += 1
+                else:
+                    n_late += 1
+                    late_s += t - dl.expected_s
+                if dl.is_first_batch and dl.first_batch_s is not None:
+                    if t > dl.first_batch_s + 1e-6:
+                        n_late_fb += 1
+                        late_s += weights.first_batch_extra * (t - dl.first_batch_s)
+    makespan = max((s.return_s for s in sched), default=0.0)
+    energy = sum(s.energy_kwh for s in sched)
+    score = (
+        n_late + n_late_fb
+        + weights.late_per_s * late_s
+        + weights.makespan_per_s * makespan
+        + weights.energy_per_kwh * energy
+        + weights.sortie_per_unit * len(sched)
+    )
+    detail = {
+        "score": round(score, 6),
+        "n_sorties": len(sched),
+        "n_late_boxes": n_late,
+        "n_late_first_batch": n_late_fb,
+        "on_time_rate": round(n_on_time / n_total, 4) if n_total else 1.0,
+        "makespan_h": round(makespan / 3600.0, 3),
+        "energy_kwh": round(energy, 4),
+    }
+    return score, detail
+
+
 def solve(
     boxes: list[Box],
     uav_types: dict[str, UAVType],
@@ -120,22 +182,53 @@ def solve(
     t_full: dict[str, float],
     do_local_search: bool = True,
     max_group: int = 3,
+    fleet_mode: str = "auto",
 ) -> Q2Result:
+    """求解问题二。
+
+    `fleet_mode`
+    -----------
+    · `"auto"`（默认）—— 由于**调度器按机型分池**（实体机与电池都不可跨机型混用），
+      一个方案的机型必须**统一**才可调度。因此这里分别构造并调度
+      A / B / C 三个**同构机队方案**，用**真实调度结果**评分，取最优者。
+      这避免了"贪心按单箱能耗选机型"造成的严重次优（实测 B 型 35 架次 vs C 型 16 架次）。
+    · 其它值 —— 视为指定机型（如 `"C"`），只跑该机型（用于实验对比）。
+    """
     t0 = time.perf_counter()
     boxes_by_id = {b.box_id: b for b in boxes}
 
-    clear_caches()
-    cands = construct(boxes, uav_types, leg_cache, deadlines, max_group=max_group)
-    iters = 1
-    if do_local_search:
-        cands = local_search(cands, uav_types, leg_cache, boxes_by_id, deadlines)
-        iters += 1
+    if fleet_mode == "auto":
+        candidates = [c for c in ("C", "B", "A") if c in uav_types and fleet.get(c)]
+    else:
+        candidates = [fleet_mode]
 
-    plans = [c.plan for c in cands if c.plan.stops]
-    pools = build_pools(fleet, bat_inv, t_full)
-    sched = schedule_dispatch(plans, uav_types, leg_cache, boxes_by_id, pools)
+    best: tuple[float, dict, list, list] | None = None
+    trials: dict[str, dict] = {}
+    for code in candidates:
+        only_t = {code: uav_types[code]}
+        only_f = {code: fleet[code]}
+        only_b = {code: bat_inv.get(code, 0)}
+        only_tf = {code: t_full.get(code, 1800.0)}
+        clear_caches()
+        try:
+            cands = construct(boxes, only_t, leg_cache, deadlines, max_group=max_group)
+            if do_local_search:
+                cands = local_search(cands, only_t, leg_cache, boxes_by_id, deadlines)
+            plans = [c.plan for c in cands if c.plan.stops]
+            pools = build_pools(only_f, only_b, only_tf)
+            sched = schedule_dispatch(plans, only_t, leg_cache, boxes_by_id, pools)
+        except Exception as exc:  # noqa: BLE001  (某机型装不下或调度失败 → 跳过)
+            trials[code] = {"error": f"{type(exc).__name__}: {str(exc)[:80]}"}
+            continue
+        score, detail = schedule_score(sched, boxes_by_id, deadlines)
+        trials[code] = detail
+        if best is None or score < best[0]:
+            best = (score, detail, sched, cands)
 
-    assert sched is not None
+    if best is None:
+        raise RuntimeError(f"没有任何机型可行；各机型尝试结果：{trials}")
+    score, detail, sched, cands = best
+    iters = 2 if do_local_search else 1
     pen = 0.0
     n_fb = n_exp = 0
     lates: list[float] = []
@@ -167,9 +260,15 @@ def solve(
         mean_lateness_s=(sum(lates) / len(lates) if lates else 0.0),
         max_lateness_s=(max(lates) if lates else 0.0),
         on_time_rate=(n_on_time / n_total if n_total else 1.0),
-        objective=pen,
+        objective=score,
         runtime_s=time.perf_counter() - t0,
         iterations=iters,
+        note=("机型比较：" + "；".join(
+            f"{k}=" + (v.get("error", "")
+                       if "error" in v else
+                       f"{v['n_sorties']}架次/{v['makespan_h']}h/准时{v['on_time_rate']:.1%}"
+                       f"/{v['energy_kwh']:.2f}kWh")
+            for k, v in trials.items())),
     )
 
 
@@ -211,6 +310,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="D 题问题二求解器")
     ap.add_argument("--no-local-search", action="store_true")
     ap.add_argument("--max-group", type=int, default=3, help="单架次最多访问的服务区数")
+    ap.add_argument("--fleet-mode", default="auto",
+                    help="auto=自动比较 A/B/C 三个同构机队并取最优；或指定机型如 C")
     args = ap.parse_args(argv)
 
     log = get_logger("q2")
@@ -227,6 +328,7 @@ def main(argv: list[str] | None = None) -> int:
     res = solve(
         boxes, uav_types, leg_cache, deadlines, fleet, bat_inv, t_full,
         do_local_search=not args.no_local_search, max_group=args.max_group,
+        fleet_mode=args.fleet_mode,
     )
     log.info(
         "求解完成：%d 架次 / %.2f kWh / makespan %.0f s / 首批违规 %d / 期望违规 %d",

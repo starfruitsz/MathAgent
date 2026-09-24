@@ -49,21 +49,28 @@ def main() -> int:
     print(f"  Q4: 分量 {m4['n_atomic_units']} / 桥接 {m4['n_bridge_sorties']} "
           f"/ K2 可行 {m4['partition_feasible_k2']} / K3 可行 {m4['partition_feasible_k3']}")
 
-    # 一致性断言
+    # 一致性断言（★ 全部由 metrics 推导，不要硬编码历史数值）
     print("\n=== 一致性检查 ===")
+    # 论文里的数字带千分位/四舍五入，这里按格式化后的字符串找
+    def appears(v: float, nd: int = 2) -> bool:
+        return f"{v:.{nd}f}" in text
+
     checks = [
         ("Q3 运输架次数 == Q2 架次数",
          m3["n_transport_sorties"] == m2["n_sorties"]),
         ("Q3 运输能耗 == Q2 总能耗",
          abs(m3["transport_energy_kwh"] - m2["total_energy_kwh"]) < 1e-6),
-        ("论文出现 Q2 的实际架次数",
+        ("Q3 总能耗 == 运输 + 中继",
+         abs(m3["total_energy_kwh"]
+             - m3["transport_energy_kwh"] - m3["relay_energy_kwh"]) < 1e-6),
+        (f"论文出现 Q2 架次数 {m2['n_sorties']}",
          f"{m2['n_sorties']} 架次" in text or f"{m2['n_sorties']} 个运输架次" in text),
-        ("论文未出现过期架次数 22",
-         "22 架次" not in text),
-        ("论文出现 Q3 总能耗 99.68",
-         "99.68" in text),
-        ("论文未出现过期中断占比 31.3%",
-         "31.3%" not in text),
+        (f"论文出现 Q2 能耗 {m2['total_energy_kwh']:.2f}", appears(m2["total_energy_kwh"])),
+        (f"论文出现 Q3 总能耗 {m3['total_energy_kwh']:.2f}", appears(m3["total_energy_kwh"])),
+        (f"论文出现 Q3 联合完工 {m3['joint_makespan_h']:.2f} h",
+         f"{m3['joint_makespan_h']:.2f} h" in text),
+        (f"论文出现 Q4 原子单元数 {m4['n_atomic_units']}",
+         str(m4["n_atomic_units"]) in text),
     ]
     ok = True
     for name, good in checks:

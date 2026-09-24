@@ -500,7 +500,143 @@ def _merge_across_areas(
     return cur
 
 
-# ---------------------------------------------------------------- 局部搜索
+# ---------------------------------------------------------------- 目标函数
+
+@dataclass(frozen=True)
+class Q2Weights:
+    """问题二多目标的权重（题目要求同时优化及时性、完工时间、能耗、架次数）。
+
+    ★ 为什么不用纯字典序
+    -------------------
+    早期版本用 `(及时性惩罚, 架次数, 能耗)` 的**字典序**，导致两个严重偏差：
+      1. **完工时间不在目标里** —— 但题目明确要求优化"全部任务完成时间"；
+      2. 字典序使**架次数压倒能耗**，而在本机队下"多开小架次"既拖长完工时间
+         又更费电，反而在名义上"架次数相同"时被保留。
+
+    实测后果（见 `scripts/diag/q2_force_type.py`）：求解器只用 2 架 B 型机
+    开出 **35 架次 / 83.01 kWh / 完工 9.78 h / 准时 38.8%**，
+    而**同一套数据用 C 型只要 16 架次 / 81.34 kWh / 完工 5.73 h / 准时 51.2%** ——
+    四个维度全面更优。也就是说旧目标把明显更差的方案排在了前面。
+
+    因此改为**加权和**：先比违规箱数（数量级压倒），再比迟到/完工/能耗/架次。
+    """
+
+    late_per_s: float = 1.0 / 3600.0
+    """每箱每迟到 1 秒的权重（1/3600 → 迟到 1 小时记 1 分）。"""
+    first_batch_extra: float = 9.0
+    """首批箱迟到在上述基础上的**额外**倍数（首批是硬约束，加重 10 倍）。"""
+    makespan_per_s: float = 0.25 / 3600.0
+    """完工时间每 1 秒的权重（1 小时 ≈ 0.25 分）。"""
+    energy_per_kwh: float = 1.0
+    """每 kWh 的权重。"""
+    sortie_per_unit: float = 0.05
+    """每个架次的权重（辅助项，避免无意义地多开架次）。"""
+
+
+DEFAULT_WEIGHTS = Q2Weights()
+
+
+@dataclass
+class ObjBreakdown:
+    """目标函数的分项明细（便于诊断与写论文）。"""
+
+    n_late_boxes: int
+    n_late_first_batch: int
+    total_lateness_s: float
+    makespan_s: float
+    energy_kwh: float
+    n_sorties: int
+    score: float
+
+    def __str__(self) -> str:
+        return (
+            f"score={self.score:.3f} | 违规箱 {self.n_late_boxes}"
+            f"（首批 {self.n_late_first_batch}）| 迟到合计 {self.total_lateness_s/3600:.2f} h"
+            f" | 完工 {self.makespan_s/3600:.2f} h | 能耗 {self.energy_kwh:.2f} kWh"
+            f" | 架次 {self.n_sorties}"
+        )
+
+
+def delivery_times_all(
+    cands: list[_Cand],
+    uav_types: dict[str, UAVType],
+    leg_cache: LegCache,
+    boxes_by_id: dict[str, Box],
+    start_s: float = 0.0,
+) -> dict[int, dict[str, float]]:
+    """每个候选架次的交付时刻（假想从 `start_s` 开工）。"""
+    out: dict[int, dict[str, float]] = {}
+    for c in cands:
+        if not c.plan.stops:
+            continue
+        out[id(c)] = delivery_times_for(
+            c.plan, uav_types[c.plan.type_code], leg_cache, start_s, boxes_by_id
+        )
+    return out
+
+
+def objective_breakdown(
+    cands: list[_Cand],
+    uav_types: dict[str, UAVType],
+    leg_cache: LegCache,
+    boxes_by_id: dict[str, Box],
+    deadlines: dict[str, Deadline],
+    weights: Q2Weights = DEFAULT_WEIGHTS,
+) -> ObjBreakdown:
+    """计算综合目标及其分项。
+
+    ★ 用**假想同时开工**（`start_s = 0`）估计交付时刻与完工时间：
+      这是资源充足时的**下界估计**，用于方案之间的相对比较；
+      真实时刻由 `schedule_dispatch` 在资源约束下给出，最终指标以调度结果为准。
+      这样做的好处是目标函数与调度器解耦（求解更快），
+      且"资源充足时的下界"能正确区分"多开小架次"与"少开大架次"：
+      后者天然更短、更省电。
+    """
+    n_late = 0
+    n_late_fb = 0
+    late_total = 0.0
+    energy = 0.0
+    makespan = 0.0
+    n_sorties = 0
+
+    for c in cands:
+        if not c.plan.stops:
+            continue
+        n_sorties += 1
+        uav = uav_types[c.plan.type_code]
+        energy += c.ev.energy_kwh
+        # 单架次自身用时（准备+装载+飞行+交接），多点时取整条链
+        dt = delivery_times_for(c.plan, uav, leg_cache, 0.0, boxes_by_id)
+        makespan = max(makespan, c.ev.total_time_s)
+        for svc, t in dt.items():
+            for bid in c.plan.boxes_by_stop.get(svc, ()):
+                dl = deadlines.get(bid)
+                if dl is None:
+                    continue
+                lat = t - dl.expected_s
+                if lat > 1e-6:
+                    n_late += 1
+                    late_total += lat
+                if dl.is_first_batch and dl.first_batch_s is not None:
+                    lat_fb = t - dl.first_batch_s
+                    if lat_fb > 1e-6:
+                        n_late_fb += 1
+                        # 首批的迟到同时计入 total（再乘额外倍数）
+                        late_total += weights.first_batch_extra * lat_fb
+
+    score = (
+        n_late + n_late_fb
+        + weights.late_per_s * late_total
+        + weights.makespan_per_s * makespan
+        + weights.energy_per_kwh * energy
+        + weights.sortie_per_unit * n_sorties
+    )
+    return ObjBreakdown(
+        n_late_boxes=n_late, n_late_first_batch=n_late_fb,
+        total_lateness_s=late_total, makespan_s=makespan,
+        energy_kwh=energy, n_sorties=n_sorties, score=round(score, 6),
+    )
+
 
 def _objective(
     cands: list[_Cand],
@@ -508,29 +644,10 @@ def _objective(
     leg_cache: LegCache,
     boxes_by_id: dict[str, Box],
     deadlines: dict[str, Deadline],
-) -> tuple[float, int, float]:
-    """目标（字典序）：(及时性惩罚, 架次数, 能耗)。
-
-    及时性用**静态估计**（从 0 时刻开工），仅用于局部搜索的相对比较；
-    最终报告的及时性由迭代调度给出精确值。
-    """
-    penalty = 0.0
-    energy = 0.0
-    for c in cands:
-        if not c.plan.stops:
-            continue
-        uav = uav_types[c.plan.type_code]
-        dt = delivery_times_for(c.plan, uav, leg_cache, 0.0, boxes_by_id)
-        fake = ScheduledSortie(
-            sortie_id="x", plan_index=0, uav_id="", type_code=c.plan.type_code,
-            battery_id="", stops=c.plan.stops, boxes_by_stop=c.plan.boxes_by_stop,
-            start_s=0.0, return_s=c.ev.total_time_s, energy_kwh=c.ev.energy_kwh,
-            soc_end=c.ev.return_soc, delivery_times=dt, n_boxes=c.plan.n_boxes,
-        )
-        p, _, _, _, _ = lateness_of(fake, boxes_by_id, deadlines)
-        penalty += p
-        energy += c.ev.energy_kwh
-    return (round(penalty, 3), len([c for c in cands if c.plan.stops]), round(energy, 6))
+) -> tuple[float, ...]:
+    """局部搜索用的目标（元组，便于与旧签名兼容；数值越小越好）。"""
+    bd = objective_breakdown(cands, uav_types, leg_cache, boxes_by_id, deadlines)
+    return (bd.score,)
 
 
 def local_search(
@@ -616,10 +733,115 @@ def local_search(
                     break
             if improved:
                 break
+        # --- move 3: ★ 按服务区合并升级机型（打破"1 箱/架次"碎片化）---
+        # 构造过程是"逐箱并入已有架次或新开一架次"，且新开时按**单箱能耗**选机型，
+        # 于是 30 kg 的 B 型常常每架只装 1~2 箱；而局部搜索的 move 2 只能把
+        # **两两**合并，无法把"同一区的 7 个 B 架次"重组成"2 个 C 架次"。
+        # 实测后果：S002 的 8 箱被拆到 7 个架次（1.1 箱/架次），
+        # 全方案 35 架次，而同样数据 C 型只要 16 架次。
+        # 本 move 专门做这件事：把某个服务区**全部**货箱取出，
+        # 用一个更大的机型重新装箱，取目标更优者。
+        if not improved:
+            per_area = _area_box_lists(cur)
+            for svc, bids in per_area.items():
+                if len(bids) <= 1:
+                    continue
+                target = set(bids)
+                best_move: list[_Cand] | None = None
+                for code in sorted(uav_types, key=lambda c: -uav_types[c].volume_m3):
+                    uav = uav_types[code]
+                    rebuilt = _repack_area(bids, svc, code, uav, boxes_by_id,
+                                           leg_cache, max_group=3)
+                    if rebuilt is None:
+                        continue
+                    # 把该区的箱子从**任意**现有架次（含多点串飞）中摘出，
+                    # 空掉的架次直接丢弃，再加入重装后的架次。
+                    trial: list[_Cand] = []
+                    for c in cur:
+                        stripped = _remove_boxes(c.plan, target)
+                        if not stripped.stops:
+                            continue
+                        if stripped is c.plan:
+                            trial.append(c)
+                            continue
+                        trial.append(_Cand(stripped, {}, {}, dict(c.boxes), c.ev))
+                    trial = _rebuild(trial + rebuilt, uav_types, leg_cache, boxes_by_id)
+                    obj = _objective(trial, uav_types, leg_cache, boxes_by_id, deadlines)
+                    if obj < cur_obj:
+                        cur, cur_obj, improved, best_move = trial, obj, True, trial
+                        break
+                if improved:
+                    break
         if not improved:
             break
 
     return cur
+
+
+def _remove_boxes(plan: SortiePlan, bids: set[str]) -> SortiePlan:
+    """从架次中移除指定货箱；若架次的访问序列不变则**原样返回**（便于调用方判断）。"""
+    if not any(b in bids for s in plan.stops for b in plan.boxes_by_stop.get(s, ())):
+        return plan
+    new_boxes = {
+        s: tuple(x for x in v if x not in bids)
+        for s, v in plan.boxes_by_stop.items()
+    }
+    new_stops = tuple(s for s in plan.stops if new_boxes.get(s))
+    return SortiePlan(plan.type_code, new_stops,
+                      {s: new_boxes.get(s, ()) for s in new_stops})
+
+
+def _area_box_lists(cands: list[_Cand]) -> dict[str, list[str]]:
+    """每个服务区的全部货箱编号（跨架次汇总）。"""
+    out: dict[str, list[str]] = {}
+    for c in cands:
+        for s in c.plan.stops:
+            out.setdefault(s, []).extend(c.plan.boxes_by_stop.get(s, ()))
+    return out
+
+
+def _repack_area(
+    bids: list[str],
+    svc: str,
+    code: str,
+    uav: UAVType,
+    boxes_by_id: dict[str, Box],
+    leg_cache: LegCache,
+    max_group: int = 3,
+) -> list[_Cand] | None:
+    """把一个服务区的货箱用指定机型重新装箱（首次适应递减）。
+
+    返回若干个**单点**架次；若存在任何箱子装不下则返回 None（该机型不可行）。
+    """
+    ordered = sorted(bids, key=lambda b: -boxes_by_id[b].volume_m3)
+    bins: list[list[str]] = []
+    bin_m: list[float] = []
+    bin_v: list[float] = []
+    for bid in ordered:
+        b = boxes_by_id[bid]
+        if b.mass_kg > uav.max_payload_kg + 1e-9 or b.volume_m3 > uav.volume_m3 + 1e-12:
+            return None
+        for k in range(len(bins)):
+            if (bin_m[k] + b.mass_kg <= uav.max_payload_kg + 1e-9
+                    and bin_v[k] + b.volume_m3 <= uav.volume_m3 + 1e-12):
+                bins[k].append(bid)
+                bin_m[k] += b.mass_kg
+                bin_v[k] += b.volume_m3
+                break
+        else:
+            bins.append([bid])
+            bin_m.append(b.mass_kg)
+            bin_v.append(b.volume_m3)
+
+    out: list[_Cand] = []
+    for grp in bins:
+        plan = SortiePlan(code, (svc,), {svc: tuple(grp)})
+        plan = _improve_order(plan, uav, leg_cache, boxes_by_id)
+        ev = _eval_plan(plan, uav, leg_cache, boxes_by_id)
+        if not ev.feasible:
+            return None
+        out.append(_Cand(plan, {}, {}, {x: boxes_by_id[x] for x in grp}, ev))
+    return out
 
 
 def _remove_box(plan: SortiePlan, bid: str) -> SortiePlan:

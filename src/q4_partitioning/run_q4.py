@@ -8,14 +8,21 @@
     tables/  q4_分区配置（交付模板）、原子单元、桥接分析、方案对比、资源缺口
     figures/ 分区示意、资源对比、工作量均衡
 
-★★ 核心结论（先说清楚）★★
-    在本队 Q3 的联合调度方案下，**不存在合法的 2 组或 3 组分区**。
-    原因：题目规则要求"同一运输架次涉及的多服务区必须划入同一任务组"，
-    而 Q3 的 21 个多点架次把 15 个服务区串成了**单一连通分量**。
-    本模块不伪造一个违反约束的分区，而是：
-      (1) 给出该不可行性的严格论证与桥接架次定位；
-      (2) 给出**最小改动**方案（去掉最少的多点架次）使分区可行；
-      (3) 在改动后的方案上完成题目要求的全部核算与对比。
+★★ 核心结论（由数据推出，**不要硬编码**）★★
+    题目规则要求"同一运输架次涉及的多服务区必须划入同一任务组"，
+    因此分区被**原子单元（连通分量）**拓扑决定：
+
+        合法分区的组数 K ∈ [1, 连通分量数]
+
+    ★ 该数取决于 Q3 方案的形态，会随 Q3 重跑而变，**必须由代码打印**。
+      例如某次 Q4 运行得到 2 个分量（S014 由单点架次单独成组，
+      其余 14 区连成一片），则 **K=2 无需改动任何架次即可行**，
+      而 K=3 需拆分 1 个多点架次才能得到 3 个分量。
+
+    本模块的做法：
+      (1) 求原子单元并定位**桥接架次**（移除后能增加分量数者）；
+      (2) 若 K 超出现有分量数，给出**最小改动**方案（拆最少的多点架次）；
+      (3) 在得到的方案上完成题目要求的全部核算与对比。
 """
 
 from __future__ import annotations
@@ -186,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
     base_plan = PartitionPlan(k=1, groups=base_groups)
     g0 = base_plan.groups[0]
     comparison.append({
-        "方案": "K=1（唯一合法分区）", "K": 1,
+        "方案": "K=1（全部 15 区一组）", "K": 1,
         "可行": "是", "改动架次数": 0,
         "运输无人机": sum(base_plan.total_uavs.values()),
         "共享电池": sum(base_plan.total_batteries.values()),
@@ -261,9 +268,13 @@ def main(argv: list[str] | None = None) -> int:
     # ---------------- (3) 方案对比与缺口 ----------------
     for k, plan in sorted(plans.items()):
         removed = edits_info.get(k, [])
+        direct = len(units) >= k
         comparison.append({
-            "方案": f"K={k}（需拆分 {len(removed)} 个多点架次）", "K": k,
-            "可行": "改动后可行", "改动架次数": len(removed),
+            "方案": (f"K={k}（直接可行）" if direct and not removed
+                     else f"K={k}（需拆分 {len(removed)} 个多点架次）"),
+            "K": k,
+            "可行": ("是" if direct and not removed else "改动后可行"),
+            "改动架次数": len(removed),
             "运输无人机": sum(plan.total_uavs.values()),
             "共享电池": sum(plan.total_batteries.values()),
             "中继无人机": plan.total_relay_uavs,
@@ -410,10 +421,25 @@ def main(argv: list[str] | None = None) -> int:
     print("=" * 92)
     print("问题四求解结果")
     print("=" * 92)
-    print("★ 关键结论：按题目规则，Q3 方案下**不存在合法的 2 组或 3 组分区**。")
-    print(f"   15 个服务区被 {sum(1 for s in sorties if len(s.stops) > 1)} 个多点架次"
-          f"串成 **{len(units)} 个连通分量**（即原子单元）。")
-    print(f"   『同架次多服务区必须同组』⟹ 唯一合法分区是「全部 15 区一组」。")
+    n_multi = sum(1 for s in sorties if len(s.stops) > 1)
+    print(f"★ 关键结论（由数据推出，勿硬编码）：")
+    print(f"   15 个服务区被 {n_multi} 个多点架次串成 **{len(units)} 个连通分量**（原子单元）。")
+    for i, u in enumerate(sorted(units, key=lambda x: (len(x), sorted(x))), 1):
+        tag = "（单点架次独立成组）" if len(u) == 1 else ""
+        print(f"     单元 U{i:02d}：{len(u):>2} 区 {sorted(u)}{tag}")
+    print(f"   『同架次多服务区必须同组』⟹ 合法分区的组数 K 只能是"
+          f" **1 ~ {len(units)}**（每个原子单元不能再拆，多个单元可合并成一组）。")
+    k2_edits = len(edits_info.get(2, []))
+    k3_edits = len(edits_info.get(3, []))
+    if feasible_2 and feasible_3:
+        print(f"   → 因此 **K=2 与 K=3 均可行**：K=2 需拆分 {k2_edits} 个、"
+              f"K=3 需拆分 {k3_edits} 个多点架次。")
+    elif feasible_2:
+        print(f"   → 因此 **K=2 可行**（需拆分 {k2_edits} 个多点架次）；"
+              f"**K=3 不可行**，至少需拆分 {k3_edits} 个多点架次才能得到 3 个分量。")
+    else:
+        print(f"   → 因此 **K=2 与 K=3 均不可行**；"
+              f"K=2 至少需拆分 {k2_edits} 个、K=3 至少需拆分 {k3_edits} 个多点架次。")
     print()
     print(f"桥接架次（移除后可直接断开连通，共 {len(bridges)} 个候选）：")
     if bridge_rows:

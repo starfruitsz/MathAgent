@@ -116,7 +116,7 @@ def schedule_score(
     sched,
     boxes_by_id: dict[str, Box],
     deadlines: dict[str, Deadline],
-    weights: Q2Weights = DEFAULT_WEIGHTS,
+    weights: Q2Weights | None = None,
 ) -> tuple[float, dict]:
     """★ 基于**真实调度结果**的多目标评分（题目要求的四个目标都进来）。
 
@@ -130,6 +130,8 @@ def schedule_score(
 
     本函数只用调度器的真实输出计算，因此四个目标可比较、可解释。
     """
+    if weights is None:
+        weights = DEFAULT_WEIGHTS
     n_late = 0
     n_late_fb = 0
     late_s = 0.0
@@ -183,6 +185,7 @@ def solve(
     do_local_search: bool = True,
     max_group: int = 3,
     fleet_mode: str = "auto",
+    weights: Q2Weights | None = None,
 ) -> Q2Result:
     """求解问题二。
 
@@ -213,14 +216,23 @@ def solve(
         try:
             cands = construct(boxes, only_t, leg_cache, deadlines, max_group=max_group)
             if do_local_search:
-                cands = local_search(cands, only_t, leg_cache, boxes_by_id, deadlines)
+                # 受保护的硬期限服务区：首批截止 ≤3600 s 者预置了专架次，
+                # 局部搜索不得把它们合并/重装回晚开的架次
+                _frozen = {b.service_id for b in boxes
+                           if b.is_first_batch
+                           and (b.first_batch_deadline_s or 1e18) <= 3600.0}
+                cands = local_search(cands, only_t, leg_cache, boxes_by_id, deadlines,
+                                     weights=weights,
+                                     resources=(len(only_f[code]), only_b.get(code, 0),
+                                                only_tf.get(code, 1800.0)),
+                                     frozen_areas=_frozen)
             plans = [c.plan for c in cands if c.plan.stops]
             pools = build_pools(only_f, only_b, only_tf)
             sched = schedule_dispatch(plans, only_t, leg_cache, boxes_by_id, pools)
         except Exception as exc:  # noqa: BLE001  (某机型装不下或调度失败 → 跳过)
             trials[code] = {"error": f"{type(exc).__name__}: {str(exc)[:80]}"}
             continue
-        score, detail = schedule_score(sched, boxes_by_id, deadlines)
+        score, detail = schedule_score(sched, boxes_by_id, deadlines, weights)
         trials[code] = detail
         if best is None or score < best[0]:
             best = (score, detail, sched, cands)

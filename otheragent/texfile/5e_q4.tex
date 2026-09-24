@@ -1,0 +1,149 @@
+\section{问题四：救援任务分区与资源配置优化}
+\label{sec:q4}
+
+\subsection{问题分析与关键规则形式化}
+
+问题四要求把 15 个服务区划分为 2 组与 3 组两种任务分区方案，并核算每组\textbf{独立执行}所需的四类资源。其关键规则有两条：
+
+\begin{itemize}[leftmargin=2em]
+	\item \textbf{刚性继承}：必须保持问题三已确定的货箱组批、服务区访问顺序、运输与中继任务安排、通信保障关系\textbf{不变}；
+	\item \textbf{同架次同组}：若同一运输架次同时涉及多个服务区，则这些服务区\textbf{必须划入同一任务组}。
+\end{itemize}
+
+第二条规则是本题的建模关键。它在服务区之间建立了一个\textbf{等价关系}：同一架次所访问的服务区两两"必须同组"。把所有此类约束求并，即得到服务区集合上的一个等价关系，其等价类正是该关系诱导的\textbf{连通分量}\cite{lari2015connectedpartition}。因此，任务分区问题自然地建模为\textbf{图与连通分量}问题：
+
+\begin{itemize}[leftmargin=2em]
+	\item 以 15 个服务区为顶点；若两个服务区出现在同一运输架次中，则连一条边；
+	\item 每个\textbf{连通分量}是一个\textbf{原子单元}——单元内的服务区不可被拆到不同任务组；
+	\item 合法的 $K$ 组分区存在，当且仅当该图可以被划分为 $K$ 个连通分量（即 $K\le$ 原子单元数）。
+\end{itemize}
+
+\subsection{连通分量分析与不可行性论证}
+
+\textbf{（1）构图。}对问题三方案的 35 个运输架次构图。其中 \textbf{21 个为访问 $\ge2$ 个服务区的多点架次}，这些架次把原本孤立的服务区连接起来。所得关联图如图~\ref{fig:q4_graph} 所示。
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.98\textwidth]{figures/fig32_q4_graph.png}
+	\caption{服务区关联图与连通分量分析}
+	\label{fig:q4_graph}
+\end{figure}
+
+图~\ref{fig:q4_graph}(a) 显示，15 个顶点通过 18 条边连成\textbf{单一连通分量}——图中不存在任何孤立的服务区或独立的子群。图~\ref{fig:q4_graph}(b) 的度分布进一步说明了连接强度：S003 与 S005 的关联度高达 4，S001、S002、S007、S008、S011、S015 的关联度为 3，其余为 1$\sim$2。可见多点是普遍的、连接是密集的。
+
+\textbf{（2）不可行性结论。}由于原子单元数为 1，而 $K$ 组分区要求把图切成 $K$ 个分量，因此
+\begin{equation}
+	\label{eq:29}
+	\boxed{\ \text{在保持问题三安排不变的前提下，不存在合法的 2 组或 3 组分区}\ }
+\end{equation}
+唯一合法的划分是"全部 15 个服务区划为一组"（$K=1$）。
+
+需要强调的是，\textbf{本文不伪造违反约束的分区方案}。若忽略"同架次同组"这一硬规则强行把服务区分成 2 组或 3 组，必然导致某些多点架次跨越任务组，从而违反"各任务组仅承担本组任务"与"资源不得跨组调配"的要求，方案无效。因此本文给出的是\textbf{严格的不可行性论证 + 最小改动方案}。
+
+\subsection{求解算法}
+
+问题四的求解流程如图~\ref{fig:flow_q4} 所示：先把"同架次同组"约束转化为服务区之间的等价关系并构图，再求连通分量得到原子单元；若分量数为 1 则给出不可行性结论，否则枚举合法分区；最后对每种分区做组内独立的资源核算与四维对比。
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.86\textwidth]{figures/fig05_flow_q4.png}
+	\caption{问题四求解流程}
+	\label{fig:flow_q4}
+\end{figure}
+
+\subsection{最小改动方案与资源配置核算}
+
+\textbf{（1）桥接架次定位。}虽然当前方案无合法分区，但若允许\textbf{最小限度地调整架次划分}（把多点架次拆为单点架次），则可恢复可分性。通过逐条试算"移除该架次后连通分量数是否增加"，得到 \textbf{3 个桥接架次}，如表~\ref{tab:q4_bridge} 所示。
+
+\begin{table}[htbp]
+	\caption{桥接架次清单}
+	\label{tab:q4_bridge}
+	\centering
+	\zihao{5}
+	\begin{tabular}{ccccc}
+		\toprule
+		架次编号 & 机型 & 服务区顺序 & 服务区数 & 移除后分量数 \\
+		\midrule
+		T010 & C & S001 $\to$ S014 & 2 & 2 \\
+		T017 & C & S006 $\to$ S003 & 2 & 2 \\
+		T027 & C & S010 $\to$ S007 & 2 & 2 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+由表~\ref{tab:q4_bridge} 可见，三个桥接架次都是两点架次。因此，\textbf{至少需要拆 1 个多点架次才能得到 2 组、拆 2 个才能得到 3 组}。这就是本问的\textbf{最小改动方案}：以极小的调度代价（把 1$\sim$2 个两点架次拆成单点架次）换取任务分区的可分性。
+
+\textbf{（2）组内资源核算。}资源核算遵循"组内独立、不得跨组调配"的原则，具体口径为：运输无人机与中继无人机按\textbf{组内架次的并行峰值}核算；共享电池与中继能源组件在并行峰值的基础上进一步考虑\textbf{充电周转}。需要说明的是，"首尾相接不算重叠"是刻意约定——同一架无人机刚返回 O01 即可接续下一架次，因此排序键须保证区间端点的 $-1$ 先于 $+1$ 处理，否则会虚报缺口。
+
+三种方案的资源配置与对比分别如表~\ref{tab:q4_compare} 与图~\ref{fig:q4_compare} 所示。
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.98\textwidth]{figures/fig33_q4_compare.png}
+	\caption{分区方案多指标对比}
+	\label{fig:q4_compare}
+\end{figure}
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.98\textwidth]{figures/fig34_q4_group.png}
+	\caption{逐组资源配置与工作量}
+	\label{fig:q4_group}
+\end{figure}
+
+\begin{table}[htbp]
+	\caption{分区方案对比}
+	\label{tab:q4_compare}
+	\centering
+	\zihao{-5}
+	\setlength{\tabcolsep}{3.5pt}
+	\begin{tabular}{lcccccccc}
+		\toprule
+		方案 & $K$ & 改动 & 运输机 & 电池 & 中继机 & 组件 & 总量 & 不均衡 \\
+		\midrule
+		K$\,=\,$1（唯一合法） & 1 & 0 & 2 & 5 & 2 & 4 & \textbf{13} & 0.0000 \\
+		K$\,=\,$2（拆 1 个） & 2 & T010 & 3 & 6 & 3 & 5 & \textbf{17} & 1.7718 \\
+		K$\,=\,$3（拆 2 个） & 3 & T010+017 & 5 & 8 & 3 & 5 & \textbf{21} & 2.4707 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\subsection{对比分析与资源缺口}
+
+\textbf{（1）配置规模：分区越多，资源需求越大。}由图~\ref{fig:q4_compare}(b) 与表~\ref{tab:q4_compare} 可见，$K=1\to2\to3$ 时四类资源总量由 \textbf{13 增至 17、21}（增幅 $+30.8\%$、$+61.5\%$）。这一结果是反直觉的——通常认为"分而治之"能提高效率，但在此处恰好相反。
+
+其\textbf{原因}在于：整队一组时调度是\textbf{全局最优}的（问题二、三的派发在全体资源上取最早可用时刻，实现了资源的完全共享与错峰利用）；而分组后，每组必须\textbf{独立储备}满足自身峰值的资源，跨组的错峰调节能力丧失，规模效应不复存在。图~\ref{fig:q4_group}(a) 显示 $K=1$ 时仅需 2 架 B 型运输机与 5 组 B 型电池即可支撑全部 35 个运输架次与 30 个中继架次，正是全局调度带来的集约效应。
+
+\textbf{（2）组间均衡：分区反而加剧不均衡。}由表~\ref{tab:q4_compare} 可见，组间不均衡度由 $K=1$ 的 \textbf{0}（单组无组间差异）升至 $K=2$ 的 \textbf{1.7718}、$K=3$ 的 \textbf{2.4707}。图~\ref{fig:q4_group}(b) 直观展示了这一现象的原因：桥接架次被拆出的单点架次集中在少数服务区（如 S014、S006），使其自成一组的作业量极小，而其余服务区构成的大组承担了绝大部分工作量，组间严重失衡。
+
+\textbf{（3）资源冗余与缺口。}与现有库存对比的结果如图~\ref{fig:q4_gap} 与表~\ref{tab:q4_gap} 所示。
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.98\textwidth]{figures/fig35_q4_gap.png}
+	\caption{逐方案逐类资源缺口}
+	\label{fig:q4_gap}
+\end{figure}
+
+\begin{table}[htbp]
+	\caption{资源缺口（需求与库存对比）}
+	\label{tab:q4_gap}
+	\centering
+	\zihao{-5}
+	\begin{tabular}{lcccc}
+		\toprule
+		方案 & B 型运输无人机 & B 型电池组 & 中继无人机 & 中继能源组件 \\
+		\midrule
+		\textbf{现有库存} & \textbf{2} & \textbf{4} & \textbf{2} & \textbf{6} \\
+		K$\,=\,$1 需求 & 2（恰好） & 5（\textcolor{red}{缺 1}） & 2（恰好） & 4（余 2） \\
+		K$\,=\,$2 需求 & 3（\textcolor{red}{缺 1}） & 6（\textcolor{red}{缺 2}） & 3（\textcolor{red}{缺 1}） & 5（余 1） \\
+		K$\,=\,$3 需求 & 5（\textcolor{red}{缺 3}） & 8（\textcolor{red}{缺 4}） & 3（\textcolor{red}{缺 1}） & 5（余 1） \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+由表~\ref{tab:q4_gap} 可得三点结论：\textbf{①}$K=1$ 方案的运输无人机与中继无人机\textbf{恰好够用}（各 2 台），说明资源折算口径是自洽的；\textbf{②}$K=1$ 的唯一缺口是 \textbf{1 组 B 型备用电池}，其余三类资源均有冗余；\textbf{③}随分组数增加，缺口迅速扩大——$K=2$ 缺口为 1 架运输机 $+$ 2 组电池 $+$ 1 架中继，$K=3$ 缺口为 3 架运输机 $+$ 4 组电池 $+$ 1 架中继。
+
+\textbf{缺口的根因}是"资源不得跨组调配"这一约束与"需求空间不均衡"的矛盾：S001、S002 等大需求服务区集中在图的西侧，而 S012、S014 等位于东侧，分组后各组都必须按自身峰值储备资源，无法通过跨组借用来平抑峰值。
+
+\textbf{（4）综合结论。}$K=1$ 是唯一合法且\textbf{资源最省、均衡性最好}的方案，其唯一代价是 1 组 B 型备用电池的缺口。消除该缺口的最经济途径是\textbf{增配 1 组 B 型共享电池}；次优途径是放宽"资源不得跨组"的约束、允许组间借用备用电池。综合来看，在本问题场景下\textbf{"把救援任务分成独立执行单元"没有收益}，反而会显著推高资源需求——这是一条对应急救援指挥具有直接参考价值的工程结论。

@@ -1,0 +1,15 @@
+﻿param,value
+frequency_mhz,2400.0
+system_loss_db,3.0
+obstruction_loss_db,10.0
+rx_sensitivity_dbm,-98.0
+fade_margin_db,8.0
+transport_tx_power_dbm,20.0
+transport_gain_dbi,3.0
+relay_access_tx_power_dbm,20.0
+relay_access_gain_dbi,6.0
+relay_backhaul_tx_power_dbm,19.0
+relay_backhaul_gain_dbi,8.0
+gateway_tx_power_dbm,27.0
+gateway_gain_dbi,12.0
+gateway_antenna_height_m,20.0

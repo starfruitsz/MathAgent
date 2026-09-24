@@ -1,7 +1,7 @@
 {
   "question": "q3",
-  "git_commit": "33cfe5fb1fffe00271d71dd08b729a7686f9ee68",
-  "timestamp": "2026-09-25T00:39:33.539923+08:00",
+  "git_commit": "81503ae72687110c5c72c37ac0ec924f46919f0c",
+  "timestamp": "2026-09-25T01:18:25.386450+08:00",
   "seed": 42,
   "data_sources": [
     "通信链路参数.xlsx",
@@ -9,26 +9,26 @@
     "30米DEM.tif"
   ],
   "metrics": {
-    "n_transport_sorties": 16,
+    "n_transport_sorties": 14,
     "n_relay_sorties": 14,
     "n_sorties_need_relay": 14,
     "n_sorties_covered": 14,
     "coverage_rate": 1.0,
-    "transport_energy_kwh": 81.343385,
-    "relay_energy_kwh": 10.336712,
-    "total_energy_kwh": 91.680097,
-    "joint_makespan_s": 20916.1,
-    "joint_makespan_h": 5.81,
-    "mean_direct_outage_fraction": 0.3494,
+    "transport_energy_kwh": 77.936806,
+    "relay_energy_kwh": 9.941324,
+    "total_energy_kwh": 87.87813,
+    "joint_makespan_s": 18697.7,
+    "joint_makespan_h": 5.194,
+    "mean_direct_outage_fraction": 0.3681,
     "n_hover_candidates": 1885,
     "sample_dt_s": 2.0,
     "hover_step_m": 400.0,
-    "runtime_sec": 291.54,
+    "runtime_sec": 307.02,
     "feasible_by_verifier": false,
-    "n_verifier_violations": 39,
+    "n_verifier_violations": 36,
     "verifier_violation_types": {
-      "超出期望送达时间": 26,
-      "首批保障箱超时": 13
+      "超出期望送达时间": 19,
+      "首批保障箱超时": 17
     }
   }
 }

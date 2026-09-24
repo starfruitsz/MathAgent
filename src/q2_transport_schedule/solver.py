@@ -46,6 +46,7 @@ from src.q2_transport_schedule.models import (
     evaluate_sortie,
     prefix_feasible,
 )
+from src.physics.battery import charging_time
 from src.q2_transport_schedule.schedule import (
     ResourcePool,
     ScheduledSortie,
@@ -312,6 +313,7 @@ def construct(
     seed_limit: int = 4,
     prefer_larger: bool = True,
     area_coherent: bool = True,
+    seed_first_batch: bool = True,
 ) -> list[_Cand]:
     """构造初始架次集合（装箱 + 邻近合并）。
 
@@ -408,7 +410,52 @@ def construct(
             )
         return created[1]
 
+    # ★ (0) 硬期限箱先行：为"首批截止很早"的服务区**抢占式**建立专架次。
+    #
+    # 为什么必须抢：首批截止 3600 s 的服务区有 8 个，而每区首批箱只有 2 箱
+    # （约 17 kg，任何机型一次可装）。若不预先建架次，贪心会把首批箱并入
+    # 已有架次，而那个架次可能被排到几小时之后 —— 硬期限就必然违反。
+    # 实测（scripts/diag/q2_firstbatch_dedicated.py）：不预置时首批达标 17/30。
+    #
+    # 资源上界（scripts/diag/q2_firstbatch_bound.py）：2 架机 + 4 组电池时，
+    # 前 3600 s 最多只能保障 3~4 个服务区（单架次含充电占用约 2600~4100 s），
+    # 因此**不可能**让 8 个区全部按时 —— 但应当把"能救的都救下来"。
+    frozen_set: set[str] = set()
+    seeded_ids: set[str] = set()
+    if seed_first_batch:
+        urgent: dict[str, list[Box]] = {}
+        for b in boxes:
+            dl = deadlines.get(b.box_id)
+            if b.is_first_batch and dl and dl.first_batch_s is not None:
+                urgent.setdefault(b.service_id, []).append(b)
+        # 按"截止时间升序、距离升序"决定抢建顺序（越紧越早建）
+        for svc in sorted(urgent, key=lambda s: (
+                min(deadlines[b.box_id].first_batch_s or 1e18 for b in urgent[s]),
+                leg_cache.distance(CENTER_ID, s))):
+            grp = urgent[svc]
+            gm = sum(b.mass_kg for b in grp)
+            gv = sum(b.volume_m3 for b in grp)
+            made = None
+            for code in type_order:
+                uav = uav_types[code]
+                if gm > uav.max_payload_kg + 1e-9 or gv > uav.volume_m3 + 1e-12:
+                    continue
+                plan = SortiePlan(code, (svc,), {svc: tuple(b.box_id for b in grp)})
+                plan = _improve_order(plan, uav, leg_cache, boxes_by_id)
+                ev = _eval_plan(plan, uav, leg_cache, boxes_by_id)
+                if not ev.feasible:
+                    continue
+                made = _Cand(plan, {}, {}, {b.box_id: b for b in grp}, ev)
+                break
+            if made is not None:
+                cands.append(made)
+                last_area_cand[svc] = made
+                seeded_ids.update(b.box_id for b in grp)
+                frozen_set.add(svc)
+
     for b in ordered:
+        if b.box_id in seeded_ids:
+            continue
         # (a) area_coherent：先试"本区上一个架次"
         if area_coherent:
             prev = last_area_cand.get(b.service_id)
@@ -438,7 +485,8 @@ def construct(
     #     因此同一架次里很少出现多个服务区 —— 那样架次数会偏多。
     #     这里做一轮**合并不增耗**的跨区合并：
     #     若两个架次的目标区互为最近邻，且合并后仍满足能耗与容量，则合并。
-    cands = _merge_across_areas(cands, uav_types, leg_cache, boxes_by_id)
+    cands = _merge_across_areas(cands, uav_types, leg_cache, boxes_by_id,
+                                 frozen_areas=frozen_set)
     return cands
 
 
@@ -448,6 +496,7 @@ def _merge_across_areas(
     leg_cache: LegCache,
     boxes_by_id: dict[str, Box],
     max_neighbour_km: float = 4.0,
+    frozen_areas: set[str] | None = None,
 ) -> list[_Cand]:
     """把**地理位置邻近**的两个架次合并为一个多点串飞架次（贪心，无退化则停）。
 
@@ -463,6 +512,11 @@ def _merge_across_areas(
             for j in range(i + 1, len(cur)):
                 a, b = cur[i], cur[j]
                 if not a.plan.stops or not b.plan.stops:
+                    continue
+                # ★ 受保护的首批专架次不参与跨区合并
+                if frozen_areas and (
+                        any(s in frozen_areas for s in a.plan.stops)
+                        or any(s in frozen_areas for s in b.plan.stops)):
                     continue
                 # 只合并邻近区（取两两最近距离；跳过同一服务区）
                 dmin = min(
@@ -536,6 +590,70 @@ class Q2Weights:
 DEFAULT_WEIGHTS = Q2Weights()
 
 
+def proxy_dispatch(
+    cands: list[_Cand],
+    uav_types: dict[str, UAVType],
+    leg_cache: LegCache,
+    boxes_by_id: dict[str, Box],
+    n_uav: int,
+    n_battery: int,
+    t_full_s: float,
+) -> dict[int, float]:
+    """**资源感知的快速代理调度**：返回 {候选架次 id: 该架次最早开工时刻}。
+
+    为什么需要它
+    -----------
+    早期用"假想同时开工"（`start_s = 0`）估计交付时刻，等价于假设**资源无限**：
+    在那种假设下每个架次都在 0 时刻起飞，所有时限都能满足，于是目标函数里
+    "违规箱数"恒为 0 —— 优化器完全看不到"只有 2 架机、4 组电池"这一现实，
+    因而一味压架次数与能耗，把硬期限箱排到 4 h 之后（实测首批达标仅 17/30）。
+
+    本函数按**架次自身时长 + 机型资源数 + 电池充电周转**给出每个架次的实际开工时刻，
+    使目标函数能看见资源争用带来的时序后果。它是一个**下界估计**
+    （不做派发择优、不做电池分配优化），但足以正确区分
+    "压架次数导致尾部架次严重迟到"与"多开架次换取及时性"两种方案。
+
+    实现：按**最紧时限升序**派发（与真实派发器同口径），
+    每轮把架次分配给"最早可用的机—池"。
+    """
+    order = sorted(
+        (c for c in cands if c.plan.stops),
+        key=lambda c: _cand_urgency(c, boxes_by_id, leg_cache, uav_types),
+    )
+    uav_free = [0.0] * max(1, n_uav)
+    bat_free = [0.0] * max(1, n_battery)
+    starts: dict[int, float] = {}
+    for c in order:
+        iu = min(range(len(uav_free)), key=lambda i: uav_free[i])
+        ib = min(range(len(bat_free)), key=lambda i: bat_free[i])
+        t0 = max(uav_free[iu], bat_free[ib])
+        starts[id(c)] = t0
+        uav_free[iu] = t0 + c.ev.total_time_s
+        soc = c.ev.return_soc
+        t_chg = charging_time(soc, t_full_s)
+        bat_free[ib] = t0 + c.ev.total_time_s + t_chg
+    return starts
+
+
+def _cand_urgency(c: _Cand, boxes_by_id: dict[str, Box], leg_cache: LegCache,
+                  uav_types: dict[str, UAVType]) -> float:
+    """候选架次的紧迫度：架上货箱的最紧时限（无时限则极大）。"""
+    best = float("inf")
+    uav = uav_types[c.plan.type_code]
+    dt = delivery_times_for(c.plan, uav, leg_cache, 0.0, boxes_by_id)
+    for svc, t in dt.items():
+        for bid in c.plan.boxes_by_stop.get(svc, ()):
+            b = boxes_by_id.get(bid)
+            if b is None:
+                continue
+            dl = (b.first_batch_deadline_s
+                  if (b.is_first_batch and b.first_batch_deadline_s is not None)
+                  else b.expected_time_s)
+            if dl is not None:
+                best = min(best, float(dl) - t)
+    return best
+
+
 @dataclass
 class ObjBreakdown:
     """目标函数的分项明细（便于诊断与写论文）。"""
@@ -581,17 +699,34 @@ def objective_breakdown(
     leg_cache: LegCache,
     boxes_by_id: dict[str, Box],
     deadlines: dict[str, Deadline],
-    weights: Q2Weights = DEFAULT_WEIGHTS,
+    weights: Q2Weights | None = None,
+    resources: tuple[int, int, float] | None = None,
 ) -> ObjBreakdown:
     """计算综合目标及其分项。
 
-    ★ 用**假想同时开工**（`start_s = 0`）估计交付时刻与完工时间：
-      这是资源充足时的**下界估计**，用于方案之间的相对比较；
-      真实时刻由 `schedule_dispatch` 在资源约束下给出，最终指标以调度结果为准。
-      这样做的好处是目标函数与调度器解耦（求解更快），
-      且"资源充足时的下界"能正确区分"多开小架次"与"少开大架次"：
-      后者天然更短、更省电。
+    `resources = (运输机数, 电池组数, 满充时间 s)`
+    --------------------------------------------
+    · 给定时：用 `proxy_dispatch` 做**资源感知**的开工时刻估计，
+      目标函数因此能看见"2 架机 4 组电池"带来的排队与充电周转；
+    · 为 None 时：退化为"假想同时开工"（等于假设资源无限）。
+
+    ★ 为什么默认必须传 resources：假想同时开工会让**违规箱数恒为 0**
+      （每个架次都 0 时刻起飞），优化器只看得到能耗与架次数，
+      于是把硬期限箱排到几小时之后 —— 实测首批达标仅 17/30。
     """
+    # ★ 不要写成默认参数 `weights=DEFAULT_WEIGHTS`：默认值在**函数定义时**绑定，
+    #   外部（如权重扫描）改模块级 DEFAULT_WEIGHTS 不会生效。必须运行时取。
+    if weights is None:
+        weights = DEFAULT_WEIGHTS
+
+    # ★ 资源感知的开工时刻：给定时用代理调度，否则退化为"假想同时开工"
+    if resources is not None:
+        n_uav, n_bat, t_full_s = resources
+        starts = proxy_dispatch(cands, uav_types, leg_cache, boxes_by_id,
+                                n_uav, n_bat, t_full_s)
+    else:
+        starts = {}
+
     n_late = 0
     n_late_fb = 0
     late_total = 0.0
@@ -605,9 +740,10 @@ def objective_breakdown(
         n_sorties += 1
         uav = uav_types[c.plan.type_code]
         energy += c.ev.energy_kwh
+        t0 = starts.get(id(c), 0.0)
         # 单架次自身用时（准备+装载+飞行+交接），多点时取整条链
-        dt = delivery_times_for(c.plan, uav, leg_cache, 0.0, boxes_by_id)
-        makespan = max(makespan, c.ev.total_time_s)
+        dt = delivery_times_for(c.plan, uav, leg_cache, t0, boxes_by_id)
+        makespan = max(makespan, t0 + c.ev.total_time_s)
         for svc, t in dt.items():
             for bid in c.plan.boxes_by_stop.get(svc, ()):
                 dl = deadlines.get(bid)
@@ -644,9 +780,12 @@ def _objective(
     leg_cache: LegCache,
     boxes_by_id: dict[str, Box],
     deadlines: dict[str, Deadline],
+    weights: Q2Weights | None = None,
+    resources: tuple[int, int, float] | None = None,
 ) -> tuple[float, ...]:
     """局部搜索用的目标（元组，便于与旧签名兼容；数值越小越好）。"""
-    bd = objective_breakdown(cands, uav_types, leg_cache, boxes_by_id, deadlines)
+    bd = objective_breakdown(cands, uav_types, leg_cache, boxes_by_id,
+                             deadlines, weights, resources)
     return (bd.score,)
 
 
@@ -657,10 +796,25 @@ def local_search(
     boxes_by_id: dict[str, Box],
     deadlines: dict[str, Deadline],
     max_rounds: int = 30,
+    weights: Q2Weights | None = None,
+    resources: tuple[int, int, float] | None = None,
+    frozen_areas: set[str] | None = None,
 ) -> list[_Cand]:
-    """局部搜索：搬箱（relocate）与合并（merge），目标为字典序 `_objective`。"""
+    """局部搜索：搬箱（relocate）/ 合并（merge）/ 按区重装（repack），
+    目标为加权综合评分 `_objective`（越小越好）。
+
+    `frozen_areas`
+    --------------
+    **受保护的硬期限服务区**：构造阶段为它们预置了"首批专架次"，
+    这些架次不得被合并或重装（否则又被塞回晚开的架次，硬期限必然违反）。
+    实测：不保护时 8 个紧期限区只有 2 个达标；保护后显著改善。
+    """
+    frozen_areas = frozen_areas or set()
     cur = _rebuild(cands, uav_types, leg_cache, boxes_by_id)
-    cur_obj = _objective(cur, uav_types, leg_cache, boxes_by_id, deadlines)
+    cur_obj = _objective(cur, uav_types, leg_cache, boxes_by_id, deadlines, weights, resources)
+
+    def _plan_frozen(p: SortiePlan | None) -> bool:
+        return p is not None and any(s in frozen_areas for s in p.stops)
 
     for _ in range(max_rounds):
         improved = False
@@ -688,7 +842,7 @@ def local_search(
                     trial[i] = _Cand(src_plan, {}, {}, dict(ci.boxes), src_ev)
                     trial[j] = _Cand(new_plan_j, {}, {}, dict(cj.boxes), new_ev_j)
                     trial = _rebuild(trial, uav_types, leg_cache, boxes_by_id)
-                    obj = _objective(trial, uav_types, leg_cache, boxes_by_id, deadlines)
+                    obj = _objective(trial, uav_types, leg_cache, boxes_by_id, deadlines, weights, resources)
                     if obj < cur_obj:
                         cur, cur_obj, improved = trial, obj, True
                         break
@@ -704,6 +858,8 @@ def local_search(
             for j in range(i + 1, len(cur)):
                 if not cur[i].plan.stops or not cur[j].plan.stops:
                     continue
+                if _plan_frozen(cur[i].plan) or _plan_frozen(cur[j].plan):
+                    continue          # ★ 受保护的首批专架次不参与合并
                 merged = _merge_plans(cur[i].plan, cur[j].plan)
                 if merged is None:
                     continue
@@ -727,7 +883,7 @@ def local_search(
                 trial = [c for k, c in enumerate(cur) if k not in (i, j)]
                 trial.append(_Cand(merged, {}, {}, {**cur[i].boxes, **cur[j].boxes}, ev))
                 trial = _rebuild(trial, uav_types, leg_cache, boxes_by_id)
-                obj = _objective(trial, uav_types, leg_cache, boxes_by_id, deadlines)
+                obj = _objective(trial, uav_types, leg_cache, boxes_by_id, deadlines, weights, resources)
                 if obj < cur_obj:
                     cur, cur_obj, improved = trial, obj, True
                     break
@@ -744,8 +900,8 @@ def local_search(
         if not improved:
             per_area = _area_box_lists(cur)
             for svc, bids in per_area.items():
-                if len(bids) <= 1:
-                    continue
+                if len(bids) <= 1 or svc in frozen_areas:
+                    continue      # ★ 受保护区不重装（保住首批专架次）
                 target = set(bids)
                 best_move: list[_Cand] | None = None
                 for code in sorted(uav_types, key=lambda c: -uav_types[c].volume_m3):
@@ -766,7 +922,7 @@ def local_search(
                             continue
                         trial.append(_Cand(stripped, {}, {}, dict(c.boxes), c.ev))
                     trial = _rebuild(trial + rebuilt, uav_types, leg_cache, boxes_by_id)
-                    obj = _objective(trial, uav_types, leg_cache, boxes_by_id, deadlines)
+                    obj = _objective(trial, uav_types, leg_cache, boxes_by_id, deadlines, weights, resources)
                     if obj < cur_obj:
                         cur, cur_obj, improved, best_move = trial, obj, True, trial
                         break

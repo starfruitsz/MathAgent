@@ -1,0 +1,16 @@
+# LaTeX 编译中间产物（不入库）
+document.aux
+document.log
+document.bbl
+document.blg
+document.out
+document.toc
+document.lof
+document.lot
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+
+# 临时目录
+_preview/
+_watch/

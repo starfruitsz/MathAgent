@@ -1,0 +1,31 @@
+{
+  "question": "q2",
+  "git_commit": "59365a3a1c60a1fdbf47603431ea0c427e5a4c56",
+  "timestamp": "2026-09-24T23:10:21.218344+08:00",
+  "seed": 42,
+  "data_sources": [
+    "物资需求与配送时限.xlsx",
+    "运输无人机数据.xlsx",
+    "调度中心与服务区.xlsx",
+    "30米DEM.tif"
+  ],
+  "metrics": {
+    "n_sorties": 35,
+    "n_boxes": 80,
+    "total_energy_kwh": 83.010022,
+    "makespan_s": 35219.3,
+    "makespan_h": 9.783,
+    "violations_first_batch": 23,
+    "violations_expected": 49,
+    "on_time_rate": 0.3875,
+    "max_lateness_s": 31174.5,
+    "objective_penalty": 6229693.598,
+    "runtime_sec": 0.7,
+    "iterations": 2,
+    "feasible_by_verifier": false,
+    "n_verifier_violations": 49,
+    "type_usage": {
+      "B": 35
+    }
+  }
+}

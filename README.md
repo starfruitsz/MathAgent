@@ -19,7 +19,8 @@
 | **P2 / Q2** 异构多点多架次调度 | ✅ 完成 | 35 架次 / 83.01 kWh / 完工 587 min；硬约束全部通过 |
 | **P3 / Q3** 通信约束下运输与中继联合调度 | ✅ 完成 | 30 个中继架次 / **29-29 全程通信覆盖** / 总能耗 99.68 kWh |
 | **P4 / Q4** 任务分区与资源配置 | ✅ 完成 | ★ **按规则不存在合法 2/3 组分区**；给出桥接架次与最小改动方案 |
-| **P5** 论文与 Word 生成 | ✅ 完成 | **60 页论文**（24 图 / 28 表 / 2.0 万字），`paper/` 下含 docx + PDF + 分目录图表备份 |
+| **P5** 论文与 Word 生成 | ✅ 完成 | **53 页论文**（24 图 / 28 表 / **79 个 MathType 公式** / 1.9 万字），`paper/` 下含 docx + PDF + 分目录图表备份 |
+| **P6** 排版整改（MathType / 三线表 / 分页 / 图表同页） | ✅ 完成 | 见「一·六 排版规范」 |
 
 **环境**：Python 3.13.7 / Windows 11 / 24 核；依赖已锁定（`requirements.txt`），`check_env.py` 返回 `status: ok`。
 **测试**：`227 passed`。
@@ -30,7 +31,7 @@
 
 | 文件 | 说明 |
 |---|---|
-| `paper/山区洪涝灾害下无人机运输与通信协同优化_论文.docx` | **正文 Word**（60 页，符合 50~100 页要求） |
+| `paper/山区洪涝灾害下无人机运输与通信协同优化_论文.docx` | **正文 Word**（53 页，符合 50~100 页要求；公式为 MathType 对象，可双击编辑） |
 | `paper/山区洪涝灾害下无人机运输与通信协同优化_论文.pdf` | 同内容 PDF（防环境差异，便于送审） |
 | `paper/论文体量报告.json` | 页数/字数/表格/图片统计（`scripts/check_paper.py` 生成） |
 | `paper/chart_manifest.csv` | 全部图表的编号、标题、章节与文件清单（24 图 + 32 表） |
@@ -38,17 +39,48 @@
 | `paper/figures/` `paper/tables/` `paper/data/` | 全部图 / 表 / 图表数据源 |
 | **`paper/by_question/{common,q1,q2,q3,q4}/{figures,tables,data}`** | ★ **按问题分目录的图表与原始数据备份** |
 
-论文结构依 **`参考文稿2.pdf`** 的章节骨架（引言与问题重述 → 总体分析 → 公共物理模型 →
-四问 → 模型检验 → 结论 → 附录），排版风格依 `docs/reference/` 的第三方版本。
+论文结构依 **`docs/reference/参考文稿2.pdf`** 的章节骨架（引言与问题重述 → 总体分析 → 公共物理模型 →
+四问 → 模型检验 → 结论 → 附录）；**论文排版规范以参考文稿2 为准**（详见下节）。
 
 ### 论文生成流程
 
 ```powershell
 python -m src.report.make_figures    # 基础图表（17 图 / 21 表）
 python -m src.report.make_figures2   # 补充图表 + 分目录备份（→ 24 图 / 32 表）
-python -m src.report.build_paper     # 装配 Word
-python scripts\check_paper.py --pdf  # 核算页数并导出 PDF
+python -m src.report.build_paper     # 装配 Word，并把公式转成 MathType（79 个对象）
+python scripts\verify_paper.py       # 一键回归：结构自检 + 页数核算 + 导出 PDF
 ```
+
+> `python -m src.report.build_paper --no-mathtype` 可跳过 MathType 转换，
+> 保留 OMML 原生公式（排查公式问题时用）。
+
+---
+
+## 一·六、论文排版规范（4 项硬性要求 + 自检脚本）
+
+| # | 要求 | 实现方式 | 自检脚本 |
+|:--:|---|---|---|
+| 1 | **公式使用 MathType**（正文嵌入、表格嵌入均含） | `src/report/equations.py`：类 LaTeX → OMML → **MathType `Equation.DSMT4`** OLE 对象。正文 60 个 + 表格内 19 个 = **79 个** | `scripts\check_docx_structure.py`（统计 OLE 对象与表格内数量） |
+| 2 | **每一章另起新页** | 写进 `Heading 1` 样式 `pageBreakBefore`，不逐处插分页符（目录页显式关闭） | `check_docx_structure.py`（逐个一级标题校验） |
+| 3 | **三线表**（参照参考文稿2） | 顶线 / 表头下线 / 底线，**无竖线**；列宽按内容自适应（幂律压缩，列宽比 ≤4:1）；≥9 列自动降字号 | `check_docx_structure.py`（逐表校验边框） |
+| 4 | **图与表跟题注同页** | 图片段落 `keepNext` → 图与图题同页；表题 `keepNext` → 表与表题同页；图高按比例限制 ≤9 cm | `check_docx_structure.py` + `scripts\check_pagination.py` |
+
+其它配套：表头中文化并把单位渲染为行内公式（如"最大安全载荷 / $\mathrm{kg}$"）、
+符号表改为参考文稿2 的双栏版式、插图内部**不再重复写图号**（避免同一张图两个编号）。
+
+**排版相关自检工具**：
+
+```powershell
+python scripts\check_docx_structure.py   # 分页/三线表/公式对象/图表同页 结构自检（不依赖 Word）
+python scripts\check_pagination.py       # 逐页量测页尾留白，找排版异常页
+python scripts\render_pdf_pages.py 13 14 # 渲染指定页为 PNG，供人工核对
+python scripts\smoke_mathtype.py         # MathType 链路冒烟测试（含 Word 打开校验）
+```
+
+> ⚠️ **踩过的坑（已修复，勿回退）**：
+> `w:tblPr` 子元素顺序必须符合 schema，且 `w:gridCol/@w:w` 单位必须是 **twips**
+> （`int(Cm(x))` 给的是 EMU，差 635 倍）。这两处任一出错，Word 会判定文档异常，
+> 表现为 **无法分页、无法导出 PDF**（"无法准备用于导出的文档"）。
 
 ---
 
@@ -142,15 +174,27 @@ MathAgent/
 │   ├── q2_transport_schedule/   Q2：多点串飞 / 资源周转 / 时限驱动派发
 │   ├── q3_comms_relay/          Q3：中继选址 / 轨迹覆盖 / 联合调度
 │   ├── q4_partitioning/         Q4：分区（原子单元/连通分量）与资源核算
-│   └── report/                  论文表格与图
+│   └── report/                  论文装配
+│       ├── make_figures.py      基础图表（17 图 / 21 表）
+│       ├── make_figures2.py     补充图表 + 按问题分目录备份
+│       ├── equations.py         ★ 公式：类 LaTeX → OMML → MathType
+│       └── build_paper.py       ★ 论文装配（三线表 / 分页 / 图表同页）
 ├── outputs/                     ★ 证据链：metrics / params / 图表 / 校验报告
 │   ├── q1/  q2/                 每问含 metrics.json、params.json、tables/、figures/
 │   └── p0_inspect/  p0_smoke/   附件勘察与冒烟验证记录
 ├── scripts/
 │   ├── commit.ps1               ★ 一键提交并推送（含收工自检）
 │   ├── check_env.py             环境自检
+│   ├── verify_paper.py          ★ 论文一键回归（构建 + 自检 + 页数 + PDF）
+│   ├── check_docx_structure.py  ★ 分页/三线表/公式/图表同页 结构自检
+│   ├── check_pagination.py      逐页留白体检
+│   ├── check_equations.py       公式解析自检（79 条）
+│   ├── check_paper.py           页数与体量核算（Word COM）
+│   ├── render_pdf_pages.py      PDF 指定页转 PNG（人工核对）
+│   ├── smoke_mathtype.py        MathType 链路冒烟测试
 │   ├── inspect_attachments.py   附件结构勘察
 │   ├── smoke_physics_real_data.py / smoke_comms_real_data.py / smoke_verify_real_data.py
+│   ├── diag/                    诊断脚本（排版量测、Word 导出对比等，非日常流程）
 │   └── run_all.ps1              端到端复现
 ├── docs/
 │   ├── PROGRESS.md              ★ 进度看板
@@ -159,7 +203,7 @@ MathAgent/
 │   ├── IMPLEMENTATION_PLAN.md   五层解耦结构与实现顺序
 │   ├── DECISIONS.md             决策记录（ADR-001~021）
 │   ├── TOOLS.md                 外部工具来源/版本/许可证
-│   ├── reference/               第三方同题解答（仅作模板/交叉验证）
+│   ├── reference/               ★ 参考文稿2（章节与排版模板）+ 第三方同题解答（仅作模板/交叉验证）
 │   └── legacy_D题/              废弃的 D 题方案归档（只读）
 └── tests/                       227 项测试（物理公式逐条锁死 + 负样本）
 ```

@@ -71,12 +71,36 @@
 | tqdm | https://github.com/tqdm/tqdm | 4.70.1 | MIT/MPL-2.0 | 进度条 |
 | joblib | https://github.com/joblib/joblib | 1.5.3 | BSD-3 | 并行与缓存 |
 | pytest | https://github.com/pytest-dev/pytest | 9.1.1 | MIT | 单元测试 |
+| python-docx | https://github.com/python-openxml/python-docx | 1.2.0 | MIT | 生成论文 docx |
+| pywin32 | https://github.com/mhammond/pywin32 | — | PSF-based | Word COM：页数统计、PDF 导出 |
+| tabulate | https://github.com/astanin/python-tabulate | 0.10.0 | MIT | `DataFrame.to_markdown` |
+| **docx-equation** | https://pypi.org/project/docx-equation/ | **0.3.0** | **MIT** | ★ **OMML → MathType（`Equation.DSMT4`）公式对象转换** |
+| PyMuPDF | https://github.com/pymupdf/PyMuPDF | — | AGPL-3.0 / 商业双许可 | **仅开发期**用于排版体检（逐页留白量测、页面转 PNG）；**不进入交付代码、不参与建模** |
+| Pillow | https://github.com/python-pillow/Pillow | — | MIT-CMU | 图片尺寸读取（图高控制） |
 
----
+### 1.7 ★ 公式排版工具链（MathType）
+
+> 要求：论文公式（含正文嵌入与表格嵌入）必须用 **MathType** 生成。
+
+| 环节 | 工具 | 说明 |
+|---|---|---|
+| 公式书写 | 本仓库 `src/report/equations.py` | 类 LaTeX 语法（`\frac{}{}`、`_{}`、`^{}`、`\sum_{}^{}`、`\rho`…）→ **OMML**（Word 原生可编辑公式） |
+| OMML → MathML | `C:\Program Files\Microsoft Office\root\Office16\OMML2MML.XSL` | **随 Microsoft Office 安装**，Apache-2.0；上游固定版本见 `github.com/chang-shuai/omml2mml` @ `55edcfd`，SHA-256 `FF1A7184…49DEB` |
+| MathML → MTEF | `docx-equation` 0.3.0（MIT） | 生成 `Equation.DSMT4` OLE 对象 + PNG 预览图 |
+| 浏览器（渲染预览图） | Microsoft Edge（Chromium 内核） | `docx-equation` 需要 Chromium 渲染 MathML；库只按 PATH 名查找，Windows 默认安装路径需由本仓库显式注入（见 `equations.find_browser()`） |
+| MathType 本体 | MathType 9+（`C:\Program Files (x86)\MathType\MathType.exe`） | 阅读/编辑公式对象；`ProgID = Equation.DSMT4` |
+
+**参数标定**：预览图缩放 `preview_pt_per_px = 0.32`。
+标定过程与依据见 `scripts/diag/mathtype_scale.py`（量测公式行与正文行的墨迹高度比），
+使行内公式字高与 12 pt 正文协调。
+
+**合规说明**：只使用 **MIT** 许可的 `docx-equation`。另外调研过的
+`biyu0608/mathtype-word-equations-skill` 为 **AGPL-3.0**，
+**未纳入本仓库、未复制其代码**（AGPL 只允许作为独立进程调用，不可 vendoring）。
 
 ## 2. 从 GitHub 克隆到 `scripts/tools/` 的工具
 
-> 目前为空。**从 GitHub 拉取时执行以下步骤**：
+> 目前为空（`scripts/tools/` 仅有 `.gitkeep`）。**从 GitHub 拉取时执行以下步骤**：
 
 ```powershell
 cd C:\Users\28447\Desktop\数学建模\MathAgent\scripts\tools
@@ -101,15 +125,19 @@ Remove-Item -Recurse -Force <repo>\.git   # 避免嵌套仓库
 | `elevation` | **需要联网下载 SRTM 瓦片** —— 与"不得引入其他数据"的红线冲突；且附件已直接提供 DEM |
 | `vrpy` | 依赖重、版本兼容风险；本题约束高度定制（充电周转、连续通信、载荷递减），通用 VRP 库收益有限 |
 | `contextily` / 在线底图库 | 需联网拉取底图瓦片，**离线不可用**且引入外部数据；用 `folium` + 本地 DEM 出图即可 |
+| `mathtype-word-equations-skill` | 许可证为 **AGPL-3.0**，不可 vendoring；其功能已由 MIT 许可的 `docx-equation` 覆盖 |
+| `latex2mathml` / `pylatexenc` | 已用自研 `equations.py` 覆盖本题所需语法，避免重复依赖与口径分叉 |
 
 ---
 
 ## 4. 许可证合规备忘
 
 - **可安全使用**：MIT / BSD-2 / BSD-3 / Apache-2.0
-- **需谨慎**：LGPL（动态链接可用，静态嵌入需注意）
+- **需谨慎**：LGPL（动态链接可用，静态嵌入需注意）；**AGPL**（只能外部进程调用、不可复制代码）
 - **禁止直接嵌入交付代码**：GPL / AGPL —— 只能作为独立进程调用，并在论文中声明
 - 任何 vendoring 必须保留上游 `LICENSE` 原文
+- ★ **本项目仅把 PyMuPDF（AGPL）用于开发期排版体检**，其输出（PNG/统计）不参与建模，
+  也未将其代码并入 `src/`；正式交付物只依赖 MIT / BSD / Apache 许可组件
 
 ---
 
@@ -134,3 +162,4 @@ Remove-Item -Recurse -Force <repo>\.git   # 避免嵌套仓库
 |---|---|---|
 | v2.0 | 建立 D 题工具清单：登记地理空间栈（rasterio/geopandas/shapely/pyproj/scikit-image）与运筹栈（ortools/networkx/pymoo/cvxpy），新增"明确不采用的工具及理由"一节 | `9f6201a` |
 | **v2.1** | 归档目录更名为 `docs/legacy_D题/`，本文件随规范同步（工具清单本身无变化） | 本次提交 |
+| **v3.0** | ★ 新增 1.7 节**公式排版工具链（MathType）**：`docx-equation`(MIT) + Office 自带 `OMML2MML.XSL`(Apache-2.0) + Edge 渲染预览；登记预览图缩放标定值 0.32 pt/px；补充 `python-docx`/`pywin32`/`tabulate`/`PyMuPDF`/`Pillow`；新增不采用项（AGPL 的 `mathtype-word-equations-skill` 等）与 AGPL 使用边界说明 | 本次提交 |

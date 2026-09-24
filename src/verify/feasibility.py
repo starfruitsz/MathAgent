@@ -56,6 +56,21 @@ class ViolationType(str, Enum):
     COMMS_UNSUPPORTED = "通信中断时段未获中继保障"
 
 
+SOFT_VIOLATION_TYPES: frozenset[ViolationType] = frozenset({
+    ViolationType.FIRST_BATCH_DEADLINE_MISSED,
+    ViolationType.EXPECTED_TIME_MISSED,
+})
+"""**时限类**违规：题目允许无法全部满足（本文已论证为资源约束下的物理不可行），
+因此不阻断产出，但必须写入报告并在论文中论证。"""
+
+HARD_VIOLATION_TYPES: frozenset[ViolationType] = frozenset(ViolationType) - SOFT_VIOLATION_TYPES
+"""**物理 / 资源 / 通信类**违规：说明方案本身不可行，**不得进入论文与交付文件**。
+
+★ 这是"硬约束闸门"的分类依据（见 `run_q2.py` / `run_q3.py`）。
+历史教训：曾出现"某架次给 B 型机装了 235 kg（上限 30 kg）却被静默输出"的缺陷，
+闸门即为防止该类问题再次发生。`tests/test_verify.py` 锁死本分类必须覆盖全部类型。"""
+
+
 @dataclass(frozen=True)
 class BoxBatch:
     """一个货箱（校验器视角）。"""
@@ -187,6 +202,31 @@ class VerifyReport:
 
     def count(self, t: ViolationType) -> int:
         return sum(1 for v in self.violations if v.type is t)
+
+    def hard(self) -> list[Violation]:
+        """物理/资源/通信类违规（方案不可交付的判据）。"""
+        return [v for v in self.violations if v.type in HARD_VIOLATION_TYPES]
+
+    def soft(self) -> list[Violation]:
+        """时限类违规（允许存在，但需论证）。"""
+        return [v for v in self.violations if v.type in SOFT_VIOLATION_TYPES]
+
+    def assert_deliverable(self) -> None:
+        """硬约束闸门：存在物理/资源/通信类违规时抛 `RuntimeError` 中止产出。
+
+        用法（各问 `run_qN.py` 在校验之后调用）：
+
+            rep = verify_transport_plan(...)
+            save_json(...)
+            rep.assert_deliverable()   # ★ 硬约束不通过就中止，绝不静默发布
+        """
+        hard = self.hard()
+        if hard:
+            raise RuntimeError(
+                f"方案存在 {len(hard)} 条物理/资源/通信类硬约束违规，已中止产出：\n"
+                + "\n".join(f"  {v}" for v in hard[:15])
+                + (f"\n  …（其余 {len(hard) - 15} 条见校验报告）" if len(hard) > 15 else "")
+            )
 
     def summary(self) -> str:
         if self.ok:

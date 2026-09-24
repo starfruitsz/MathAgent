@@ -18,10 +18,14 @@ import pytest
 
 from src.physics.payload import UAVType
 from src.verify.feasibility import (
+    HARD_VIOLATION_TYPES,
+    SOFT_VIOLATION_TYPES,
     BoxBatch,
     RelayAssignment,
     Sortie,
     TransportPlan,
+    VerifyReport,
+    Violation,
     ViolationType,
     verify_transport_plan,
 )
@@ -417,3 +421,72 @@ def test_report_summary_contains_violation_detail(uav_types, boxes) -> None:
     s = rep.summary()
     assert "超" in s or "overload" in s.lower()
     assert rep.violations[0].sortie_id == "T01"
+
+
+# ================================================================ 硬约束闸门
+
+class TestHardGate:
+    """★ 硬约束闸门：物理/资源/通信类违规必须中止产出，时限类放行。
+
+    背景：曾出现"某架次给 B 型机装了 235 kg（上限 30 kg）却被静默输出"的缺陷，
+    闸门即为防止该类问题再次发生（见 docs/AGENT_GUIDE.md §2.2）。
+    """
+
+    def test_classification_covers_all_types(self) -> None:
+        """分类必须**穷尽** ViolationType，避免新增类型时漏进"放行"分支。"""
+        assert HARD_VIOLATION_TYPES | SOFT_VIOLATION_TYPES == set(ViolationType)
+        assert not (HARD_VIOLATION_TYPES & SOFT_VIOLATION_TYPES)
+
+    def test_only_timing_types_are_soft(self) -> None:
+        """软（放行）类必须**只有**时限两类 —— 别把物理类误放进白名单。"""
+        assert SOFT_VIOLATION_TYPES == {
+            ViolationType.FIRST_BATCH_DEADLINE_MISSED,
+            ViolationType.EXPECTED_TIME_MISSED,
+        }
+
+    @pytest.mark.parametrize("t", [
+        ViolationType.MASS_OVERLOAD,
+        ViolationType.VOLUME_OVERLOAD,
+        ViolationType.ENERGY_BUDGET_EXCEEDED,
+        ViolationType.SOC_BELOW_RESERVE,
+        ViolationType.RESOURCE_TIME_OVERLAP,
+        ViolationType.TIMING_INCONSISTENT,
+        ViolationType.MISSING_BOX,
+        ViolationType.COMMS_UNSUPPORTED,
+    ])
+    def test_physical_violations_block_delivery(self, t: ViolationType) -> None:
+        rep = VerifyReport()
+        rep.violations.append(Violation(t, "T01", "测试用违规"))
+        with pytest.raises(RuntimeError):
+            rep.assert_deliverable()
+
+    @pytest.mark.parametrize("t", [
+        ViolationType.FIRST_BATCH_DEADLINE_MISSED,
+        ViolationType.EXPECTED_TIME_MISSED,
+    ])
+    def test_timing_violations_do_not_block(self, t: ViolationType) -> None:
+        rep = VerifyReport()
+        rep.violations.append(Violation(t, "T01", "时限类"))
+        rep.assert_deliverable()          # 不应抛异常
+        assert len(rep.soft()) == 1
+        assert rep.hard() == []
+
+    def test_overload_from_real_shape_is_caught(self, uav_types, boxes_s1) -> None:
+        """跑得通的超载负样本：B 型（30 kg）装 S001 的 3 个箱子 → 必须被闸门拦住。
+
+        `boxes_s1` 是 S001 的完整三箱（5+5+5 kg）。这里把其中一箱加重到 60 kg，
+        构成"总质量 70 kg > B 型上限 30 kg"，模拟历史上出现过的真实缺陷形态。
+        """
+        heavy = dict(boxes_s1)
+        heavy["S001-X1"] = BoxBatch("S001-X1", "S001", 60.0, 0.02, True, 3600.0, 3600.0)
+        s = Sortie(
+            sortie_id="T01", uav_id="U05", type_code="B", battery_id="B-B01",
+            start_s=0.0, service_sequence=("S001",),
+            box_ids=("S001-X1", "S001-X2", "S001-X3"),
+            leg_distance_m=5000.0, climb_out_m=100.0, descent_out_m=100.0,
+        )
+        rep = verify_transport_plan(TransportPlan(sorties=(s,)), uav_types, heavy)
+        assert rep.has(ViolationType.MASS_OVERLOAD)
+        assert rep.hard()
+        with pytest.raises(RuntimeError):
+            rep.assert_deliverable()

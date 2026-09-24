@@ -396,10 +396,23 @@ def main(argv: list[str] | None = None) -> int:
     save_json({"ok": rep.ok, "violations": [str(v) for v in rep.violations]},
               out / "feasibility.json")
     from collections import Counter
+
     viol = Counter(v.type.value for v in rep.violations)
     log.info("独立校验：%s（%d 条）", "通过" if rep.ok else "未通过", len(rep.violations))
     for k, n in viol.most_common():
         log.info("   %s: %d", k, n)
+
+    # ---------------- ★ 硬约束闸门（与 Q2 同口径）----------------
+    # 时限类违规可接受（已论证为资源约束下的物理不可行）；
+    # 物理/资源/通信类违规说明方案不可交付，必须中止。
+    # 分类依据见 `verify.feasibility.HARD_VIOLATION_TYPES`。
+    try:
+        rep.assert_deliverable()
+    except RuntimeError as exc:
+        log.error("★ 硬约束闸门未通过：%s", exc)
+        raise
+    log.info("硬约束闸门：通过（物理/资源/通信类违规 0 条；时限类 %d 条已按论文口径论证）",
+             len(rep.violations))
 
     # ---------------- 8. 图 ----------------
     fig, ax = plt.subplots(figsize=(8, 6.4))

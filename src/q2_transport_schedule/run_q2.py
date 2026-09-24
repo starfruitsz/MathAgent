@@ -38,7 +38,13 @@ from src.q2_transport_schedule.solver import (
     lateness_of,
     local_search,
 )
-from src.verify.feasibility import BoxBatch, Leg, Sortie, TransportPlan, verify_transport_plan
+from src.verify.feasibility import (
+    BoxBatch,
+    Leg,
+    Sortie,
+    TransportPlan,
+    verify_transport_plan,
+)
 from src.q0_data import build_processed as BP
 
 plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "DejaVu Sans"]
@@ -314,6 +320,20 @@ def main(argv: list[str] | None = None) -> int:
     if not rep.ok:
         for v in rep.violations[:10]:
             log.warning("  %s", v)
+
+    # ---------------- ★ 硬约束闸门（R8 强化）----------------
+    # 题目允许"首批/期望时限无法全部满足"（本文已论证为资源约束下的物理不可行），
+    # 因此时限类违规**不阻断**产出；但**物理与资源类**违规（超载、超体积、
+    # 超能量预算、返航 SOC 不足、资源时段冲突、架次时长不足、货箱缺失/重复）
+    # 说明方案本身不可行，绝不能进入论文与交付文件。
+    # 分类依据见 `verify.feasibility.HARD_VIOLATION_TYPES`。
+    try:
+        rep.assert_deliverable()
+    except RuntimeError as exc:
+        log.error("★ 硬约束闸门未通过：%s", exc)
+        raise
+    log.info("硬约束闸门：通过（物理/资源类违规 0 条；时限类 %d 条已按论文口径论证）",
+             len(rep.violations))
 
     # ---------------- 图 ----------------
     fig, ax = plt.subplots(figsize=(10, 4.2))

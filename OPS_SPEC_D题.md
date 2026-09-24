@@ -737,7 +737,7 @@ python -m pytest tests\ -v
 
 | # | 要求 | 实现位置 | 自检 |
 |:--:|---|---|---|
-| 1 | **公式使用 MathType**（含正文嵌入与**表格嵌入**的公式） | `src/report/equations.py`（类 LaTeX → OMML → `Equation.DSMT4`）；`build_paper.py` 的 `EQ()` / `P()` 的 `$...$` / 表头单元格 | `scripts/check_docx_structure.py`（统计 OLE 对象，含"位于表格内"计数） |
+| 1 | **公式可用、比例正确**（含正文嵌入与**表格嵌入**的公式） | ★ 公式以 **Word 原生 OMML 公式对象**交付（`src/report/equations.py` 类 LaTeX → OMML；`build_paper.py` 的 `EQ()` / `P()` 的 `$...$` / 表头单元格）：**双击即可编辑**，字号随正文自动匹配。~~MathType OLE 路线已否决~~ → **ADR-028** | `scripts/check_docx_structure.py`（统计 `m:oMath`，含"位于表格内"计数） |
 | 2 | **每一章必须起新页** | `Heading 1` 样式的 `pageBreakBefore`（`build_paper.py::setup`） | `check_docx_structure.py`（逐个一级标题校验） |
 | 3 | **三线表**：顶线 + 表头下线 + 底线，**无竖线** | `build_paper.py::_three_line_borders` / `_header_bottom_rule` | `check_docx_structure.py`（逐表校验边框） |
 | 4 | **图片与表格必须与题注同页** | 图片段落 `keepNext`；表题 `keepNext`；题注 `keepLines`；图高按比例 ≤ 9 cm | `check_docx_structure.py` + `scripts/check_pagination.py`（逐页留白体检） |
@@ -751,10 +751,13 @@ python -m src.report.build_paper       # 装配 + MathType 转换
 python scripts\verify_paper.py         # 结构自检 + 页数 + PDF，一步到位
 ```
 
-> ⚠️ **两个会让 Word 判定文档损坏的坑（已修复，勿回退）**：
+> ⚠️ **会让 Word 判定文档损坏的两处（已修复，勿回退）**：
 > ① `w:tblPr` 子元素顺序必须符合 CT_TblPrBase schema（见 `_order_tblpr`）；
 > ② `w:gridCol/@w:w` 单位必须是 **twips**（`int(Cm(x))` 返回 EMU，差 635 倍）。
 > 任一出错的表现都是：Word 能打开，但**无法分页、无法导出 PDF**。
+>
+> ⚠️ **公式形态已按 ADR-028 定为 OMML**：`docx-equation` 自制的 MathType OLE
+> 容器 Word 无法激活（`ProgID` 为空 → 双击打不开），不要再切回该路线。
 
 ### 10.2 学术规范红线（违反即取消资格）
 
@@ -838,7 +841,8 @@ git log origin/main..HEAD --oneline
 |---|---|---|---|
 | v2.0 | — | 初版（本题「山区洪涝灾害下无人机运输与通信协同优化」）：含物理口径章（第 5 节）、可行性校验器要求（R8）、坐标系约定（2.3 节）、地理+运筹工具链 | `9f6201a` |
 | **v2.1** | 规范维护 | 归档目录定名为 `docs/legacy_D题/`，用途为"D 题历史/废弃方案归档"；`ADR-010` 同步更新为现行表述 | 本次提交 |
-| **v2.2** | 排版整改 | ★ 新增 **10.1b 排版硬性要求**（MathType 公式 / 章页分页 / 三线表 / 图表与题注同页），并登记两个"会让 Word 判定文档损坏"的实现坑 | 本次提交 |
+| **v2.2** | 排版整改 | ★ 新增 **10.1b 排版硬性要求**（公式 / 章页分页 / 三线表 / 图表与题注同页），并登记两个"会让 Word 判定文档损坏"的实现坑 | 本次提交 |
+| **v2.3** | 公式形态定案 | 按 **ADR-028** 把公式交付形态定为 **Word 原生 OMML 对象**（放弃 MathType OLE 路线），10.1b 与 R11 同步更新 | 本次提交 |
 
 > 变更本文件后，必须同步更新上表并**提交推送**（铁律 R2）。
 
@@ -858,7 +862,7 @@ git log origin/main..HEAD --oneline
 | **R8** | **方案必须通过独立可行性校验器** | 第 7.3 节 |
 | R9 | 工具/求解器须标注版本与参数 | 第 9 节 |
 | R10 | AI 使用必须披露 | 第 10.2 节 |
-| **R11** | **论文排版四项硬性要求：MathType 公式（含表内）、每章起新页、三线表、图表与题注同页**；改排版后必须跑 `scripts\verify_paper.py` | 第 10.1b 节 |
+| **R11** | **论文排版四项硬性要求：可用且比例正确的公式（Word 原生 OMML，含表内）、每章起新页、三线表、图表与题注同页**；改排版后必须跑 `scripts\verify_paper.py` | 第 10.1b 节 |
 
 ---
 

@@ -78,7 +78,7 @@
 | PyMuPDF | https://github.com/pymupdf/PyMuPDF | — | AGPL-3.0 / 商业双许可 | **仅开发期**用于排版体检（逐页留白量测、页面转 PNG）；**不进入交付代码、不参与建模** |
 | Pillow | https://github.com/python-pillow/Pillow | — | MIT-CMU | 图片尺寸读取（图高控制） |
 
-### 1.7 ★ 公式排版工具链（MathType）
+### 1.7 公式排版工具链（★ 结论：交付形态为 OMML，MathType 路线已否决）
 
 > 要求：论文公式（含正文嵌入与表格嵌入）必须用 **MathType** 生成。
 
@@ -97,6 +97,13 @@
 > ⚠️ **该库的预览图渲染有缺陷（必须修正）**：它把 `mml:math` 原样嵌入 HTML，
 > 而 HTML 解析器不做命名空间解析，公式会退化成"一行普通文字"（上下标/分式全丢）。
 > 本仓库在转换后用 `equations.render_previews()` + `reembed_previews()` 重绘并写回 docx。
+
+> ★ **最终结论（ADR-028）**：交付论文里的公式是 **Word 原生 OMML 公式对象**，
+> 不使用 `docx-equation` 生成的 MathType OLE 对象。原因是后者**双击打不开**：
+> `OLEFormat.ProgID` 为空、`Activate()` 抛"此对象已损坏或不再可用"，
+> 隔离实验（含"换成自建合规 CFB 容器重打包"）均无法修复；
+> 而 Word+MathType 亲手插入的**真品**对象可正常激活，说明是库的自制容器有问题。
+> 下表工具仅用于调研复现与 `--mathtype` 实验开关。
 
 **合规说明**：只使用 **MIT** 许可的 `docx-equation`。另外调研过的
 `biyu0608/mathtype-word-equations-skill` 为 **AGPL-3.0**，

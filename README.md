@@ -20,7 +20,7 @@
 | **P3 / Q3** 通信约束下运输与中继联合调度 | ✅ 完成 | 30 个中继架次 / **29-29 全程通信覆盖** / 总能耗 99.68 kWh |
 | **P4 / Q4** 任务分区与资源配置 | ✅ 完成 | ★ **按规则不存在合法 2/3 组分区**；给出桥接架次与最小改动方案 |
 | **P5** 论文与 Word 生成 | ✅ 完成 | **50 页论文**（24 图 / 28 表 / **96 个 Word 原生公式对象** / 1.9 万字），`paper/` 下含 docx + PDF + 分目录图表备份 |
-| **P6** 排版整改（MathType / 三线表 / 分页 / 图表同页） | ✅ 完成 | 见「一·六 排版规范」 |
+| **P6** 排版整改（公式 / 三线表 / 章页分页 / 图表同页） | ✅ 完成 | 见「一·六 论文排版规范」；公式形态见 **ADR-028** |
 
 **环境**：Python 3.13.7 / Windows 11 / 24 核；依赖已锁定（`requirements.txt`），`check_env.py` 返回 `status: ok`。
 **测试**：`227 passed`。
@@ -99,9 +99,14 @@ python scripts\diag\calibrate_scale.py 12     # 标定"预览图像素 → 文�
 ```
 
 > ⚠️ **踩过的坑（已修复，勿回退）**：
-> `w:tblPr` 子元素顺序必须符合 schema，且 `w:gridCol/@w:w` 单位必须是 **twips**
-> （`int(Cm(x))` 给的是 EMU，差 635 倍）。这两处任一出错，Word 会判定文档异常，
-> 表现为 **无法分页、无法导出 PDF**（"无法准备用于导出的文档"）。
+>
+> | 坑 | 症状 | 处理 |
+> |---|---|---|
+> | `w:tblPr` 子元素顺序不符合 schema | Word 判定文档异常：**无法分页、无法导出 PDF**（"无法准备用于导出的文档"） | `build_paper.py::_order_tblpr()` 按 CT_TblPrBase 顺序重排 |
+> | `w:gridCol/@w:w` 误写 EMU（`int(Cm(x))` 给的是 EMU，与 twips 差 635 倍） | 同上 | 一律用 `Cm(x).twips` |
+> | 表格数据行里残留 `$\mathrm{kg}$` 等公式标记 | Word 里出现 LaTeX 原文 | `build_paper.py::_math_to_plain()` 在数据行剥成纯文本（表头保留行内公式） |
+> | 超长单元格（如货箱编号列表）不截断 | 列宽被拉满、整表撑到跨页 | `_shorten()` 截断为 34 字符并注明完整数据见附件 CSV |
+> | 所有公式挤成同一高度 | 公式被渲染成"一行普通文字"（上下标/分式丢失）——见 ADR-023 | `check_docx_structure.py` 增加预览图高度分布检查，异常即报错 |
 
 ---
 
@@ -198,8 +203,9 @@ MathAgent/
 │   └── report/                  论文装配
 │       ├── make_figures.py      基础图表（17 图 / 21 表）
 │       ├── make_figures2.py     补充图表 + 按问题分目录备份
-│       ├── equations.py         ★ 公式：类 LaTeX → OMML → MathType
-│       └── build_paper.py       ★ 论文装配（三线表 / 分页 / 图表同页）
+│       ├── equations.py         ★ 公式：类 LaTeX → OMML（Word 原生公式对象）
+│       ├── cfb.py               OLE2 复合文档生成器（MathType 调研用，见 ADR-028）
+│       └── build_paper.py       ★ 论文装配（三线表 / 章页分页 / 图表同页）
 ├── outputs/                     ★ 证据链：metrics / params / 图表 / 校验报告
 │   ├── q1/  q2/                 每问含 metrics.json、params.json、tables/、figures/
 │   └── p0_inspect/  p0_smoke/   附件勘察与冒烟验证记录
@@ -209,20 +215,20 @@ MathAgent/
 │   ├── verify_paper.py          ★ 论文一键回归（构建 + 自检 + 页数 + PDF）
 │   ├── check_docx_structure.py  ★ 分页/三线表/公式/图表同页 结构自检
 │   ├── check_pagination.py      逐页留白体检
-│   ├── check_equations.py       公式解析自检（79 条）
+│   ├── check_equations.py       公式解析自检（42 条样例）
 │   ├── check_paper.py           页数与体量核算（Word COM）
 │   ├── render_pdf_pages.py      PDF 指定页转 PNG（人工核对）
 │   ├── smoke_mathtype.py        MathType 链路冒烟测试
 │   ├── inspect_attachments.py   附件结构勘察
 │   ├── smoke_physics_real_data.py / smoke_comms_real_data.py / smoke_verify_real_data.py
-│   ├── diag/                    诊断脚本（排版量测、Word 导出对比等，非日常流程）
+│   ├── diag/                    ★ 30 个诊断脚本（排版量测、OLE 解剖、CFB 调试等）
 │   └── run_all.ps1              端到端复现
 ├── docs/
 │   ├── PROGRESS.md              ★ 进度看板
 │   ├── DATA_NOTES.md            ★ 附件字段结构实测记录
 │   ├── MODEL_NOTES.md           ★ 各问数学形式与推导
 │   ├── IMPLEMENTATION_PLAN.md   五层解耦结构与实现顺序
-│   ├── DECISIONS.md             决策记录（ADR-001~021）
+│   ├── DECISIONS.md             决策记录（ADR-001~028）
 │   ├── TOOLS.md                 外部工具来源/版本/许可证
 │   ├── reference/               ★ 参考文稿2（章节与排版模板）+ 第三方同题解答（仅作模板/交叉验证）
 │   └── legacy_D题/              废弃的 D 题方案归档（只读）

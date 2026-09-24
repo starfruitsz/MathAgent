@@ -20,6 +20,8 @@
 | ★ 数据一致性 | Q3 的「运输架次数/能耗」必须等于 Q2 的「架次数/总能耗」（Q3 继承 Q2 方案）。已加 `scripts\diag\check_paper_numbers.py` 自动核对论文与 metrics |
 | ⚠️ 结论会随 Q3 重跑而变 | Q4 的「原子单元数」由 Q3 方案形态决定，**不要在代码或论文里硬编码**；跑完必须用 `check_paper_numbers.py` 复核 |
 | ⚠️ 已推翻的历史结论 | 旧版曾断言「首批保障时限物理不可行」——**那是 Q2 只用 2 架 C 型的产物**，属建模缺陷，已修复；**不要再把"不可行"写进论文**（详见 `docs/DECISIONS.md` ADR-029） |
+| ⚠️ 分支状态 | 全部工作已合并入 **`main`**（合并提交 `8fe3014`），历史分支 `integrate-otheragent` 保留备查。`origin/add-latex-paper` 的最新提交基于**更早**的 main 状态（Q2 16 架次、Q4 无合法分区），**已被取代，不要并入** |
+| ⚠️ otheragent 交付物 | `otheragent/` 的 `.tex` / 图表 / 数据 / 流程图均已同步到最新结论；但 **`otheragent/document.pdf` 是过期编译产物**（本机无 LaTeX，无法重编），最终提交前必须重编或删除 |
 
 ---
 

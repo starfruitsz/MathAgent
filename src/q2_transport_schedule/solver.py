@@ -83,6 +83,9 @@ class Q2Result:
     runtime_s: float
     iterations: int
     note: str = ""
+    #: 各候选机队的真实调度结果 {标签: {n_sorties, energy_kwh, makespan_h, ...}}
+    #: 供论文"指标之间的权衡关系"一节直接引用，避免二次求解
+    fleet_trials: dict[str, dict] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------- 及时性
@@ -314,6 +317,8 @@ def construct(
     prefer_larger: bool = True,
     area_coherent: bool = True,
     seed_first_batch: bool = True,
+    fleet_counts: dict[str, int] | None = None,
+    load_balance: float = 0.0,
 ) -> list[_Cand]:
     """构造初始架次集合（装箱 + 邻近合并）。
 
@@ -329,6 +334,13 @@ def construct(
         True  —— 尽量把**同一服务区**的货放进同一个架次（填满再换新架次），
                  避免同一区的货被拆到很多架次而延误。
                  这批箱装满后，下一个箱优先开"本区新架次"或并入别的架次。
+    fleet_counts :
+        `{机型: 可用架数}`（如 `{"A":4,"B":2,"C":2}`）。给了它才启用
+        **机队铺开**：首批专架次按槽位轮转挑机型，使每个服务区各占一架机，
+        8 个 3600 s 截止的服务区才可能同时开工。
+    load_balance :
+        >0 时对新开架次加入 `w · 本机型已开架次数 / 该机型架数` 的惩罚，
+        把架次数按机队构成摊平（A:B:C ≈ 4:2:2），从而压完工时间。
     """
     def key(b: Box):
         dl = deadlines.get(b.box_id)
@@ -361,6 +373,34 @@ def construct(
 
     cands: list[_Cand] = []
     last_area_cand: dict[str, _Cand] = {}  # 该区最近一次开的架次（area_coherent 用）
+
+    # ★ 机队铺开：把每个"无人机槽位"排成一圈，按槽位轮转挑机型。
+    #   动机：首批截止 3600 s 的服务区有 8 个，每个只需约 17 kg（任何机型都装得下），
+    #   真正的瓶颈是**能同时起飞的架数**。若一律用最大机型 C，则只有 2 架机能起飞，
+    #   另外 6 个区必然超时；按槽位轮转铺到 8 架机（4A+2B+2C）才能 8 个区同时开工。
+    slot_seq: list[str] = []
+    if fleet_counts:
+        for code in type_order:
+            slot_seq.extend([code] * max(0, int(fleet_counts.get(code, 0))))
+    slot_i = 0
+
+    def _codes_from_slot() -> list[str]:
+        """从轮转指针开始、环形遍历槽位机型（去重保序，大的兜底在后面）。"""
+        if not slot_seq:
+            return list(type_order)
+        seen: list[str] = []
+        for k in range(len(slot_seq)):
+            c = slot_seq[(slot_i + k) % len(slot_seq)]
+            if c not in seen:
+                seen.append(c)
+        return seen
+
+    def _type_penalty(code: str) -> float:
+        """架次数按机队构成摊平的软惩罚（越小越该用这个机型）。"""
+        if load_balance <= 0.0 or not fleet_counts:
+            return 0.0
+        n_used = sum(1 for c in cands if c.plan.type_code == code)
+        return load_balance * n_used / max(1, int(fleet_counts.get(code, 1)))
 
     def _try_all_existing(b: Box):
         """在已有架次中找能耗增量最小的并入方案。"""
@@ -398,6 +438,7 @@ def construct(
                     continue
                 cost = ev.energy_kwh + 0.02 * len(stops)
                 cost += 0.5 * sum(1 for s in stops if s != b.service_id)
+                cost += _type_penalty(code)      # ★ 机队摊平
                 if created is None or cost < created[0]:
                     created = (
                         cost,
@@ -415,11 +456,12 @@ def construct(
     # 为什么必须抢：首批截止 3600 s 的服务区有 8 个，而每区首批箱只有 2 箱
     # （约 17 kg，任何机型一次可装）。若不预先建架次，贪心会把首批箱并入
     # 已有架次，而那个架次可能被排到几小时之后 —— 硬期限就必然违反。
-    # 实测（scripts/diag/q2_firstbatch_dedicated.py）：不预置时首批达标 17/30。
     #
-    # 资源上界（scripts/diag/q2_firstbatch_bound.py）：2 架机 + 4 组电池时，
-    # 前 3600 s 最多只能保障 3~4 个服务区（单架次含充电占用约 2600~4100 s），
-    # 因此**不可能**让 8 个区全部按时 —— 但应当把"能救的都救下来"。
+    # ★ 机型必须**按机队槽位轮转**，不能一律取最大机型：
+    #   `type_order` 首元素是 C，于是 8 个专架次全是 C 型，而 C 型只有 2 架 ——
+    #   同一时刻只能起飞 2 架，其余 6 个区照样超时。按槽位轮转则 8 个区
+    #   各占一架机（4A+2B+2C），t=0 同时起飞，3600 s 截止才真正可满足。
+    #   （旧口径下的"资源上界 3~4 个区"是**机型没铺开**造成的假瓶颈。）
     frozen_set: set[str] = set()
     seeded_ids: set[str] = set()
     if seed_first_batch:
@@ -436,7 +478,7 @@ def construct(
             gm = sum(b.mass_kg for b in grp)
             gv = sum(b.volume_m3 for b in grp)
             made = None
-            for code in type_order:
+            for code in _codes_from_slot():
                 uav = uav_types[code]
                 if gm > uav.max_payload_kg + 1e-9 or gv > uav.volume_m3 + 1e-12:
                     continue
@@ -452,6 +494,8 @@ def construct(
                 last_area_cand[svc] = made
                 seeded_ids.update(b.box_id for b in grp)
                 frozen_set.add(svc)
+                if slot_seq:
+                    slot_i = (slot_i + 1) % len(slot_seq)   # ★ 轮到下一架机
 
     for b in ordered:
         if b.box_id in seeded_ids:
@@ -595,9 +639,10 @@ def proxy_dispatch(
     uav_types: dict[str, UAVType],
     leg_cache: LegCache,
     boxes_by_id: dict[str, Box],
-    n_uav: int,
-    n_battery: int,
-    t_full_s: float,
+    n_uav: int | None = None,
+    n_battery: int | None = None,
+    t_full_s: float | None = None,
+    resources: dict[str, tuple[int, int, float]] | None = None,
 ) -> dict[int, float]:
     """**资源感知的快速代理调度**：返回 {候选架次 id: 该架次最早开工时刻}。
 
@@ -615,23 +660,36 @@ def proxy_dispatch(
 
     实现：按**最紧时限升序**派发（与真实派发器同口径），
     每轮把架次分配给"最早可用的机—池"。
+
+    `resources`（★ 混合机队必须用它）
+    --------------------------------
+    `{机型: (运输机数, 电池组数, 满充时间 s)}`。资源池**按机型互相独立**
+    （实体机与电池都不可跨机型混用），因此混合机队下各机型要各排各的队：
+    给了 `resources` 就按机型分组、组内用本机型的资源数派发；
+    只给 `n_uav/n_battery/t_full_s` 三个标量则所有机型共用同一组计数（同构口径）。
     """
-    order = sorted(
-        (c for c in cands if c.plan.stops),
-        key=lambda c: _cand_urgency(c, boxes_by_id, leg_cache, uav_types),
-    )
-    uav_free = [0.0] * max(1, n_uav)
-    bat_free = [0.0] * max(1, n_battery)
+    live = [c for c in cands if c.plan.stops]
+    by_type: dict[str, list[_Cand]] = {}
+    for c in live:
+        by_type.setdefault(c.plan.type_code, []).append(c)
+
+    res_map = resources or {}
     starts: dict[int, float] = {}
-    for c in order:
-        iu = min(range(len(uav_free)), key=lambda i: uav_free[i])
-        ib = min(range(len(bat_free)), key=lambda i: bat_free[i])
-        t0 = max(uav_free[iu], bat_free[ib])
-        starts[id(c)] = t0
-        uav_free[iu] = t0 + c.ev.total_time_s
-        soc = c.ev.return_soc
-        t_chg = charging_time(soc, t_full_s)
-        bat_free[ib] = t0 + c.ev.total_time_s + t_chg
+    for code, group in by_type.items():
+        n_u, n_b, tf = res_map.get(
+            code, (n_uav or 1, n_battery or 1, t_full_s or 1800.0)
+        )
+        order = sorted(group, key=lambda c: _cand_urgency(c, boxes_by_id, leg_cache, uav_types))
+        uav_free = [0.0] * max(1, int(n_u))
+        bat_free = [0.0] * max(1, int(n_b))
+        for c in order:
+            iu = min(range(len(uav_free)), key=lambda i: uav_free[i])
+            ib = min(range(len(bat_free)), key=lambda i: bat_free[i])
+            t0 = max(uav_free[iu], bat_free[ib])
+            starts[id(c)] = t0
+            uav_free[iu] = t0 + c.ev.total_time_s
+            t_chg = charging_time(c.ev.return_soc, tf)
+            bat_free[ib] = t0 + c.ev.total_time_s + t_chg
     return starts
 
 
@@ -700,19 +758,21 @@ def objective_breakdown(
     boxes_by_id: dict[str, Box],
     deadlines: dict[str, Deadline],
     weights: Q2Weights | None = None,
-    resources: tuple[int, int, float] | None = None,
+    resources: tuple[int, int, float] | dict[str, tuple[int, int, float]] | None = None,
 ) -> ObjBreakdown:
     """计算综合目标及其分项。
 
-    `resources = (运输机数, 电池组数, 满充时间 s)`
-    --------------------------------------------
+    `resources`
+    -----------
+    · `(运输机数, 电池组数, 满充时间 s)` —— 同构机队（单机型）；
+    · `{机型: (运输机数, 电池组数, 满充时间 s)}` —— 混合机队，按机型分别排队；
     · 给定时：用 `proxy_dispatch` 做**资源感知**的开工时刻估计，
       目标函数因此能看见"2 架机 4 组电池"带来的排队与充电周转；
     · 为 None 时：退化为"假想同时开工"（等于假设资源无限）。
 
     ★ 为什么默认必须传 resources：假想同时开工会让**违规箱数恒为 0**
       （每个架次都 0 时刻起飞），优化器只看得到能耗与架次数，
-      于是把硬期限箱排到几小时之后 —— 实测首批达标仅 17/30。
+      于是把硬期限箱排到几小时后 —— 实测首批达标仅 17/30。
     """
     # ★ 不要写成默认参数 `weights=DEFAULT_WEIGHTS`：默认值在**函数定义时**绑定，
     #   外部（如权重扫描）改模块级 DEFAULT_WEIGHTS 不会生效。必须运行时取。
@@ -721,9 +781,13 @@ def objective_breakdown(
 
     # ★ 资源感知的开工时刻：给定时用代理调度，否则退化为"假想同时开工"
     if resources is not None:
-        n_uav, n_bat, t_full_s = resources
-        starts = proxy_dispatch(cands, uav_types, leg_cache, boxes_by_id,
-                                n_uav, n_bat, t_full_s)
+        if isinstance(resources, dict):
+            starts = proxy_dispatch(cands, uav_types, leg_cache, boxes_by_id,
+                                    resources=resources)
+        else:
+            n_uav, n_bat, t_full_s = resources
+            starts = proxy_dispatch(cands, uav_types, leg_cache, boxes_by_id,
+                                    n_uav, n_bat, t_full_s)
     else:
         starts = {}
 
@@ -781,7 +845,7 @@ def _objective(
     boxes_by_id: dict[str, Box],
     deadlines: dict[str, Deadline],
     weights: Q2Weights | None = None,
-    resources: tuple[int, int, float] | None = None,
+    resources: tuple[int, int, float] | dict[str, tuple[int, int, float]] | None = None,
 ) -> tuple[float, ...]:
     """局部搜索用的目标（元组，便于与旧签名兼容；数值越小越好）。"""
     bd = objective_breakdown(cands, uav_types, leg_cache, boxes_by_id,
@@ -797,7 +861,7 @@ def local_search(
     deadlines: dict[str, Deadline],
     max_rounds: int = 30,
     weights: Q2Weights | None = None,
-    resources: tuple[int, int, float] | None = None,
+    resources: tuple[int, int, float] | dict[str, tuple[int, int, float]] | None = None,
     frozen_areas: set[str] | None = None,
 ) -> list[_Cand]:
     """局部搜索：搬箱（relocate）/ 合并（merge）/ 按区重装（repack），

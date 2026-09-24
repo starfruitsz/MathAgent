@@ -357,25 +357,40 @@ def schedule_dispatch(
             #   fb_late —— 首批违规的**总时长**（同违规箱数时取更早的）
             #   n_exp   —— 期望送达违规箱数
             #   exp_late—— 期望违规总时长
+            #   slack   —— ★ 最小松弛量（详见下）
+            #   energy  —— 能耗，最后的确定性 tie-break
+            #
+            # ★ 为什么必须有 slack（最小松弛优先 / least-laxity-first）：
+            #   开工时刻早的时候（尤其 t=0）所有架次都**还没**违规，
+            #   n_fb / fb_late / n_exp / exp_late 全是 0，排序实际退化成
+            #   "能耗最小者优先" —— 于是稀缺的首批资源被"顺路的小架次"占满，
+            #   真正该抢时间的紧时限服务区反而要等下一轮。
+            #   实测（旧口径）：t=0 的 8 个机位里有两个给了 S001 的第二个架次，
+            #   而 S002/S012/S013 的首批箱被推到 5 800~7 800 s，凭空多出 5 箱首批超时。
+            #   松弛量 slack = min(时限 − 交付时刻) 把"离超时还有多久"直接编码进来，
+            #   同违规量的架次里**最紧的先派**，这才是时限驱动派发应有的行为。
             n_fb = 0
             fb_late = 0.0
             n_exp = 0
             exp_late = 0.0
+            slack = math.inf
             for svc, off in offs.items():
                 t_deliver = now + off
                 for bid in plan.boxes_by_stop.get(svc, ()):
                     b = boxes_by_id[bid]
                     if b.is_first_batch and b.first_batch_deadline_s is not None:
                         late = t_deliver - b.first_batch_deadline_s
+                        slack = min(slack, -late)
                         if late > 0:
                             n_fb += 1
                             fb_late += late
                     if b.expected_time_s is not None:
                         late_e = t_deliver - b.expected_time_s
+                        slack = min(slack, -late_e)
                         if late_e > 0:
                             n_exp += 1
                             exp_late += late_e
-            key = (n_fb, fb_late, n_exp, exp_late, ev.energy_kwh)
+            key = (n_fb, fb_late, n_exp, exp_late, slack, ev.energy_kwh)
             if best is None or key < best[0]:
                 best = (key, plan, uav_id, bat_id, offs, ret_off, ev)
 

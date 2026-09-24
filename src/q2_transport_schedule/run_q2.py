@@ -186,60 +186,101 @@ def solve(
     max_group: int = 3,
     fleet_mode: str = "auto",
     weights: Q2Weights | None = None,
+    prefer_small: bool = False,
 ) -> Q2Result:
     """求解问题二。
 
     `fleet_mode`
     -----------
-    · `"auto"`（默认）—— 由于**调度器按机型分池**（实体机与电池都不可跨机型混用），
-      一个方案的机型必须**统一**才可调度。因此这里分别构造并调度
-      A / B / C 三个**同构机队方案**，用**真实调度结果**评分，取最优者。
-      这避免了"贪心按单箱能耗选机型"造成的严重次优（实测 B 型 35 架次 vs C 型 16 架次）。
+    · `"auto"`（默认）—— 分别构造并调度**四个候选**：同构 A / B / C 机队，
+      以及题目真实给出的**混合机队**（A×4 + B×2 + C×2 = 8 架），
+      全部用**真实调度结果**评分，取最优者。
+    · `"mixed"` —— 只跑混合机队（可选 `prefer_small` 用最小可容纳机型装配）。
     · 其它值 —— 视为指定机型（如 `"C"`），只跑该机型（用于实验对比）。
+
+    ★ 为什么必须把混合机队纳入候选
+    ------------------------------
+    早期版本只跑同构机队，理由是"调度器按机型分池，方案机型必须统一"。
+    该理由**不成立**：`schedule_ordered` 是按 `pools[plan.type_code]` 取资源的，
+    各机型资源池彼此独立，混合机队天然可调度。
+    漏掉混合机队的后果很严重：目标函数里的"准时率"由 8 架机的并行能力决定，
+    只留 2 架 C 型等于人为砍掉 3/4 的并行度，于是首批到期箱必然大面积超时
+    （实测准时率被压到 55%、首批 30 箱仅 13 箱准时），
+    解也会退化成"少开架次、牺牲时效"的 14 架次方案。
     """
     t0 = time.perf_counter()
     boxes_by_id = {b.box_id: b for b in boxes}
 
+    # 候选机队：(标签, 机型子集, 机队, 电池库存, 满充时间, 偏好大机型, 机队摊平权重)
+    # ★ 标签会直接印进论文的表 18，故用中文可读名
+    cands_cfg: list[tuple[str, dict, dict, dict, dict, bool, float]] = []
     if fleet_mode == "auto":
-        candidates = [c for c in ("C", "B", "A") if c in uav_types and fleet.get(c)]
+        for c in ("C", "B", "A"):
+            if c in uav_types and fleet.get(c):
+                cands_cfg.append((f"同构 {c} 型", {c: uav_types[c]}, {c: fleet[c]},
+                                  {c: bat_inv.get(c, 0)}, {c: t_full.get(c, 1800.0)},
+                                  True, 0.0))
+        # ★ 题目真实给出的混合机队（A×4+B×2+C×2）；三种装配策略都试，
+        #   由目标函数裁决"少开架次"/"小机型省电"/"架次摊平压完工"谁更优
+        if len([c for c in fleet if fleet.get(c)]) > 1:
+            cands_cfg.append(("混合-大机型优先", dict(uav_types), dict(fleet),
+                              dict(bat_inv), dict(t_full), True, 0.0))
+            cands_cfg.append(("混合-小机型优先", dict(uav_types), dict(fleet),
+                              dict(bat_inv), dict(t_full), False, 0.0))
+            # 架次按机队构成摊平（A:B:C ≈ 4:2:2）→ 8 架机并行度与完工时间最优
+            cands_cfg.append(("混合-机队摊平", dict(uav_types), dict(fleet),
+                              dict(bat_inv), dict(t_full), False, 2.0))
+    elif fleet_mode == "mixed":
+        cands_cfg.append(("混合-大机型优先", dict(uav_types), dict(fleet),
+                          dict(bat_inv), dict(t_full), not prefer_small, 0.0))
+        if prefer_small:
+            cands_cfg.append(("混合-小机型优先", dict(uav_types), dict(fleet),
+                              dict(bat_inv), dict(t_full), False, 0.0))
     else:
-        candidates = [fleet_mode]
+        c = fleet_mode
+        cands_cfg.append((f"同构 {c} 型", {c: uav_types[c]}, {c: fleet[c]},
+                          {c: bat_inv.get(c, 0)}, {c: t_full.get(c, 1800.0)}, True, 0.0))
+
+    # 受保护的硬期限服务区：首批截止 ≤3600 s 者预置了专架次，
+    # 局部搜索不得把它们合并/重装回晚开的架次
+    _frozen = {b.service_id for b in boxes
+               if b.is_first_batch
+               and (b.first_batch_deadline_s or 1e18) <= 3600.0}
+    # 各机型资源 → 目标函数/代理调度用（混合机队按机型分别排队）
+    def _res(f: dict, b: dict, tf: dict) -> dict[str, tuple[int, int, float]]:
+        return {k: (len(v), int(b.get(k, 0)), float(tf.get(k, 1800.0)))
+                for k, v in f.items() if v}
 
     best: tuple[float, dict, list, list] | None = None
     trials: dict[str, dict] = {}
-    for code in candidates:
-        only_t = {code: uav_types[code]}
-        only_f = {code: fleet[code]}
-        only_b = {code: bat_inv.get(code, 0)}
-        only_tf = {code: t_full.get(code, 1800.0)}
+    for label, sub_t, sub_f, sub_b, sub_tf, prefer_large, lb in cands_cfg:
         clear_caches()
         try:
-            cands = construct(boxes, only_t, leg_cache, deadlines, max_group=max_group)
+            ccands = construct(boxes, sub_t, leg_cache, deadlines,
+                               max_group=max_group, prefer_larger=prefer_large,
+                               fleet_counts={k: len(v) for k, v in sub_f.items() if v},
+                               load_balance=lb)
             if do_local_search:
-                # 受保护的硬期限服务区：首批截止 ≤3600 s 者预置了专架次，
-                # 局部搜索不得把它们合并/重装回晚开的架次
-                _frozen = {b.service_id for b in boxes
-                           if b.is_first_batch
-                           and (b.first_batch_deadline_s or 1e18) <= 3600.0}
-                cands = local_search(cands, only_t, leg_cache, boxes_by_id, deadlines,
-                                     weights=weights,
-                                     resources=(len(only_f[code]), only_b.get(code, 0),
-                                                only_tf.get(code, 1800.0)),
-                                     frozen_areas=_frozen)
-            plans = [c.plan for c in cands if c.plan.stops]
-            pools = build_pools(only_f, only_b, only_tf)
-            sched = schedule_dispatch(plans, only_t, leg_cache, boxes_by_id, pools)
+                ccands = local_search(ccands, sub_t, leg_cache, boxes_by_id, deadlines,
+                                      weights=weights,
+                                      resources=_res(sub_f, sub_b, sub_tf),
+                                      frozen_areas=_frozen)
+            plans = [c.plan for c in ccands if c.plan.stops]
+            pools = build_pools(sub_f, sub_b, sub_tf)
+            sched = schedule_dispatch(plans, sub_t, leg_cache, boxes_by_id, pools)
         except Exception as exc:  # noqa: BLE001  (某机型装不下或调度失败 → 跳过)
-            trials[code] = {"error": f"{type(exc).__name__}: {str(exc)[:80]}"}
+            trials[label] = {"error": f"{type(exc).__name__}: {str(exc)[:80]}"}
             continue
         score, detail = schedule_score(sched, boxes_by_id, deadlines, weights)
-        trials[code] = detail
+        detail["fleet_mode"] = label
+        trials[label] = detail
         if best is None or score < best[0]:
-            best = (score, detail, sched, cands)
+            best = (score, detail, sched, ccands)
 
     if best is None:
         raise RuntimeError(f"没有任何机型可行；各机型尝试结果：{trials}")
     score, detail, sched, cands = best
+    fleet_used = detail.get("fleet_mode", "")
     iters = 2 if do_local_search else 1
     pen = 0.0
     n_fb = n_exp = 0
@@ -275,12 +316,13 @@ def solve(
         objective=score,
         runtime_s=time.perf_counter() - t0,
         iterations=iters,
-        note=("机型比较：" + "；".join(
+        note=("机队比较：" + "；".join(
             f"{k}=" + (v.get("error", "")
                        if "error" in v else
                        f"{v['n_sorties']}架次/{v['makespan_h']}h/准时{v['on_time_rate']:.1%}"
-                       f"/{v['energy_kwh']:.2f}kWh")
+                       f"/{v['energy_kwh']:.2f}kWh/得分{v['score']:.1f}")
             for k, v in trials.items())),
+        fleet_trials={k: dict(v) for k, v in trials.items()},
     )
 
 
@@ -323,7 +365,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-local-search", action="store_true")
     ap.add_argument("--max-group", type=int, default=3, help="单架次最多访问的服务区数")
     ap.add_argument("--fleet-mode", default="auto",
-                    help="auto=自动比较 A/B/C 三个同构机队并取最优；或指定机型如 C")
+                    help="auto=比较 A/B/C 同构机队与混合机队(A×4+B×2+C×2)并取最优；"
+                         "mixed=只跑混合机队；或指定机型如 C")
+    ap.add_argument("--prefer-small", action="store_true",
+                    help="mixed 模式下只跑'最小可容纳机型'装配方案")
     args = ap.parse_args(argv)
 
     log = get_logger("q2")
@@ -340,7 +385,7 @@ def main(argv: list[str] | None = None) -> int:
     res = solve(
         boxes, uav_types, leg_cache, deadlines, fleet, bat_inv, t_full,
         do_local_search=not args.no_local_search, max_group=args.max_group,
-        fleet_mode=args.fleet_mode,
+        fleet_mode=args.fleet_mode, prefer_small=args.prefer_small,
     )
     log.info(
         "求解完成：%d 架次 / %.2f kWh / makespan %.0f s / 首批违规 %d / 期望违规 %d",
@@ -390,6 +435,26 @@ def main(argv: list[str] | None = None) -> int:
                     "期望达标": "是" if t <= dl.expected_s + 1e-6 else "否",
                 })
     save_table(pd.DataFrame(tl), out / "tables" / "q2_时限达成.csv")
+
+    # ---------------- 机队策略对比（四目标权衡） ----------------
+    # ★ trials 是求解过程中已经算过的候选机队真实调度结果，直接落盘即可，
+    #   不需额外求解；论文"指标之间的权衡关系"一节即以此表为依据。
+    cmp_rows = []
+    for label, v in (res.fleet_trials or {}).items():
+        if "error" in v:
+            continue
+        cmp_rows.append({
+            "候选机队": label,
+            "架次数": v["n_sorties"],
+            "总能耗（kWh）": round(v["energy_kwh"], 2),
+            "完工时间（h）": round(v["makespan_h"], 2),
+            "期望送达准时率": f"{v['on_time_rate']:.1%}",
+            "首批违规（箱）": v["n_late_first_batch"],
+            "期望违规（箱）": v["n_late_boxes"],
+            "综合得分": round(v["score"], 1),
+        })
+    if cmp_rows:
+        save_table(pd.DataFrame(cmp_rows), out / "tables" / "q2_机队对比.csv")
 
     # ---------------- 独立校验 ----------------
     boxes_map = {

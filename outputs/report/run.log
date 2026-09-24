@@ -353,3 +353,99 @@
 01:18:48 [INFO]   问题二：图 3 / 表 5 / 数据 9
 01:18:48 [INFO]   问题三：图 4 / 表 4 / 数据 9
 01:18:48 [INFO]   问题四：图 3 / 表 5 / 数据 9
+01:50:32 [INFO] 载入全部结果 ...
+01:50:32 [INFO] 生成公共图 ...
+01:50:32 [INFO] 图 f01_roadmap  全文技术路线图
+01:50:33 [INFO] 图 f02_terrain_nodes  研究区 30 m DEM 与任务节点分布
+01:50:33 [INFO] 图 f03_box_stats  货箱质量/体积/时限统计
+01:50:33 [INFO] 表 t_box_by_type  分类物资总量统计
+01:50:33 [INFO] 表 t_box_by_service  各服务区物资需求
+01:50:33 [INFO] 生成问题一图 ...
+01:50:34 [INFO] 图 f04_q1_payload  最大安全载荷热力图与生效约束
+01:50:34 [INFO] 表 t_q1_payload  3 机型 × 15 服务区最大安全载荷
+01:50:34 [INFO] 图 f05_q1_groups  货箱组批方案构成
+01:50:34 [INFO] 表 t_q1_groups  货箱组批方案明细（交付模板列序）
+01:50:34 [INFO] 图 f06_q1_strategy  策略对比与 Pareto 前沿
+01:50:34 [INFO] 表 t_q1_strategy  各策略多目标对比
+01:50:34 [INFO] 表 t_q1_lowerbound  逐服务区架次数下界与差距
+01:50:35 [INFO] 图 f07_q1_rho  返航安全余量敏感性分析
+01:50:35 [INFO] 表 t_q1_rho_sweep  ρ_g 扫描汇总
+01:50:35 [INFO] 生成问题二图 ...
+01:50:36 [INFO] 图 f08_q2_gantt  运输调度甘特图
+01:50:36 [INFO] 表 t_q2_sorties  问题二运输架次明细（交付模板列序）
+01:50:36 [INFO] 图 f09_q2_timeliness  物资时限达成分析
+01:50:36 [INFO] 表 t_q2_timeliness  逐箱时限达成明细
+01:50:36 [INFO] 表 t_q2_tradeoff  问题二四目标权衡与候选机队对比
+01:50:37 [INFO] 图 f10_q2_resources  资源使用情况
+01:50:37 [INFO] 表 t_q2_uav_use  实体无人机使用统计
+01:50:37 [INFO] 表 t_q2_battery_use  共享电池周转明细
+01:50:37 [INFO] 表 t_q2_battery_count  共享电池使用次数
+01:50:37 [INFO] 生成问题三图 ...
+01:50:38 [INFO] 图 f11_q3_diagnosis  连续通信诊断
+01:50:38 [INFO] 表 t_q3_diagnosis  逐架次直连状态诊断
+01:50:38 [INFO] 图 f12_q3_relay_map  中继悬停点与保障关系
+01:50:38 [INFO] 表 t_q3_relay_sorties  中继架次明细（交付模板列序）
+01:50:38 [INFO] 表 t_q3_siting  逐架次选址结果
+01:50:39 [INFO] 图 f13_q3_coverage  中继选址特征
+01:50:39 [INFO] 表 t_q3_summary  中继保障汇总
+01:50:39 [INFO] 图 f14_q3_joint_gantt  运输与中继联合调度时间线
+01:50:39 [INFO] 生成问题四图 ...
+01:50:40 [INFO] 图 f15_q4_graph  原子单元连通分量分析
+01:50:40 [INFO] 表 t_q4_bridge  桥接架次清单
+01:50:40 [INFO] 表 t_q4_units  原子单元（连通分量）
+01:50:41 [INFO] 图 f16_q4_compare  分区方案多指标对比
+01:50:41 [INFO] 表 t_q4_compare  分区方案对比
+01:50:41 [INFO] 表 t_q4_gap  逐方案逐类资源缺口
+01:50:41 [INFO] 图 f17_q4_detail  逐组资源配置与工作量
+01:50:41 [INFO] 表 t_q4_group  逐组资源与工作量明细
+01:50:41 [INFO] 表 t_all_metrics  四问关键指标汇总
+01:50:41 [INFO] 完成：图 17 个 / 表 23 个
+01:50:41 [INFO] 图表目录：paper
+02:04:38 [INFO] 载入全部结果 ...
+02:04:38 [INFO] 生成公共图 ...
+02:04:38 [INFO] 图 f01_roadmap  全文技术路线图
+02:04:39 [INFO] 图 f02_terrain_nodes  研究区 30 m DEM 与任务节点分布
+02:04:39 [INFO] 图 f03_box_stats  货箱质量/体积/时限统计
+02:04:39 [INFO] 表 t_box_by_type  分类物资总量统计
+02:04:39 [INFO] 表 t_box_by_service  各服务区物资需求
+02:04:39 [INFO] 生成问题一图 ...
+02:04:40 [INFO] 图 f04_q1_payload  最大安全载荷热力图与生效约束
+02:04:40 [INFO] 表 t_q1_payload  3 机型 × 15 服务区最大安全载荷
+02:04:40 [INFO] 图 f05_q1_groups  货箱组批方案构成
+02:04:40 [INFO] 表 t_q1_groups  货箱组批方案明细（交付模板列序）
+02:04:41 [INFO] 图 f06_q1_strategy  策略对比与 Pareto 前沿
+02:04:41 [INFO] 表 t_q1_strategy  各策略多目标对比
+02:04:41 [INFO] 表 t_q1_lowerbound  逐服务区架次数下界与差距
+02:04:41 [INFO] 图 f07_q1_rho  返航安全余量敏感性分析
+02:04:41 [INFO] 表 t_q1_rho_sweep  ρ_g 扫描汇总
+02:04:41 [INFO] 生成问题二图 ...
+02:04:42 [INFO] 图 f08_q2_gantt  运输调度甘特图
+02:04:42 [INFO] 表 t_q2_sorties  问题二运输架次明细（交付模板列序）
+02:04:42 [INFO] 图 f09_q2_timeliness  物资时限达成分析
+02:04:42 [INFO] 表 t_q2_timeliness  逐箱时限达成明细
+02:04:43 [INFO] 表 t_q2_tradeoff  问题二四目标权衡与候选机队对比
+02:04:43 [INFO] 图 f10_q2_resources  资源使用情况
+02:04:43 [INFO] 表 t_q2_uav_use  实体无人机使用统计
+02:04:43 [INFO] 表 t_q2_battery_use  共享电池周转明细
+02:04:43 [INFO] 表 t_q2_battery_count  共享电池使用次数
+02:04:43 [INFO] 生成问题三图 ...
+02:04:44 [INFO] 图 f11_q3_diagnosis  连续通信诊断
+02:04:44 [INFO] 表 t_q3_diagnosis  逐架次直连状态诊断
+02:04:44 [INFO] 图 f12_q3_relay_map  中继悬停点与保障关系
+02:04:44 [INFO] 表 t_q3_relay_sorties  中继架次明细（交付模板列序）
+02:04:44 [INFO] 表 t_q3_siting  逐架次选址结果
+02:04:45 [INFO] 图 f13_q3_coverage  中继选址特征
+02:04:45 [INFO] 表 t_q3_summary  中继保障汇总
+02:04:45 [INFO] 图 f14_q3_joint_gantt  运输与中继联合调度时间线
+02:04:45 [INFO] 生成问题四图 ...
+02:04:46 [INFO] 图 f15_q4_graph  原子单元连通分量分析
+02:04:46 [INFO] 表 t_q4_bridge  桥接架次清单
+02:04:46 [INFO] 表 t_q4_units  原子单元（连通分量）
+02:04:47 [INFO] 图 f16_q4_compare  分区方案多指标对比
+02:04:47 [INFO] 表 t_q4_compare  分区方案对比
+02:04:47 [INFO] 表 t_q4_gap  逐方案逐类资源缺口
+02:04:47 [INFO] 图 f17_q4_detail  逐组资源配置与工作量
+02:04:47 [INFO] 表 t_q4_group  逐组资源与工作量明细
+02:04:47 [INFO] 表 t_all_metrics  四问关键指标汇总
+02:04:47 [INFO] 完成：图 17 个 / 表 23 个
+02:04:47 [INFO] 图表目录：paper

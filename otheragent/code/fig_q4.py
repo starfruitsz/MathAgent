@@ -68,7 +68,11 @@ def fig32_graph():
     nx.draw_networkx_labels(G, pos, ax=ax, font_size=7.5,
                             font_family="SimSun")
     ax.set_aspect("equal"); ax.axis("off")
-    ax.set_title(f"(a) 架次—服务区关联图：1 个连通分量（15 顶点 / {G.number_of_edges()} 边）",
+    # ★ 组件数必须由数据推出，不能写死：Q2/Q3 方案一变，分区单元数就变
+    #   （历史上这里写死"1 个连通分量"，与刷新的数据不符）
+    _n_comp_a = nx.number_connected_components(G)
+    ax.set_title(f"(a) 架次—服务区关联图：{_n_comp_a} 个连通分量"
+                 f"（{G.number_of_nodes()} 顶点 / {G.number_of_edges()} 边）",
                  loc="left", fontsize=10.5, fontweight="bold")
     from matplotlib.lines import Line2D
     ax.legend(handles=[Line2D([], [], marker="o", ls="", ms=9, mfc=C_RED, mec="white",
@@ -87,7 +91,19 @@ def fig32_graph():
     ax.set_xlabel("服务区"); ax.set_ylabel("关联架次数（度）")
     ax.tick_params(axis="x", rotation=90)
     ax.set_title("(b) 各服务区的关联度", loc="left", fontsize=10.5, fontweight="bold")
-    ax.annotate("21 个多点架次把 15 个服务区\n串成单一连通分量\n$\\Rightarrow$ 不存在合法的 2/3 组分区",
+    # ★ 组件数与多点架次数由数据推出，勿硬编码（Q3 方案一变，结论就变）
+    n_comp = nx.number_connected_components(G)
+    n_multi = int((TR["stops"].str.contains("→")).sum())
+    if n_comp >= 3:
+        _concl = f"{n_multi} 个多点架次把 15 个服务区\n串成 {n_comp} 个连通分量\n" \
+                 r"$\Rightarrow$ K=2 与 K=3 均可行"
+    elif n_comp == 2:
+        _concl = f"{n_multi} 个多点架次把 15 个服务区\n串成 2 个连通分量\n" \
+                 r"$\Rightarrow$ K=2 可行，K=3 需拆分架次"
+    else:
+        _concl = f"{n_multi} 个多点架次把 15 个服务区\n串成单一连通分量\n" \
+                 r"$\Rightarrow$ 不存在合法的 2/3 组分区"
+    ax.annotate(_concl,
                 (0.40, 0.80), xycoords="axes fraction", fontsize=9, color=C_RED,
                 bbox=dict(boxstyle="round,pad=0.45", fc="#fdf2f2", ec=C_RED, lw=1.0))
     fig.tight_layout()

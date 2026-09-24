@@ -193,7 +193,7 @@ def fig30_sankey():
     fig.update_layout(font=dict(family="SimSun, Microsoft YaHei", size=14, color="#262626"),
                       paper_bgcolor="white", width=1000, height=560,
                       margin=dict(l=20, r=20, t=50, b=20),
-                      title=dict(text="问题三通信保障方式流向：35 个运输架次的保障资源分配",
+                      title=dict(text=f"问题三通信保障方式流向：{n_direct + r01 + r02} 个运输架次的保障资源分配",
                                  font=dict(size=15)))
     from plotstyle import FIG as FIGDIR
     out = FIGDIR / "fig30_q3_sankey.png"

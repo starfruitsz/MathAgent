@@ -72,6 +72,8 @@ def fig36_sensitivity():
 # ---------------------------------------------------------------- fig37 独立审计
 def fig37_audit():
     """四问独立校验结果记分卡：按违规类别分列，突出「物理类硬约束违规 0 条」。"""
+    _m2, _m3 = metrics(2), metrics(3)     # ★ 图例数字取自 metrics，勿硬编码
+
     def cats(path):
         d = json.loads((DAT / path).read_text(encoding="utf-8"))
         c = collections.Counter()
@@ -95,9 +97,10 @@ def fig37_audit():
     v3 = [c3.get(k, 0) for k in allc]
     x = np.arange(len(short)); w = 0.38
     b1 = ax.bar(x - w / 2, v2, w, color=C_BLUE, edgecolor="white", linewidth=0.7,
-                label="问题二（35 架次）")
+                label=f"问题二（{_m2['n_sorties']} 架次）")
     b2 = ax.bar(x + w / 2, v3, w, color=C_ORANGE, edgecolor="white", linewidth=0.7,
-                label="问题三（35 运输 + 30 中继架次）")
+                label=f"问题三（{_m3['n_transport_sorties']} 运输 + "
+                      f"{_m3['n_relay_sorties']} 中继架次）")
     for b in list(b1) + list(b2):
         if b.get_height() > 0:
             ax.annotate(f"{int(b.get_height())}",
@@ -163,13 +166,20 @@ def fig38_summary():
          ("期望送达准时率", f"{m2['on_time_rate']*100:.1f}", "%")])
     kpi(fig.add_subplot(gs[0, 2]), "问题三 · 通信协同",
         [("中继架次数", m3["n_relay_sorties"], "架次"),
-         ("覆盖率", f"{m3['coverage_rate']*100:.0f}", "%（29/29）"),
+         ("覆盖率", f"{m3['coverage_rate']*100:.0f}%",
+          f"（{m3['n_sorties_covered']}/{m3['n_sorties_need_relay']}）"),
          ("总能耗", f"{m3['total_energy_kwh']:.2f}", "kWh"),
          ("联合完工", f"{m3['joint_makespan_h']:.2f}", "h")])
+    # ★ Q4 的可行性与资源量由 metrics 推出，勿硬编码
+    _nu = int(m4["n_atomic_units"])
+    _feas = ("K=2 与 K=3 均可行" if _nu >= 3 else
+             ("K=2 可行（K=3 需拆架次）" if _nu == 2 else "无（单一连通分量）"))
+    _tot1 = sum(int(m4.get("baseline_resources_k1", {}).get(k, 0))
+                for k in ("uavs", "batteries", "relay_uavs", "relay_packs"))
     kpi(fig.add_subplot(gs[1, 0]), "问题四 · 分区配置",
-        [("合法 2/3 组分区", "无", "（单一连通分量）"),
-         ("K=1 资源总量", "13", "台·组"),
-         ("唯一缺口", "1", "组 B 型备用电池")])
+        [("原子单元数", _nu, "个"),
+         ("直接可行的分组", _feas, ""),
+         ("K=1 资源总量", str(_tot1), "台·组")])
 
     ax = fig.add_subplot(gs[1, 1:])
     names = ["总能耗\n(kWh)", "完工时间\n(h)", "架次数"]

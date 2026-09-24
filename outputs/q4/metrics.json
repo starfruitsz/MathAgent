@@ -1,7 +1,7 @@
 {
   "question": "q4",
-  "git_commit": "81503ae72687110c5c72c37ac0ec924f46919f0c",
-  "timestamp": "2026-09-25T01:18:26.997680+08:00",
+  "git_commit": "c3a64d9c16361eba6a0ee794584caf6994509a95",
+  "timestamp": "2026-09-25T01:50:24.847209+08:00",
   "seed": 42,
   "data_sources": [
     "调度中心与服务区.xlsx",
@@ -11,34 +11,34 @@
   ],
   "metrics": {
     "n_services": 15,
-    "n_transport_sorties_q3": 14,
-    "n_multi_stop_sorties": 11,
-    "n_atomic_units": 2,
-    "n_bridge_sorties": 8,
+    "n_transport_sorties_q3": 28,
+    "n_multi_stop_sorties": 9,
+    "n_atomic_units": 5,
+    "n_bridge_sorties": 6,
     "partition_feasible_k2": true,
-    "partition_feasible_k3": false,
+    "partition_feasible_k3": true,
     "baseline_resources_k1": {
-      "uavs": 2,
-      "batteries": 4,
+      "uavs": 8,
+      "batteries": 16,
       "relay_uavs": 2,
-      "relay_packs": 4
+      "relay_packs": 5
     },
     "k2_edits_required": 0,
-    "k3_edits_required": 1,
-    "runtime_sec": 0.45,
+    "k3_edits_required": 0,
+    "runtime_sec": 0.48,
     "k2_resources": {
-      "uavs": 3,
-      "batteries": 5,
-      "relay_uavs": 3,
-      "relay_packs": 5,
-      "imbalance": 1.7736
+      "uavs": 9,
+      "batteries": 16,
+      "relay_uavs": 2,
+      "relay_packs": 6,
+      "imbalance": 1.8652
     },
     "k3_resources": {
-      "uavs": 5,
-      "batteries": 7,
-      "relay_uavs": 4,
-      "relay_packs": 5,
-      "imbalance": 1.705
+      "uavs": 11,
+      "batteries": 17,
+      "relay_uavs": 2,
+      "relay_packs": 6,
+      "imbalance": 2.6216
     }
   }
 }

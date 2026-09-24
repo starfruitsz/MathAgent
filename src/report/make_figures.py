@@ -119,6 +119,7 @@ def load_all() -> dict:
         "q2_timeliness": pd.read_csv(q2 / "q2_时限达成.csv"),
         "q2_uavuse": pd.read_csv(q2 / "q2_资源使用_无人机.csv"),
         "q2_batuse": pd.read_csv(q2 / "q2_资源使用_电池.csv"),
+        "q2_fleetcmp": pd.read_csv(q2 / "q2_机队对比.csv"),
         "q3_sorties": pd.read_csv(q3 / "q3_运输架次.csv"),
         "q3_relay": pd.read_csv(q3 / "q3_中继架次.csv"),
         "q3_siting": pd.read_csv(q3 / "q3_中继选址.csv"),
@@ -506,6 +507,10 @@ def fig_q2_timeliness(D: dict) -> None:
 #     fig.suptitle("图 9  问题二：物资时限达成分析", y=1.03, fontsize=12, weight="bold")
     _save(fig, "f09_q2_timeliness", "物资时限达成分析", "问题二")
     _tab(tl, "t_q2_timeliness", "逐箱时限达成明细", "问题二")
+    # 四目标权衡：直接落盘求解时已算过的候选机队对比（不再二次求解）
+    if "q2_fleetcmp" in D and len(D["q2_fleetcmp"]):
+        _tab(D["q2_fleetcmp"], "t_q2_tradeoff",
+             "问题二四目标权衡与候选机队对比", "问题二")
 
 
 def fig_q2_resources(D: dict) -> None:

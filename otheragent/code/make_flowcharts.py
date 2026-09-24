@@ -15,6 +15,32 @@ import re
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / "diagrams"
+DAT = Path(__file__).resolve().parent.parent / "data"
+
+
+def _metrics(q: str) -> dict:
+    """读取某问的 metrics（用于把结果盒的**数字做成数据驱动**，避免过期）。"""
+    p = DAT / f"{q}_metrics.json"
+    return json.loads(p.read_text(encoding="utf-8"))["metrics"] if p.exists() else {}
+
+
+M1, M2, M3, M4 = _metrics("q1"), _metrics("q2"), _metrics("q3"), _metrics("q4")
+# 结果盒文本（★ 全部取自 metrics，改动数据后重跑本脚本即可同步）
+TXT_Q2_OUT = (f"输出：{M2.get('n_sorties','?')} 架次（全 C 型）｜"
+              f"{M2.get('total_energy_kwh',0):.2f} kWh\n"
+              f"完工 {M2.get('makespan_h',0):.2f} h｜准时率 "
+              f"{M2.get('on_time_rate',0):.1%}（首批超时 "
+              f"{M2.get('violations_first_batch','?')} 箱）")
+TXT_Q3_OUT = (f"输出：{M3.get('n_relay_sorties','?')} 个中继架次｜覆盖 "
+              f"{M3.get('n_sorties_covered','?')}/{M3.get('n_sorties_need_relay','?')}\n"
+              f"总能耗 {M3.get('total_energy_kwh',0):.2f} kWh｜联合完工 "
+              f"{M3.get('joint_makespan_h',0):.2f} h")
+_NU = M4.get("n_atomic_units", "?")
+TXT_Q4_BRANCH = (f"是 ⇒ 合法组数 K ∈ [1, {_NU}]（原子单元数）\n"
+                 f"K=2 需拆 {M4.get('k2_edits_required','?')} 个、"
+                 f"K=3 需拆 {M4.get('k3_edits_required','?')} 个多点架次")
+TXT_Q4_OUT = ("输出：分区可行性论证 + 桥接架次清单\n"
+              f"资源总量 K=1/2/3 见方案对比表；原子单元 {_NU} 个")
 
 # ---------------------------------------------------------------- 版式常量
 W_CANVAS = 1120
@@ -232,7 +258,7 @@ SPECS = [
              "branch": {"text": "否 ⇒ 等待充电周转\nΔ 为两阶段充电时长", "label": "否"}},
             {"t": "box", "text": "资源池周转：无人机 + 共享电池\n两阶段充电（SOC < 90% 占 65%，其后 35%）"},
             {"t": "box", "text": "独立复算校验\n逐段能耗、返航 SOC、资源占用区间"},
-            {"t": "box", "text": "输出：35 架次（全 B 型）｜83.01 kWh\n完工 9.78 h｜准时率 38.8%（首批超时 23 箱）"},
+            {"t": "box", "text": TXT_Q2_OUT},
         ],
     },
     {
@@ -248,7 +274,7 @@ SPECS = [
             {"t": "dec", "text": "单点可覆盖？",
              "branch": {"text": "否 ⇒ 分时段接力\n多架中继分段保障", "label": "否"}},
             {"t": "box", "text": "选址择优：通过返航 SOC 校验的\n最低能耗悬停点（离地 ≤ 300 m）"},
-            {"t": "box", "text": "输出：30 个中继架次｜覆盖 29/29\n总能耗 99.68 kWh｜联合完工 9.90 h"},
+            {"t": "box", "text": TXT_Q3_OUT},
         ],
     },
     {
@@ -258,12 +284,12 @@ SPECS = [
             {"t": "box", "text": "提取「架次—服务区」关联并构图\n15 个服务区为顶点，同架次服务区连边"},
             {"t": "box", "text": "求连通分量 = 原子单元\n（同架次服务区必须同组，不可拆）"},
             {"t": "dec", "text": "分量数 = 1？",
-             "branch": {"text": "是 ⇒ 唯一合法分区为「全部一组」\nK = 2、K = 3 均不存在合法解", "label": "是"}},
+             "branch": {"text": TXT_Q4_BRANCH, "label": "是"}},
             {"t": "box", "text": "定位桥接架次：移除后分量数增加\n得 T010 / T017 / T027 三个"},
             {"t": "box", "text": "最小改动方案\n拆 1 个架次得 2 组，拆 2 个得 3 组"},
             {"t": "box", "text": "组内资源核算：并行峰值 + 电池周转\n（资源不得跨组调配）"},
             {"t": "box", "text": "四维对比：配置规模 / 冗余 / 组间均衡 / 缺口\nK=1,2,3 ⇒ 资源总量 13 / 17 / 21"},
-            {"t": "box", "text": "输出：分区不可行性论证 + 桥接架次清单\nK=1 唯一缺口为 1 组 B 型备用电池"},
+            {"t": "box", "text": TXT_Q4_OUT},
         ],
     },
 ]

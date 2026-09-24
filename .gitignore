@@ -38,6 +38,7 @@ paper/_mathtype_smoke/
 # PDF 页面预览图（人工检查排版留白）
 paper/_preview/
 # 诊断用副本
+paper/_probe_min/
 paper/_probe*.docx
 paper/*_probe.pdf
 # Word 打开文档时留下的锁文件

@@ -549,6 +549,27 @@ def _add_text_runs(p, text, size, bold, cn=None):
                   cn=cn or (CN_HEI if bold else CN_FONT))
 
 
+_PLAIN_MATH = re.compile(r"\$([^$]*)\$")
+
+
+def _math_to_plain(expr: str) -> str:
+    """把简单公式转成普通文本（用于**表格数据行**）。
+
+    表格数据行由 CSV 提供，其中的单位记号（`$\\mathrm{kg}$`）本不该出现在数据里；
+    但确有少数表把带单位的表头写进了数据行。这里统一剥掉公式标记，
+    避免 Word 里出现难看的 `$\\mathrm{kg}$` 原文。
+    """
+    t = _PLAIN_MATH.sub(lambda m: m.group(1), expr)
+    t = re.sub(r"\\mathrm\{([^{}]*)\}", r"\1", t)
+    t = re.sub(r"\\text\{([^{}]*)\}", r"\1", t)
+    t = t.replace("\\,", " ").replace("\\ ", " ")
+    t = re.sub(r"\^\{?\\circ\}?", "°", t)
+    t = re.sub(r"\^\{?(-?\d+)\}?", r"^\1", t)
+    t = re.sub(r"_\{([^{}]*)\}", r"\1", t)
+    t = t.replace("$", "").replace("{", "").replace("}", "")
+    return t.strip()
+
+
 def H(doc, text, level=1, page_break=None):
     """标题。**一级标题自动另起新页**（由 Heading 1 样式保证）。
 
@@ -660,9 +681,19 @@ def _fill_row(row, values, font, header=False):
         if text.lower() in ("nan", "none"):
             text = ""
         if header:
-            _set_font(para.add_run(text), font, bold=True, cn=CN_HEI)
+            # 表头允许 `$...$` 行内公式（如"最大安全载荷 / $\mathrm{kg}$"）
+            _add_text_runs(para, text, font, True, cn=CN_HEI)
         else:
-            _add_text_runs(para, text, font, False)
+            # ★ 数据行不用公式：少数表把带单位的表头混进了数据，会出现
+            #   `$\mathrm{kg}$` 原文。统一剥成纯文本，避免 Word 里出现 LaTeX 记号。
+            _set_font(para.add_run(_shorten(_math_to_plain(text))), font, cn=CN_FONT)
+
+
+def _shorten(text: str, limit: int = 34) -> str:
+    """过长的单元格内容截断显示（完整内容在附件 CSV 中）。"""
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip(" ,;、") + "…"
 
 
 def TABLE(doc, name: str, caption: str, max_rows: int = 40, font=8.5,
@@ -834,9 +865,10 @@ def main() -> int:
     except Exception:
         pass
 
-    ap = argparse.ArgumentParser(description="生成论文 docx（公式转 MathType）")
-    ap.add_argument("--no-mathtype", action="store_true",
-                    help="跳过 MathType 转换，保留 OMML 原生公式（便于排查）")
+    ap = argparse.ArgumentParser(description="生成论文 docx（公式为 Word 原生 OMML 公式）")
+    ap.add_argument("--mathtype", action="store_true",
+                    help="实验性：把公式转成 MathType OLE 对象（该库生成的容器在 "
+                         "Word 中无法激活，双击打不开，见 ADR-028）")
     args = ap.parse_args()
 
     m1, m2, m3, m4 = metrics("q1"), metrics("q2"), metrics("q3"), metrics("q4")
@@ -954,15 +986,24 @@ def main() -> int:
     print(f"已生成：{OUT}")
     print(f"大小：{OUT.stat().st_size/1024/1024:.2f} MB")
 
-    # ★ 修改要求 1：公式使用 MathType。
-    #   OMML → MathType（Equation.DSMT4）OLE 对象，覆盖正文、行内与表格内公式。
-    if not args.no_mathtype:
+    # ★ 公式形式（ADR-028）：
+    #   默认输出 **OMML 原生公式**（Word 内置公式对象）：
+    #     · 双击即可编辑（Word 公式编辑器）
+    #     · 由 Word 排版引擎渲染，字号自动与正文一致，不会有比例问题
+    #     · 在任何 Word/WPS 环境与 PDF 导出中都稳定
+    #   `--mathtype` 走 `docx-equation` 的 OLE 路线，但该库自制的 OLE 容器
+    #   Word 不认（ProgID 为空、无法激活 → 双击打不开），仅在调研时使用。
+    if args.mathtype:
         convert_math(OUT)
     return 0
 
 
 def convert_math(path: Path) -> None:
-    """把 docx 中的 OMML 公式转换为 MathType 原生公式对象。"""
+    """把 docx 中的 OMML 公式转换为 MathType 原生公式对象（实验性，见 ADR-028）。
+
+    ⚠️ 已知问题：`docx-equation` 生成的 OLE 容器在 Word 中无法激活
+    （`OLEFormat.ProgID` 为空 → 双击打不开），故不作为默认输出。
+    """
     tmp = path.with_name(path.stem + "_omml.docx")
     try:
         n = EQM.convert_to_mathtype(path, tmp, work_dir=path.parent / "_mathtype_work")
@@ -973,6 +1014,7 @@ def convert_math(path: Path) -> None:
         return
     tmp.replace(path)
     print(f"MathType 转换完成：{n} 个公式 → Equation.DSMT4 对象")
+    print("⚠️  注意：该库的 OLE 容器在 Word 中无法激活（双击打不开），仅用于调研")
     print(f"大小：{path.stat().st_size/1024/1024:.2f} MB")
 
 

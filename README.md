@@ -19,7 +19,7 @@
 | **P2 / Q2** 异构多点多架次调度 | ✅ 完成 | 35 架次 / 83.01 kWh / 完工 587 min；硬约束全部通过 |
 | **P3 / Q3** 通信约束下运输与中继联合调度 | ✅ 完成 | 30 个中继架次 / **29-29 全程通信覆盖** / 总能耗 99.68 kWh |
 | **P4 / Q4** 任务分区与资源配置 | ✅ 完成 | ★ **按规则不存在合法 2/3 组分区**；给出桥接架次与最小改动方案 |
-| **P5** 论文与 Word 生成 | ✅ 完成 | **57 页论文**（24 图 / 28 表 / **79 个 MathType 公式** / 1.9 万字），`paper/` 下含 docx + PDF + 分目录图表备份 |
+| **P5** 论文与 Word 生成 | ✅ 完成 | **50 页论文**（24 图 / 28 表 / **96 个 Word 原生公式对象** / 1.9 万字），`paper/` 下含 docx + PDF + 分目录图表备份 |
 | **P6** 排版整改（MathType / 三线表 / 分页 / 图表同页） | ✅ 完成 | 见「一·六 排版规范」 |
 
 **环境**：Python 3.13.7 / Windows 11 / 24 核；依赖已锁定（`requirements.txt`），`check_env.py` 返回 `status: ok`。
@@ -31,7 +31,7 @@
 
 | 文件 | 说明 |
 |---|---|
-| `paper/山区洪涝灾害下无人机运输与通信协同优化_论文.docx` | **正文 Word**（57 页，符合 50~100 页要求；公式为 MathType 对象，可双击编辑） |
+| `paper/山区洪涝灾害下无人机运输与通信协同优化_论文.docx` | **正文 Word**（50 页，符合 50~100 页要求；公式为 Word 原生公式对象，**双击即可编辑**） |
 | `paper/山区洪涝灾害下无人机运输与通信协同优化_论文.pdf` | 同内容 PDF（防环境差异，便于送审） |
 | `paper/论文体量报告.json` | 页数/字数/表格/图片统计（`scripts/check_paper.py` 生成） |
 | `paper/chart_manifest.csv` | 全部图表的编号、标题、章节与文件清单（24 图 + 32 表） |
@@ -47,12 +47,12 @@
 ```powershell
 python -m src.report.make_figures    # 基础图表（17 图 / 21 表）
 python -m src.report.make_figures2   # 补充图表 + 分目录备份（→ 24 图 / 32 表）
-python -m src.report.build_paper     # 装配 Word，并把公式转成 MathType（79 个对象）
+python -m src.report.build_paper     # 装配 Word（公式为 Word 原生公式对象）
 python scripts\verify_paper.py       # 一键回归：结构自检 + 页数核算 + 导出 PDF
 ```
 
-> `python -m src.report.build_paper --no-mathtype` 可跳过 MathType 转换，
-> 保留 OMML 原生公式（排查公式问题时用）。
+> `python -m src.report.build_paper --mathtype` 为实验开关（MathType OLE 路线，见 ADR-028），
+> 默认不使用。
 
 ---
 
@@ -60,7 +60,7 @@ python scripts\verify_paper.py       # 一键回归：结构自检 + 页数核�
 
 | # | 要求 | 实现方式 | 自检脚本 |
 |:--:|---|---|---|
-| 1 | **公式使用 MathType**（正文嵌入、表格嵌入均含） | `src/report/equations.py`：类 LaTeX → OMML → **MathType `Equation.DSMT4`** OLE 对象。正文 60 个 + 表格内 19 个 = **79 个** | `scripts\check_docx_structure.py`（统计 OLE 对象与表格内数量） |
+| 1 | **公式可用、比例正确**（正文嵌入、表格嵌入均含） | ★ 公式以 **Word 原生 OMML 公式对象**（`m:oMath`）交付：**双击即可编辑**，字号由 Word 排版引擎决定、**与正文一致**。正文 60 个 + 表头 19 个 ≈ **96 个**（含表格内） | `scripts\check_docx_structure.py`（统计 `m:oMath` 与表格内数量） |
 | 2 | **每一章另起新页** | 写进 `Heading 1` 样式 `pageBreakBefore`，不逐处插分页符（目录页显式关闭） | `check_docx_structure.py`（逐个一级标题校验） |
 | 3 | **三线表**（参照参考文稿2） | 顶线 / 表头下线 / 底线，**无竖线**；列宽按内容自适应（幂律压缩，列宽比 ≤4:1）；≥9 列自动降字号 | `check_docx_structure.py`（逐表校验边框） |
 | 4 | **图与表跟题注同页** | 图片段落 `keepNext` → 图与图题同页；表题 `keepNext` → 表与表题同页；图高按比例限制 ≤9 cm | `check_docx_structure.py` + `scripts\check_pagination.py` |
@@ -68,33 +68,34 @@ python scripts\verify_paper.py       # 一键回归：结构自检 + 页数核�
 其它配套：表头中文化并把单位渲染为行内公式（如"最大安全载荷 / $\mathrm{kg}$"）、
 符号表改为参考文稿2 的双栏版式、插图内部**不再重复写图号**（避免同一张图两个编号）。
 
-### ★ 公式预览图的坑（决定公式"长得对不对"）
+### ★ 公式形态：为什么用 OMML 而不是 MathType OLE（ADR-028）
 
-`docx-equation` 生成 `Equation.DSMT4` OLE 对象**同时**生成 PNG 预览图；
-Word 与 PDF 实际显示的是**预览图**。该库原始的预览图渲染是**错的**：
+曾按要求走过 `docx-equation` 的 **MathType `Equation.DSMT4` OLE** 路线，实测**不可用**：
 
-> 它把 OMML2MML 产出的 `mml:math` **原样**塞进 HTML。而 **HTML 解析器不做
-> 命名空间解析**，`mml:math` 被当作"未知内联元素"，于是整条公式退化成
-> **一行普通文字**——上下标、分式、大算符全部丢失（看起来像 `Lg(q) = Lg0 - ...`）。
+| 问题 | 现象 | 证据 |
+|---|---|---|
+| **双击打不开** | `OLEFormat.ProgID` 为空，`Activate()` 抛"此对象已损坏或不再可用" | 隔离实验：最小 docx（仅 1 个公式）同样失败；换成自建**合规 CFB 容器**重打包仍失败；而 Word+MathType 亲手插入的**真品**对象可正常激活 |
+| **公式退化成普通文字** | 该库把 `mml:math` 原样嵌入 HTML，而 **HTML 解析器不做命名空间解析** → 上下标/分式全丢 | `--dump-dom` 显示 `<math>` 出现 0 次、`<msub>` 0 次 |
 
-本仓库的处理：转换完成后**用正确方式重绘预览图并写回 docx**
-（`equations.render_previews()` + `equations.reembed_previews()`）：
-① 去掉 `mml:` 前缀、让根元素就叫 `math`；② `--force-device-scale-factor=1`
-渲染并按新尺寸修正 `v:shape@style` 与 `a:ext`；③ 显示比例按量测标定为
-**0.23 pt/px**（12 pt 字号的公式基字高约 49 px）。
+因此交付形态改为 **OMML**（Word 内置公式对象），两项硬要求同时满足：
 
-`check_docx_structure.py` 会检查预览图高度分布：若所有公式高度几乎相同，
-即说明又退化成了"普通文字"，会直接报错。
+- **可编辑**：Word COM 实测 **96 个 `m:oMath` 全部可选中、可 `BuildUp`**，双击进入公式编辑器；
+- **比例正确**：公式由 Word 排版引擎渲染，字号随正文（12 pt）自动匹配，不再出现"公式偏大/偏小"。
+
+> 若确实需要 MathType 对象：打开 docx → MathType 加载项 →「转换公式 / Convert Equations」→
+> 选"Word 内置公式 → MathType 公式"，一次性批量转换即可（MathType 自己生成的对象是可用的）。
+> 本仓库保留 `--mathtype` 实验开关与 `src/report/equations.py` 的转换链路，仅用于调研复现。
 
 **排版相关自检工具**：
 
 ```powershell
-python scripts\check_docx_structure.py   # 分页/三线表/公式对象/预览图健全性/图表同页（不依赖 Word）
+python scripts\check_docx_structure.py   # 分页/三线表/公式对象/图表同页（不依赖 Word）
 python scripts\check_pagination.py       # 逐页量测页尾留白，找排版异常页
 python scripts\render_pdf_pages.py 13 14 # 渲染指定页为 PNG，供人工核对
 python scripts\smoke_mathtype.py         # MathType 链路冒烟测试（含 Word 打开校验）
-python scripts\diag\line_heights.py 15   # 逐行量测墨迹高度（校准公式字号用）
-python scripts\diag\dump_previews.py 6   # 导出公式预览图拼版，肉眼核对上下标/分式
+python scripts\diag\span_sizes.py 本论文 13   # 列出各 span 字号，核对正文/公式比例
+python scripts\diag\line_heights.py 13        # 逐行量测墨迹高度
+python scripts\diag\calibrate_scale.py 12     # 标定"预览图像素 → 文档点数"
 ```
 
 > ⚠️ **踩过的坑（已修复，勿回退）**：

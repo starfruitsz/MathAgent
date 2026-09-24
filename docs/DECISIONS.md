@@ -52,12 +52,23 @@
 | **ADR-019** | **DEM 是 DSM（数字表面模型，含植被/建筑），不是裸地 DEM** —— 按原样使用，不"去建筑" | `镇龙乡地理空间数据说明.pdf` 明确："DEM 来源于 Copernicus DEM GLO-30，**为数字表面模型（DSM）**"。DSM 高程 ≥ 真实地形，用于净空与遮挡判定**偏保守**（更安全），符合救援场景 | `geo/dem.py`、`geo/los.py` |
 | **ADR-020** | 爬升能耗系数 `0.72` 解读为**效率**：`E_up = m·g·h⁺ / η_up`，η_up=0.72 | 附件列名为"**爬升能耗效率**"，且下降为 0（不单独计能耗）→ η 是"机械功→电能"的效率。但附件只给列名、未给定义，故**在 `config` 中显式暴露该解读**，并在论文中说明；若改为乘法则只需改一处 | `physics/energy.py` |
 | **ADR-021** | 运输机**水平巡航能耗由航程反推**：`E_hor = (d / L_g(q)) · E_g^use` | 附件只给"空载/满载标准航程"与"电池可用能量"，**未给巡航功率**（中继机才给功率）。由航程定义反推是唯一自洽的做法，且使安全余量约束退化为 `d ≤ (1−ρ)·L_g(q)`，物理意义清晰 | `physics/energy.py` |
-| **ADR-022** | 论文公式**统一用 MathType 对象**呈现：类 LaTeX → OMML → `Equation.DSMT4`（正文/行内/表内全部覆盖） | 用户明确要求"公式使用 MathType 生成，涉及正文嵌入的表格嵌入的公式"；MathType 既能被 Word 原生识别为**可编辑公式**，又能保证任何环境（含打印/PDF）显示一致 | `src/report/equations.py` |
-| **ADR-023** | 公式预览图缩放取 `preview_pt_per_px = 0.23`，且**必须自行重绘预览图** | 库默认 0.15 使公式小于正文；而更大的问题是库把 `mml:math` 原样嵌入 HTML，HTML 解析器不做命名空间解析 → 公式退化成一行普通文字，**上下标与分式全部丢失**。本仓库改为去前缀后重绘（`render_previews`）并按新尺寸写回（`reembed_previews`）；比例在 300 dpi 成品 PDF 上逐行量测标定为 0.23 | `src/report/equations.py` |
+| **ADR-022** | 论文公式**统一用 OMML（Word 原生公式对象）** 承载：类 LaTeX → OMML（正文 / 行内 / 表格内全部覆盖）。~~原定用 MathType OLE 对象~~ → 见 **ADR-028** | 用户要求公式可用且与正文比例一致。OMML 是 Word 内置公式引擎的原生格式，既能**双击编辑**，又由 Word 排版决定字号 | `src/report/equations.py` |
+| **ADR-023** | 公式预览图缩放取 `preview_pt_per_px = 0.23`，且**必须自行重绘预览图**（仅 `--mathtype` 实验路径涉及） | 库默认 0.15 使公式小于正文；而更大的问题是库把 `mml:math` 原样嵌入 HTML，HTML 解析器不做命名空间解析 → 公式退化成一行普通文字，**上下标与分式全部丢失**。本仓库改为去前缀后重绘（`render_previews`）并按新尺寸写回（`reembed_previews`）；比例在 300 dpi 成品 PDF 上逐行量测标定为 0.23 | `src/report/equations.py` |
 | **ADR-024** | 表格统一为**三线表**（顶线/表头下线/底线，无竖线），列宽按内容自适应且列宽比 ≤4:1，≥9 列自动降字号 | 用户要求"表格格式参照参考文稿2"；等宽列会让中文表头逐字换行、把表撑高甚至跨页 | `build_paper.py::TABLE` |
 | **ADR-025** | 图表同页采用"图片段落 `keepNext` + 表题 `keepNext` + 题注 `keepLines`"，**不给图题设 `keepNext`** | 若图题也 `keepNext`，"图+题注+后文"会连成不可分割的整体，放不下时整块被推到下页，制造大片留白（实测最差 22.7 cm 空白） | `build_paper.py::FIGURE` |
 | **ADR-026** | 章节分页写入 `Heading 1` 样式的 `pageBreakBefore`，**不逐处插分页符** | 样式级控制一处生效、目录与导航一致，避免"某章漏加分页符"这类不一致 | `build_paper.py::setup` |
 | **ADR-027** | 插图内部**不再写图号**（删除 15 处 `fig.suptitle("图 N …")`） | 论文 docx 已由 `FIGURE()` 统一生成题注；插图内再写会与正文编号冲突（实测出现"图 7"与"图 20"同指一张图） | `make_figures.py` / `make_figures2.py` |
+| **ADR-028** | ★ **公式交付形态定为 OMML，不用 `docx-equation` 的 MathType OLE 对象** | 实测：该库自制的 OLE 容器 Word **不认** —— `OLEFormat.ProgID` 取不到、`Activate()` 抛"此对象已损坏或不再可用"，**双击打不开**；且其预览图渲染另有命名空间缺陷（ADR-023）。OMML 形态同时解决两项问题：**双击即可编辑**（实测 96 个公式全部可选中、可 `BuildUp`）、**字号由 Word 排版引擎决定、与正文一致**。MathType 仍可用其加载项的「转换公式」一次性批量转换 | `src/report/build_paper.py` |
+
+**ADR-028 的实测依据**（可复现的隔离实验，脚本在 `scripts/diag/`）：
+
+| 实验 | 脚本 | 结果 |
+|---|---|---|
+| 真品对照：Word + MathType 插入的 OLE 对象 | `make_reference_object.py` → `test_reference_activate.py` | ✅ `ProgID=Equation.DSMT4`，`Activate()` 成功 |
+| 库产物（最小 docx，仅 1 个公式） | `probe_minimal.py` | ❌ `ProgID` 读取失败："没有对此对象有效的 ProgID" |
+| 用自建合规 CFB 容器重打包库产物 | `repackage_ole.py` → `test_repackage_word.py` | ❌ Word 认出 OLE（Type=1）但 `ProgID` 仍为空、无法激活 |
+| MTEF 数据本身是否有效 | `omml_to_mathml.py`、`check_subscript.py` | ✅ 数据有效（重绘的预览图上下标/分式全部正确） |
+| OMML 形态是否可编辑 | Word COM 实测 | ✅ 96 个 `m:oMath` 全部可选中、可 `BuildUp` |
 
 ---
 
@@ -80,3 +91,4 @@
 | **v3.0** | **P0 实测完成**：10 项 OPEN 全部解决；新增 ADR-015~018（权威箱数据源、交付格式约束、SOC 解读、天线增益解读） | 本次提交 |
 | **v3.1** | 补充 ADR-019~021（DSM 判定、爬升效率口径、能耗由航程反推），与代码实现对齐 | `744ba09` |
 | **v4.0** | ★ 排版整改：新增 **ADR-022~027**（MathType 公式、预览图标定、三线表、图表同页策略、样式级章页分页、去除插图内重复图号） | 本次提交 |
+| **v4.1** | ★ **ADR-028**：公式交付形态改为 **OMML 原生公式对象**（放弃 `docx-equation` 的 MathType OLE 路线），附 5 项隔离实验作为依据 | 本次提交 |

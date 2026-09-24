@@ -121,37 +121,36 @@ def main() -> int:
               f"{' …' if len(bad_tables) > 12 else ''}")
 
     # ---------------- 3. 公式对象 ----------------
-    n_omml_total = len(list(root.iter(f"{M}oMath")))
+    # 默认交付形态是 **OMML 原生公式**（Word 内置公式对象）：双击可编辑、
+    # 由 Word 排版引擎渲染（字号与正文一致）。若存在 OLE 对象则额外检查其
+    # 是否为可激活的 MathType 对象（docx-equation 生成的容器 Word 不认）。
+    n_omml = len(list(root.iter(f"{M}oMath")))
+    n_omml_in_tbl = sum(len(list(t.iter(f"{M}oMath"))) for t in tables)
     n_ole = xml.count("<o:OLEObject")
     n_dsmt = xml.count("Equation.DSMT4")
-    n_ole_in_tbl = 0
-    for t in tables:
-        if t.findall(f".//{W}object"):
-            n_ole_in_tbl += len(t.findall(f".//{W}object"))
     print("\n— 公式 —")
-    if n_dsmt:
-        print(f"  MathType 公式对象（Equation.DSMT4）  {n_dsmt}")
-        print(f"  o:OLEObject 元素                     {n_ole}")
-        print(f"     · 位于表格内                      {n_ole_in_tbl}")
-        print(f"     · 位于正文段落                    {n_ole - n_ole_in_tbl}")
-        # ★ 预览图健全性检查：若所有公式高度相同（尤其是只有一个高度值），说明
-        #   MathML 被当成普通文字渲染，上下标/分式全部丢失（曾经踩过这个坑）。
+    print(f"  m:oMath（Word 原生公式对象）   {n_omml}")
+    print(f"     · 位于表格内                {n_omml_in_tbl}")
+    print(f"     · 位于正文段落              {n_omml - n_omml_in_tbl}")
+    if n_ole:
+        print(f"  o:OLEObject（MathType OLE）   {n_ole}，"
+              f"Equation.DSMT4 {n_dsmt}")
+        print("  ⚠️  交付形态含 OLE 对象：docx-equation 自制的容器在 Word 中"
+              "无法激活（ProgID 为空 → 双击打不开）")
+        print("      建议用 OMML 形态交付，或事后用 MathType 的「转换公式」批量转换")
         from PIL import Image
         import io as _io
 
         with zipfile.ZipFile(DOCX) as z:
             pngs = sorted(n for n in z.namelist() if "mathtype_preview" in n)
             hs = [Image.open(_io.BytesIO(z.read(n))).size[1] for n in pngs]
-        print(f"  预览图                               {len(pngs)} 张，"
-              f"高 {min(hs)}~{max(hs)} px")
-        if len(set(hs)) <= 2:
-            ok = False
-            print(f"  ⚠️  预览图高度几乎全部相同（{sorted(set(hs))}）——"
-                  f"公式很可能被渲染成了普通文字（上下标/分式丢失）")
-        elif max(hs) < 2.2 * min(hs):
-            print("  ⚠️  预览图高度差异偏小，建议抽查确认分式与上下标是否正常")
-    print(f"  m:oMath（OMML 回退/未转换）          {n_omml_total}")
-    if n_dsmt == 0 and n_omml_total == 0:
+        if hs:
+            print(f"  预览图                        {len(pngs)} 张，高 {min(hs)}~{max(hs)} px")
+            if len(set(hs)) <= 2:
+                ok = False
+                print(f"  ⚠️  预览图高度几乎全部相同（{sorted(set(hs))}）——"
+                      f"公式很可能被渲染成了普通文字（上下标/分式丢失）")
+    if n_omml == 0 and n_ole == 0:
         ok = False
         print("  ⚠️  没有任何公式对象")
 

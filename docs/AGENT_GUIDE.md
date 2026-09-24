@@ -21,7 +21,7 @@
 | ⚠️ 结论会随 Q3 重跑而变 | Q4 的「原子单元数」由 Q3 方案形态决定，**不要在代码或论文里硬编码**；跑完必须用 `check_paper_numbers.py` 复核 |
 | ⚠️ 已推翻的历史结论 | 旧版曾断言「首批保障时限物理不可行」——**那是 Q2 只用 2 架 C 型的产物**，属建模缺陷，已修复；**不要再把"不可行"写进论文**（详见 `docs/DECISIONS.md` ADR-029） |
 | ⚠️ 分支状态 | 全部工作已合并入 **`main`**（合并提交 `8fe3014`），历史分支 `integrate-otheragent` 保留备查。`origin/add-latex-paper` 的最新提交基于**更早**的 main 状态（Q2 16 架次、Q4 无合法分区），**已被取代，不要并入** |
-| ⚠️ otheragent 交付物 | `otheragent/` 的 `.tex` / 图表 / 数据 / 流程图均已同步到最新结论；但 **`otheragent/document.pdf` 是过期编译产物**（本机无 LaTeX，无法重编），最终提交前必须重编或删除 |
+| ✅ otheragent 交付物 | `otheragent/` 的 `.tex` / 图表 / 数据 / 流程图均已同步到最新结论；**`document.pdf` 已用 MiKTeX 重新编译**（54 页、无 LaTeX 报错、引用全部解析）。重编命令与三个踩坑见 §4.1 |
 
 ---
 
@@ -361,8 +361,44 @@ python -m src.report.build_paper                 # 装配 Word（公式 = Word �
 python scripts\verify_paper.py                   # ★ 一键回归：构建 + 结构自检 + 页数 + PDF
 
 # 4) 测试
-python -m pytest tests\ -v                       # 227 passed
+python -m pytest tests\ -v                       # 240 passed
+
+# 5) otheragent LaTeX 论文（第三方 agent 稿件，可选）
+pwsh -File scripts\build_otheragent_pdf.ps1      # XeLaTeX + BibTeXu 三遍 → otheragent/document.pdf
 ```
+
+### 4.1 ★ LaTeX 工具链（已装好，含两个坑）
+
+本机已装 **MiKTeX 25.12**（per-user，无需管理员）：
+
+| 项 | 值 |
+|---|---|
+| 安装位置 | `%LOCALAPPDATA%\Programs\MiKTeX\miktex\bin\x64`（已加入用户 PATH） |
+| 编译器 | `xelatex`（XeTeX 4.16）、`bibtexu`、`bibtex8`、`latexmk` |
+| 缺包处理 | 已设 `[MPM]AutoInstall=1`，编译时**按需自动下载**宏包（首次编译约 158 s） |
+
+**坑 1：`bibtex.exe` 在本机启动即崩**（退出码 `-1073740940` = `0xC0000374`
+`STATUS_HEAP_CORRUPTION`），一行都不写就退出，`document.bbl` 恒为 0 字节，
+于是全文引用显示成 `[?]`。**改用同发行版自带的 `bibtexu.exe`**（Unicode 感知，
+处理中文条目优于 `bibtex8.exe`）。`scripts\build_otheragent_pdf.ps1` 已按
+`bibtexu → bibtex8 → bibtex` 自动回退，并以 `.bbl > 1000 字节`为成功判据
+（该引擎退出码不可靠，**不要**用退出码判断）。
+
+**坑 2：圈码 ①②③ 显示为豆腐块**。xeCJK 默认把 U+2460–U+24FF 判为**非 CJK**，
+于是走 `\setmainfont{Times New Roman}`，而该字体没有这些字形 ⇒ `.notdef`，
+PDF 里连字符都提取不到。`document.tex` 前言已加：
+
+```latex
+\xeCJKDeclareCharClass{CJK}{"2460 -> "24FF}   % 注意 " 是 TeX 十六进制前缀，不是引号
+```
+
+**坑 3：中文引号曾被写成 ASCII 直引号**。302 个 `"` 在 xeCJK 全角标点风格下
+开/闭都映射成同一个字形（看去全像 `”`）。已用
+`scripts\diag\tex_fix_quotes.py` 成对转换为 `“`/`”`
+（151 对，转换前先校验文件内引号数为偶数）。
+★ 该脚本带**十六进制前缀护栏**：`"2460` 这类 TeX 十六进制数字**不能**当引号替换，
+否则 xelatex 会报一片 `Missing number, treated as zero`
+（自测：`python scripts\diag\test_tex_fix_quotes.py`）。
 
 ---
 

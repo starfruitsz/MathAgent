@@ -1,0 +1,40 @@
+﻿类型,编号,标题,章节,文件,大小KB
+图,f01_roadmap,全文技术路线图,总体分析,figures/f01_roadmap.png,165.7
+图,f02_terrain_nodes,研究区 30 m DEM 与任务节点分布,总体分析,figures/f02_terrain_nodes.png,2129.6
+图,f03_box_stats,货箱质量/体积/时限统计,总体分析,figures/f03_box_stats.png,151.5
+表,t_box_by_type,分类物资总量统计,总体分析,tables/t_box_by_type.csv,0.2
+表,t_box_by_service,各服务区物资需求,总体分析,tables/t_box_by_service.csv,0.2
+图,f04_q1_payload,最大安全载荷热力图与生效约束,问题一,figures/f04_q1_payload.png,197.7
+表,t_q1_payload,3 机型 × 15 服务区最大安全载荷,问题一,tables/t_q1_payload.csv,2.7
+图,f05_q1_groups,货箱组批方案构成,问题一,figures/f05_q1_groups.png,145.5
+表,t_q1_groups,货箱组批方案明细（交付模板列序）,问题一,tables/t_q1_groups.csv,2.0
+图,f06_q1_strategy,策略对比与 Pareto 前沿,问题一,figures/f06_q1_strategy.png,168.1
+表,t_q1_strategy,各策略多目标对比,问题一,tables/t_q1_strategy.csv,0.8
+表,t_q1_lowerbound,逐服务区架次数下界与差距,问题一,tables/t_q1_lowerbound.csv,0.8
+图,f07_q1_rho,返航安全余量敏感性分析,问题一,figures/f07_q1_rho.png,174.6
+表,t_q1_rho_sweep,ρ_g 扫描汇总,问题一,tables/t_q1_rho_sweep.csv,1.0
+图,f08_q2_gantt,运输调度甘特图,问题二,figures/f08_q2_gantt.png,138.7
+表,t_q2_sorties,问题二运输架次明细（交付模板列序）,问题二,tables/t_q2_sorties.csv,2.0
+图,f09_q2_timeliness,物资时限达成分析,问题二,figures/f09_q2_timeliness.png,168.2
+表,t_q2_timeliness,逐箱时限达成明细,问题二,tables/t_q2_timeliness.csv,4.3
+图,f10_q2_resources,资源使用情况,问题二,figures/f10_q2_resources.png,101.6
+表,t_q2_uav_use,实体无人机使用统计,问题二,tables/t_q2_uav_use.csv,0.1
+表,t_q2_battery_use,共享电池周转明细,问题二,tables/t_q2_battery_use.csv,1.3
+表,t_q2_battery_count,共享电池使用次数,问题二,tables/t_q2_battery_count.csv,0.1
+图,f11_q3_diagnosis,连续通信诊断,问题三,figures/f11_q3_diagnosis.png,204.6
+表,t_q3_diagnosis,逐架次直连状态诊断,问题三,tables/t_q3_diagnosis.csv,1.9
+图,f12_q3_relay_map,中继悬停点与保障关系,问题三,figures/f12_q3_relay_map.png,600.3
+表,t_q3_relay_sorties,中继架次明细（交付模板列序）,问题三,tables/t_q3_relay_sorties.csv,2.6
+表,t_q3_siting,逐架次选址结果,问题三,tables/t_q3_siting.csv,2.9
+图,f13_q3_coverage,中继选址特征,问题三,figures/f13_q3_coverage.png,193.6
+表,t_q3_summary,中继保障汇总,问题三,tables/t_q3_summary.csv,0.2
+图,f14_q3_joint_gantt,运输与中继联合调度时间线,问题三,figures/f14_q3_joint_gantt.png,59.1
+图,f15_q4_graph,原子单元连通分量分析,问题四,figures/f15_q4_graph.png,200.3
+表,t_q4_bridge,桥接架次清单,问题四,tables/t_q4_bridge.csv,0.1
+表,t_q4_units,原子单元（连通分量）,问题四,tables/t_q4_units.csv,0.1
+图,f16_q4_compare,分区方案多指标对比,问题四,figures/f16_q4_compare.png,135.5
+表,t_q4_compare,分区方案对比,问题四,tables/t_q4_compare.csv,0.4
+表,t_q4_gap,逐方案逐类资源缺口,问题四,tables/t_q4_gap.csv,0.8
+图,f17_q4_detail,逐组资源配置与工作量,问题四,figures/f17_q4_detail.png,90.3
+表,t_q4_group,逐组资源与工作量明细,问题四,tables/t_q4_group.csv,0.6
+表,t_all_metrics,四问关键指标汇总,结论,tables/t_all_metrics.csv,1.7

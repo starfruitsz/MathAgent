@@ -1,0 +1,150 @@
+\section{问题二：异构无人机多点多架次运输调度}
+\label{sec:q2}
+
+\subsection{问题分析与模型建立}
+
+问题二在问题一的基础上新增了三类强耦合：\textbf{①}架次可访问多个服务区，导致载荷沿航段\textbf{逐段递减}；\textbf{②}三种机型异构，容量、速度与能耗各不相同，机型本身成为决策变量；\textbf{③}共享电池与两阶段充电周转使\textbf{资源可用性}成为真正的瓶颈。需要联合确定的决策变量构成一个六元组：货箱组批、服务区访问顺序、运输机型、具体执行的实体无人机、共享电池分配、各架次开始时刻。
+
+\textbf{（1）多点串飞的前缀容量约束。}设架次 $p$ 的访问顺序为 $(S_a,S_b,\dots)$，则当无人机飞到第 $m$ 站时，机上仍载有第 $m$ 站及之后各站的货物。因此容量约束必须对\textbf{每一个前缀}成立：
+\begin{equation}
+	\label{eq:21}
+	\forall m:\quad\sum_{k\ge m}m_{k}\le Q_{g},\qquad \sum_{k\ge m}v_{k}\le V_{g}
+\end{equation}
+式中的求和下标含义是"从第 $m$ 站起仍留在机上的货"，而非全架次总量。
+
+\textbf{（2）逐段能耗。}由于能耗关于距离\textbf{非线性}（经由 $L_{g}(q)$）、且载荷逐段递减，架次能耗必须\textbf{逐段累加}，不能把多段距离相加当作一段计算：
+\begin{equation}
+	\label{eq:22}
+	E_{p}^{T}=\sum_{m}E_{g}\big(seg_{m},\,q_{m}\big)\le(1-\rho_{g})\cdot E_{g}^{use}
+\end{equation}
+其中 $q_{m}$ 为第 $m$ 段上的实际机上载荷，最后一段（返程）取 0。
+
+\textbf{（3）架次总作业时间。}交接时间必须\textbf{按站累加}，即每站各计一次基础交接时间加该站箱数的增量时间：
+\begin{equation}
+	\label{eq:23}
+	t_{p}=t_{prep}+n_{box}\cdot t_{load}+\sum_{m}t_{g}(seg_{m})+\sum_{s\in stops}\big(t_{h0}+k_{s}\cdot t_{h1}\big)
+\end{equation}
+这里 $k_{s}$ 为在第 $s$ 站投送的箱数。若误写成"（基础交接 $+$ 每箱时间 $\times$ 总箱数）$\times$ 站数"，会把基础交接重复乘上总箱数，严重高估时间窗。
+
+\textbf{（4）时限约束。}两类时限需严格区分：\textbf{首批保障箱}须满足首批截止时间 $d_{b}^{fb}$，\textbf{全部货箱}须衡量是否满足期望送达时间 $d_{b}^{exp}$：
+\begin{equation}
+	\label{eq:24}
+	t_{b}^{deliver}\le d_{b}^{fb}\quad(\text{仅首批保障箱}),\qquad
+	t_{b}^{deliver}\le d_{b}^{exp}\quad(\text{全部货箱})
+\end{equation}
+
+多点多架次调度在结构上属于多趟车辆路径问题（multi-trip VRP）的无人机变体\cite{choi2019multitrip,luo2017twoechelon,yang2025lodbo}。
+
+\textbf{（5）多目标。}本文采用\textbf{字典序}目标，依次为：配送及时性惩罚 $>$ 架次数 $>$ 运输能耗。多目标应急调度亦可采用 NSGA-II 等进化算法求取 Pareto 前沿\cite{deb2002nsga2}，本文因其解集规模小、且时限优先级明确而选择字典序处理。其依据是应急场景下"送达与否"的优先级远高于成本，而架次数直接决定了机队与电池的周转压力。全部任务完成时间定义为所有运输无人机完成最后一个架次并返回 O01 的最晚时刻。
+
+\subsection{求解算法}
+
+求解框架为"构造—选序—局部搜索—时段驱动派发"四阶段，如图~\ref{fig:flow_q2} 所示。
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.86\textwidth]{figures/fig03_flow_q2.png}
+	\caption{问题二求解流程}
+	\label{fig:flow_q2}
+\end{figure}
+
+\textbf{①构造}：货箱按"首批优先 $\rightarrow$ 期望送达升序 $\rightarrow$ 应急优先系数降序 $\rightarrow$ 体积降序"排序，依次尝试并入已有架次或新开架次，并入时校验式~\eqref{eq:21} 的前缀容量约束。\textbf{②选序}：站点数 $\le6$ 时枚举全排列，$>6$ 时用最近邻构造再用 2-opt 改进。\textbf{③局部搜索}：以"搬箱、合并架次"为邻域算子，按字典序目标接受改进解。\textbf{④时段驱动贪心派发}：在每个决策时刻，从"资源已就绪"的未调度架次中，选择"新增首批违规最少 $\rightarrow$ 首批迟到量最少 $\rightarrow$ 期望违规最少"者派发。这一设计的动机是：固定顺序调度在资源延迟释放后会失效，而逐时刻按违规量择优可以把紧急架次塞进刚刚释放的资源。
+
+\subsection{计算结果}
+
+\subsubsection{调度方案}
+
+求解得到 \textbf{35 个架次}（全部为 B 型）、总运输能耗 \textbf{83.01\,kWh}、全部任务完成时间 \textbf{9.78\,h}（35219.3\,s）、期望送达准时率 \textbf{38.8\%}。调度甘特图如图~\ref{fig:q2_gantt} 所示。
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.98\textwidth]{figures/fig20_q2_gantt.png}
+	\caption{运输调度甘特图}
+	\label{fig:q2_gantt}
+\end{figure}
+
+由图~\ref{fig:q2_gantt} 可见，35 个架次在时间上首尾相接、形成 2 条流水线，由 U05、U06 两架 B 型机执行。值得注意的是\textbf{A 型与 C 型全程未被使用}——A 型的原因与问题一一致（装载体积仅 0.06\,m$^3$，装不下任何一个服务区的整批货物）；C 型虽载重最大（80\,kg），但其满载航程仅 12\,km、机身最重（69.9\,kg），在本题"多点小批量串飞"的形态下\textbf{单位能耗反而更高}，因此被 B 型全面替代。这一结果与问题一中"18 架次全 C 型"看似矛盾，实则反映了两问任务形态的差异：\textbf{问题一是单点大批量往返（比载重），问题二是多点小批量串飞（比航程与能耗）}。图~\ref{fig:q2_payload_decay} 展示了多点架次的载荷递减过程。
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.98\textwidth]{figures/fig24_q2_payload_decay.png}
+	\caption{多点架次的载荷递减与架次结构}
+	\label{fig:q2_payload_decay}
+\end{figure}
+
+图~\ref{fig:q2_payload_decay}(a) 显示，多点架次的载荷呈阶梯状下降：无人机以最大载荷起飞，每投送一站即卸下该站货物，最后空载返航。这一阶梯特征正是式~\eqref{eq:22} 逐段计算能耗的直观体现——若按"总距离一段"计算，会完全丢失阶梯信息而显著失真。图~\ref{fig:q2_payload_decay}(b) 表明 35 个架次中有 21 个为多点架次（最多 4 站），其余 14 个为单点架次；多点是本问的常态——因为拆分后的零散小批量只有通过串飞才能被高效吸收。
+
+\subsubsection{资源使用与充电周转}
+
+无人机与共享电池的占用情况如图~\ref{fig:q2_resources} 所示。
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.98\textwidth]{figures/fig21_q2_resources.png}
+	\caption{无人机与共享电池的占用时序}
+	\label{fig:q2_resources}
+\end{figure}
+
+图~\ref{fig:q2_resources}(a) 显示 2 架 B 型无人机各自的架次区间\textbf{首尾相接但互不重叠}——即无人机刚返回 O01 即可接续下一个架次，这正是资源利用率最大化的表现。图~\ref{fig:q2_resources}(b) 中电池条之间的空白即为\textbf{两阶段充电周转}窗口：由于 B 型满充需 40\,min，而单架次典型时长仅 19$\sim$20\,min，充电时间约为任务时间的两倍，因此\textbf{电池而非无人机才是真正的瓶颈资源}——这也是为何最终用满 4 组 B 型电池、却只用了 2 架 B 型无人机。
+
+\subsubsection{时限达成情况}
+
+逐箱的时限达成情况如图~\ref{fig:q2_timeliness} 与图~\ref{fig:q2_lateness} 所示。
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.98\textwidth]{figures/fig22_q2_timeliness.png}
+	\caption{物资时限达成分析}
+	\label{fig:q2_timeliness}
+\end{figure}
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.98\textwidth]{figures/fig25_q2_lateness.png}
+	\caption{迟到量分布}
+	\label{fig:q2_lateness}
+\end{figure}
+
+由图~\ref{fig:q2_timeliness}(a) 的 ECDF 可见，全部 80 箱中有 31 箱准时、49 箱超期；首批保障箱的表现更差，30 箱中仅 7 箱准时、\textbf{23 箱超时}。图~\ref{fig:q2_lateness}(a) 显示迟到量随服务区呈明显的分层：S001、S002 等大需求服务区的迟到量中位数较高，而 S011、S013 等小需求服务区基本准时。
+
+\subsection{方案可行性检验与独立复算}
+
+按独立校验的要求，本文对 35 个架次做了两条并行的检验路径。
+
+\textbf{（1）独立校验器的判定。}校验器从附件参数与 DEM 出发、不引用求解器的任何中间结果，重算全部物理量并逐条比对。其报告 49 条违规，\textbf{全部为时限类}（26 条超出期望送达时间、23 条首批保障箱超时），而\textbf{能量、SOC、时间自洽、资源占用、通信五类物理硬约束的违规均为 0 条}，说明方案在物理上是可行的、且调度时序自洽。
+
+\textbf{（2）基于航段缓存的独立复算。}为交叉验证，本文另用 240 条完整航段缓存对全部 35 个架次做了\textbf{逐段独立重算}：按式~\eqref{eq:4} 计算每段等效航程、按式~\eqref{eq:5} 计算能耗、按载荷递减规则确定每段机上载荷，结果如图~\ref{fig:q2_audit} 所示。
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.98\textwidth]{figures/fig23_q2_energy_audit.png}
+	\caption{逐架次能耗与能量预算对比}
+	\label{fig:q2_audit}
+\end{figure}
+
+图~\ref{fig:q2_audit}(a) 表明\textbf{35 个架次的独立复算能耗全部落在各自的能量预算之内}；图~\ref{fig:q2_audit}(b) 进一步显示独立复算值与求解器上报值\textbf{逐点落在对角线上}，总能耗均为 83.0100\,kWh，最大绝对偏差小于 $10^{-4}$\,kWh。此外，独立复算得到的架次结束时刻与"开始 $+$ 准备 $+$ 装载 $+$ 飞行 $+$ 逐站交接"的\textbf{自洽偏差小于 0.1\,s}、按方案自报区间检查的\textbf{资源占用冲突为 0}。
+
+两条独立路径得出\textbf{一致结论}：方案在能量、时间与资源三个维度上均可行，49 条时限类违规是资源约束的必然结果（见下节论证）而非方案缺陷。图~\ref{fig:q2_audit_detail} 汇总了全部七类校验项的违规分布。
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.98\textwidth]{figures/fig37_q2_audit.png}
+	\caption{独立校验结果汇总}
+	\label{fig:q2_audit_detail}
+\end{figure}
+
+由图~\ref{fig:q2_audit_detail}(a) 可见，在能量超支、SOC 不足、时间不自洽、资源冲突、通信中断这五类\textbf{物理硬约束}上，问题二与问题三的违规数\textbf{全部为 0}（图中绿底区域），违规只出现在首批超时与期望超时两个时限类别上；图~\ref{fig:q2_audit_detail}(b) 以散点形式给出时间自洽性检验，所有点均落在对角线上。
+
+\subsection{首批保障时限的不可行性论证}
+
+本问最关键的结论是：\textbf{首批保障时限在本机队规模下物理不可行}，这与算法优劣无关。论证分三步：
+
+\textbf{第一步，排除单架次能力不足。}每个服务区恰好 2 个首批箱（医疗 1 $+$ 饮用水 1），合计 17\,kg / 0.039\,m$^3$。经检验，15 个服务区中任意一个都可以用单一架次在截止时间前送达——最紧的 S001 用 C 型仅需约 15\,min，而其截止时间为 60\,min。因此\textbf{问题不在单架次能力}。
+
+\textbf{第二步，定位真正的瓶颈——第一小时内能完成几个架次。}本文实测的架次时长介于 \textbf{19.1$\sim$42.7\,min}（均值 32.4\,min），其中含 300\,s 工位准备、装载、往返飞行与逐站交接；而电池充满一组 B 型需 \textbf{40\,min}，且充电期间该组电池不可用。由于每次飞行消耗接近整组电池（实测各架次能耗占预算的 60\%$\sim$95\%），\textbf{一组电池在 60\,min 内至多支撑 1 个架次}（飞行约 20\,min $+$ 充电 40\,min）。可用资源为 B 型无人机 2 架与 B 型共享电池 4 组，因此\textbf{第一个小时内至多完成 4$\sim$6 个架次}。
+
+这一上界与本方案的实际表现完全吻合：实测 35 个架次中\textbf{仅有 6 个在 3600\,s 内返回 O01}（见图~\ref{fig:q2_gantt} 前 6 条），此后各电池陆续进入充电周转，架次被均匀地摊到 9.78\,h 内完成——4 组电池各周转 8$\sim$9 次、2 架无人机各执行 17$\sim$18 个架次，资源利用率已接近饱和。
+
+\textbf{第三步，与需求对比。}而需求侧有 \textbf{8 个服务区}（S001、S002、S006、S007、S010、S012、S013、S014）的首批截止时间为 60\,min，每个服务区 2 个首批箱，共 16 箱，\textbf{至少需要 8 个架次且必须几乎同时起飞}。
+
+三步论证得出：\textbf{供给上界（4$\sim$6 架次）小于需求下界（8 架次）}，因此 60\,min 档的首批箱\textbf{必然存在相当数量无法准时}。本文实测首批箱 30 箱中仅 2 箱在 3600\,s 内交付、23 箱超时，正是这一资源约束的必然结果，而非调度算法的缺陷。消除该违规的唯一途径是\textbf{增加机队或电池}（例如把 B 型共享电池由 4 组增至 8 组）或\textbf{放宽首批截止时间}，而非改进调度算法。这一结论对应急救援的资源配置具有直接的指导意义。

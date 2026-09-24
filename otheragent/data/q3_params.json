@@ -1,0 +1,35 @@
+{
+  "question": "q3",
+  "git_commit": "59365a3a1c60a1fdbf47603431ea0c427e5a4c56",
+  "timestamp": "2026-09-24T23:26:39.024916+08:00",
+  "seed": 42,
+  "data_sources": [
+    "通信链路参数.xlsx",
+    "中继无人机数据.xlsx",
+    "30米DEM.tif"
+  ],
+  "params": {
+    "relay_spec": {
+      "code": "R",
+      "name": "中继标准测试多旋翼",
+      "empty_mass_kg": 21.0,
+      "comms_module_mass_kg": 2.5,
+      "takeoff_mass_kg": 23.5,
+      "cruise_speed_ms": 15.0,
+      "cruise_power_kw": 1.15,
+      "energy_kwh": 3.2,
+      "reserve_ratio": 0.2,
+      "prepare_time_s": 180.0,
+      "link_setup_time_s": 30.0,
+      "turnaround_time_s": 300.0,
+      "climb_speed_ms": 4.0,
+      "descent_speed_ms": 3.0,
+      "climb_efficiency": 0.72,
+      "descent_efficiency": 0.0,
+      "hover_power_kw": 1.05,
+      "comms_power_kw": 0.05,
+      "max_hover_agl_m": 300.0
+    },
+    "gateway_alt_m": 147.7
+  }
+}

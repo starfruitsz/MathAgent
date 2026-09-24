@@ -19,10 +19,36 @@
 | **P2 / Q2** 异构多点多架次调度 | ✅ 完成 | 35 架次 / 83.01 kWh / 完工 587 min；硬约束全部通过 |
 | **P3 / Q3** 通信约束下运输与中继联合调度 | ✅ 完成 | 30 个中继架次 / **29-29 全程通信覆盖** / 总能耗 99.68 kWh |
 | **P4 / Q4** 任务分区与资源配置 | ✅ 完成 | ★ **按规则不存在合法 2/3 组分区**；给出桥接架次与最小改动方案 |
-| **P5** 论文与 Word 生成 | ⬜ 待做 | 以 `docs/reference/` 的第三方版本为**格式模板** |
+| **P5** 论文与 Word 生成 | ✅ 完成 | **60 页论文**（24 图 / 28 表 / 2.0 万字），`paper/` 下含 docx + PDF + 分目录图表备份 |
 
 **环境**：Python 3.13.7 / Windows 11 / 24 核；依赖已锁定（`requirements.txt`），`check_env.py` 返回 `status: ok`。
 **测试**：`227 passed`。
+
+---
+
+## 一·五、论文交付物（paper/）
+
+| 文件 | 说明 |
+|---|---|
+| `paper/山区洪涝灾害下无人机运输与通信协同优化_论文.docx` | **正文 Word**（60 页，符合 50~100 页要求） |
+| `paper/山区洪涝灾害下无人机运输与通信协同优化_论文.pdf` | 同内容 PDF（防环境差异，便于送审） |
+| `paper/论文体量报告.json` | 页数/字数/表格/图片统计（`scripts/check_paper.py` 生成） |
+| `paper/chart_manifest.csv` | 全部图表的编号、标题、章节与文件清单（24 图 + 32 表） |
+| `paper/backup_manifest.csv` | 分目录备份统计 |
+| `paper/figures/` `paper/tables/` `paper/data/` | 全部图 / 表 / 图表数据源 |
+| **`paper/by_question/{common,q1,q2,q3,q4}/{figures,tables,data}`** | ★ **按问题分目录的图表与原始数据备份** |
+
+论文结构依 **`参考文稿2.pdf`** 的章节骨架（引言与问题重述 → 总体分析 → 公共物理模型 →
+四问 → 模型检验 → 结论 → 附录），排版风格依 `docs/reference/` 的第三方版本。
+
+### 论文生成流程
+
+```powershell
+python -m src.report.make_figures    # 基础图表（17 图 / 21 表）
+python -m src.report.make_figures2   # 补充图表 + 分目录备份（→ 24 图 / 32 表）
+python -m src.report.build_paper     # 装配 Word
+python scripts\check_paper.py --pdf  # 核算页数并导出 PDF
+```
 
 ---
 

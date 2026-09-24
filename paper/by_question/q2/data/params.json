@@ -1,0 +1,15 @@
+{
+  "question": "q2",
+  "git_commit": "40004f0cc0124342c087187f34b30ec530bea601",
+  "timestamp": "2026-09-23T22:17:33.733443+08:00",
+  "seed": 42,
+  "data_sources": [
+    "物资需求与配送时限.xlsx",
+    "运输无人机数据.xlsx",
+    "调度中心与服务区.xlsx",
+    "30米DEM.tif"
+  ],
+  "params": {
+    "reserve_ratio": 0.2
+  }
+}

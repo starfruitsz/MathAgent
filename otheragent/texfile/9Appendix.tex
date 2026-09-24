@@ -1,0 +1,133 @@
+\newpage
+\appendix
+\begin{center}
+	{\zihao{4}\bfseries 附\quad 录}
+\end{center}
+
+\section*{附录 A\quad 程序与数据文件说明}
+\addcontentsline{toc}{section}{附录 A\quad 程序与数据文件说明}
+
+本文的全部程序、数据与结果文件按"公共层—问题层—论文层"组织。其中公共层实现附录 2/3 的物理与通信公式，问题一至问题四共用，保证口径唯一；问题层按问题分文件组织，每问有独立入口脚本，可单独运行。
+
+\begin{table}[htbp]
+	\caption{程序与数据文件清单}
+	\centering
+	\zihao{-5}
+	\begin{tabularx}{0.94\textwidth}{lX}
+		\toprule
+		文件 / 目录 & 说明 \\
+		\midrule
+		\texttt{code/plotstyle.py} & 全局绘图样式（SimSun 中文字体、统一调色板、DPI$\ge$300）与数据加载 \\
+		\texttt{code/verify\_q2\_energy.py} & 问题二能耗与返航 SOC 的\textbf{独立复算}（逐段） \\
+		\texttt{code/audit\_q2\_plan.py} & 问题二方案的独立可行性审计（能量 / 时间 / 资源 / 时限） \\
+		\texttt{code/fig\_common.py} & 总体分析与公共模型章图（fig06--fig12） \\
+		\texttt{code/fig\_q1.py} \texttt{fig\_q2.py} \texttt{fig\_q3.py} \texttt{fig\_q4.py} & 四问的图（fig13--fig35） \\
+		\texttt{code/fig\_check.py} & 敏感性、独立复算审计与指标汇总图（fig36--fig38） \\
+		\texttt{code/make\_flowcharts.py} & 生成四张求解流程图的 draw.io 源文件 \\
+		\texttt{code/make\_tables.py} & 由 CSV 自动生成论文三线表，避免手工誊抄 \\
+		\texttt{diagrams/*.drawio} & 技术路线图与四张流程图的\textbf{可编辑}源文件 \\
+		\texttt{figures/} & 论文全部插图（PNG + PDF 矢量备份） \\
+		\texttt{tables/} & 全部表格数据源（CSV） \\
+		\texttt{data/} & 建模就绪数据、四问指标与参数、独立复算与审计结果 \\
+		\texttt{results/} & 按赛题《结果提交模板》生成的 6 个交付 sheet \\
+		\bottomrule
+	\end{tabularx}
+\end{table}
+
+\section*{附录 B\quad 关键物理与通信口径汇总}
+\addcontentsline{toc}{section}{附录 B\quad 关键物理与通信口径汇总}
+
+为便于复核，此处集中列出本文全部关键口径。这些口径在四问中\textbf{只实现一次}，四问共用：
+
+\begin{table}[htbp]
+	\caption{关键物理与通信口径}
+	\centering
+	\zihao{-5}
+	\begin{tabularx}{0.94\textwidth}{lX}
+		\toprule
+		项目 & 口径 \\
+		\midrule
+		巡航海拔 & 航段经过的 DEM 像元最高地面高程 $+50$\,m \\
+		作业高度 & O01 取地面海拔；服务区取地面海拔 $+30$\,m \\
+		载荷—航程 & $L_{g}(q)=L_{g0}-(L_{g0}-L_{gF})(q/Q_{g})^{3/2}$（指数 $3/2$） \\
+		最大安全载荷 & 能量约束取等号，用单调性 $+$ Brent 法\textbf{数值反解}（无闭式解） \\
+		水平巡航能耗 & 由航程反推 $E^{hor}=(d/L_{g}(q))E_{g}^{use}$（附件未给运输机巡航功率） \\
+		爬升附加能耗 & $E^{up}=mgh^{+}/\eta_{up}$，$\eta_{up}=0.72$（附件列名为"爬升能耗效率"） \\
+		下降能耗 & \textbf{不单独计}（附件下降能耗效率 $=0$） \\
+		返航余量 & $E_{p}^{T}\le(1-\rho_{g})E_{g}^{use}$，$\rho_{g}=0.20$ \\
+		充电模型 & 两阶段：SOC$<90\%$ 占 $T_{full}$ 的 65\%，$90\%\sim100\%$ 占 35\%（$s=0.9$ 处连续） \\
+		FSPL & $32.45+20\log_{10}f(\mathrm{MHz})+20\log_{10}D(\mathbf{km})$ \\
+		双向门限 & 取两个方向中的\textbf{较小值} \\
+		通信三态 & 直连 $>$ 中继（接入段与回传段\textbf{同时}可用）$>$ 中断；\textbf{不允许多跳} \\
+		多点载荷递减 & 第 $m$ 段携带"尚未投送的货"（飞到第 $k$ 站时仍带第 $k..M$ 站的货） \\
+		交接时间 & 逐站累加 $\sum_{s}(t_{h0}+k_{s}t_{h1})$，\textbf{不}乘总箱数 \\
+		\bottomrule
+	\end{tabularx}
+\end{table}
+
+\section*{附录 C\quad 四问关键指标汇总}
+\addcontentsline{toc}{section}{附录 C\quad 四问关键指标汇总}
+
+\begin{table}[htbp]
+	\caption{四问关键指标汇总}
+	\centering
+	\zihao{-5}
+	\begin{tabular}{lll}
+		\toprule
+		问题 & 指标 & 数值 \\
+		\midrule
+		问题一 & 最优往返架次数 & 18（全部 C 型，逐区达解析下界） \\
+		问题一 & 总运输能耗 & 75.07\,kWh \\
+		问题一 & 累计作业时间 / 并行完工时间 & 9.37\,h / 1.27\,h \\
+		问题一 & 最优性 & 架次数维度\textbf{可证最优}（15 区全部等于下界） \\
+		\midrule
+		问题二 & 运输架次数 & 28（A 型 14 $+$ B 型 8 $+$ C 型 6，8 架全用） \\
+		问题二 & 总运输能耗 & 82.30\,kWh \\
+		问题二 & 全部任务完成时间 & 2.45\,h（8819.5\,s） \\
+		问题二 & 期望送达准时率 & 100.0\%（80/80 箱全部按时送达；首批违规 0 箱、期望违规 0 箱） \\
+		问题二 & 独立校验结论 & \textbf{违规 0 条}（物理类硬约束与两类时限约束全部通过） \\
+		\midrule
+		问题三 & 运输 / 中继架次数 & 28 / 24（其中 24 个运输架次需中继） \\
+		问题三 & 需保障架次覆盖率 & 24 / 24 $=$ 100\%（均为单一悬停点全程覆盖） \\
+		问题三 & 运输 / 中继 / 总能耗 & 82.30 / 4.32 / 86.62\,kWh（中继占 5.0\%） \\
+		问题三 & 联合任务完成时间 & 2.84\,h（10219.3\,s） \\
+		问题三 & 平均直连中断占比 & 28.5\% \\
+		\midrule
+		问题四 & 合法 2 / 3 组分区 & \textbf{均可零架次改动}（原子单元数 5：$K=2$ 与 $K=3$ 直接由原子单元合并得到） \\
+		问题四 & 桥接架次 & 6 个（T015、T022、T003、T004、T016、T025） \\
+		问题四 & 最小改动 & \textbf{0 个架次}（$K=2$ 与 $K=3$ 均为 0） \\
+		问题四 & 资源总量（K$\,=\,$1/2/3） & 31 / 33 / 36（台$\cdot$组） \\
+		问题四 & 组间不均衡度 & 0 / 1.8652 / 2.6216 \\
+		问题四 & 最大组工作量（K$\,=\,$1/2/3） & 15.34 / 14.82 / 13.92\,h \\
+		问题四 & K$\,=\,$1 资源缺口 & 1 组 A 型 $+$ 1 组 B 型共享电池（运输机、中继机与中继组件无缺口） \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\section*{附录 D\quad 可复现性说明}
+\addcontentsline{toc}{section}{附录 D\quad 可复现性说明}
+
+本文结果的可复现性由以下措施保证：
+
+\begin{enumerate}[label=\arabic*.]
+	\item \textbf{随机种子固定}：全部随机过程使用 SEED $=42$，同种子两次运行结果完全一致。
+	\item \textbf{物理口径唯一}：附录 2/3 的公式只在公共层实现一次，四问共用，不存在口径分叉。
+	\item \textbf{结果可追溯}：每个问题的指标、参数、图与表均有对应的输出文件；论文中的每个数值都能追溯到附件数据或程序输出。
+	\item \textbf{独立复算}：问题二的能耗与 SOC 由第二套独立代码逐段重算验证，与求解器上报值一致（总能耗均为 82.3018\,kWh）；问题二、问题三的方案另由独立校验器逐条复核，违规 0 条。
+	\item \textbf{图表自动生成}：全部插图由脚本生成（可复现），全部表格由 CSV 自动转 LaTeX（避免手工誊抄错误）。
+\end{enumerate}
+
+复现命令（Python 3.13，依赖 NumPy / SciPy / pandas / Matplotlib / seaborn / NetworkX / Plotly）：
+
+\begin{lstlisting}[style=Python, basicstyle=\zihao{-5}\ttfamily, frame=single]
+python code/verify_q2_energy.py   # 问题二能耗与 SOC 独立复算
+python code/audit_q2_plan.py      # 问题二方案独立可行性审计
+python code/make_flowcharts.py    # 生成技术路线图与四张流程图的 draw.io 源
+python code/fig_common.py         # 总体分析与公共模型章图
+python code/fig_q1.py             # 问题一图
+python code/fig_q2.py             # 问题二图
+python code/fig_q3.py             # 问题三图
+python code/fig_q4.py             # 问题四图
+python code/fig_check.py          # 敏感性、审计与指标汇总图
+python code/make_tables.py        # 由 CSV 生成论文三线表
+\end{lstlisting}

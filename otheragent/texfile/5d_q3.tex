@@ -1,0 +1,128 @@
+\section{问题三：通信约束下的运输与中继联合调度}
+\label{sec:q3}
+
+\subsection{问题分析与新增约束}
+
+问题三在问题二的运输调度之上引入\textbf{连续通信约束}：运输无人机在\textbf{爬升、巡航、下降及物资投送}四个阶段均应保持通信。形式化地，设架次 $p$ 的轨迹为 $\mathrm{Traj}_{p}(t)$，则要求
+\begin{equation}
+	\label{eq:25}
+	\forall t\in[t_{start}(p),\,t_{end}(p)]:\quad \mathrm{comm\_state}\big(\mathrm{Traj}_{p}(t)\big)\neq\text{中断}
+\end{equation}
+其中通信状态按式~\eqref{eq:18} 的三态规则判定。这一约束带来两个新难点：\textbf{①判定必须逐时刻}——只检查服务区一点或航段两端点会漏掉"中途被山体遮挡"的时段（见 ADR-007）；\textbf{②选址是连续三维变量}——悬停位置含平面坐标与飞行海拔，若逐时刻独立选址，问题退化为难解的连续最优控制。
+
+新增的决策变量为中继无人机的悬停位置、服务时段与能源组件分配\cite{zeng2016uavcomm,alhourani2014lap}。中继架次的建链时刻与服务时段为
+\begin{equation}
+	\label{eq:26}
+	t_{link}=t_{prep}+t_{fly}(O01\to P)+t_{setup},\qquad
+	t_{svc}=[\,t_{link},\ T_{win}^{end}\,]
+\end{equation}
+中继架次能耗由爬升、巡航与悬停（含通信）三部分构成：
+\begin{equation}
+	\label{eq:27}
+	E_{R}=E_{up}\big(m_{takeoff},h^{+}\big)+P_{cruise}\cdot t_{cruise}+\big(P_{hover}+P_{comms}\big)\cdot t_{svc}
+\end{equation}
+中继的约束包括：悬停位置须位于 DEM 覆盖范围内；悬停\textbf{离地高度不超过附件规定的 300\,m}；往返悬停位置的地形净空按航段规则确定；须满足返航电量要求。
+
+\subsection{通信中断诊断：中继是否必需}
+
+本文遵循"先诊断、再设计"的思路，先对运输方案做直连可用性诊断——沿每条架次的完整轨迹按 $\Delta t=2$\,s 逐时刻采样，逐点判定直连链路是否可用（考虑地形遮挡与传播损耗）。结果如图~\ref{fig:q3_diagnosis} 所示。
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.98\textwidth]{figures/fig26_q3_diagnosis.png}
+	\caption{直连通信状态诊断}
+	\label{fig:q3_diagnosis}
+\end{figure}
+
+由图~\ref{fig:q3_diagnosis}(a) 可见，中断并非个别现象：\textbf{28 个运输架次中有 24 个存在直连中断}，占 \textbf{85.7\%}（平均中断时间占比 \textbf{28.5\%}）；图~\ref{fig:q3_diagnosis}(c) 以饼图给出通信状态构成——\textbf{24 个架次（85.7\%）需中继保障}，另有 4 个架次（14.3\%）全程直连可用，因此\textbf{中继无人机是必需项而非可选项}。图~\ref{fig:q3_diagnosis}(b) 进一步表明中断与航段规模正相关，轨迹采样点越多（航段越长）的架次，其中断占比普遍越高；平均直连中断占比达 \textbf{28.5\%}，即约三成的飞行时间处于无直连状态。
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.98\textwidth]{figures/fig31_q3_coverage.png}
+	\caption{直连可达比例与中断占比分布}
+	\label{fig:q3_coverage}
+\end{figure}
+
+由图~\ref{fig:q3_coverage}(b) 的核密度曲线可见，中断占比呈右偏分布，24 个中断架次基本集中在 \textbf{18\%$\sim$45\%} 区间（最大 45.3\%）。这一形态说明中断主要源于\textbf{远距离航段的中段遮挡}，而非全程不可用——中继只需覆盖飞行中间的一段即可，这为后续"单点全程覆盖"的选址策略提供了依据。
+
+\subsection{求解算法}
+
+求解流程如图~\ref{fig:flow_q3} 所示。
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.86\textwidth]{figures/fig04_flow_q3.png}
+	\caption{问题三求解流程}
+	\label{fig:flow_q3}
+\end{figure}
+
+\textbf{（1）连续选址的降维。}本文采用一个\textbf{可验证的充分条件}来替代连续最优控制：对某架次，若存在\textbf{某一个}悬停点 $P$，使得轨迹上每一时刻都满足
+\begin{equation}
+	\label{eq:28}
+	\text{直连可用}\ \vee\ \big(\text{接入}(P)\ \text{可用}\ \wedge\ \text{回传}(P)\ \text{可用}\big)
+\end{equation}
+则该架次由一架中继在 $P$ 处全程保障即可。这样只需"离散候选点 $\times$ 时间采样"两次扫描。若单点无法覆盖全程，则退化为\textbf{按时段分段接力}——题目允许不同时刻由不同中继保障，只要每一时刻仅由一架中继服务。
+
+\textbf{（2）候选点生成。}在 DEM 覆盖范围内、服务区凸包外扩 3\,km 的区域上以 \textbf{400\,m 网格}生成 \textbf{1885 个}悬停候选点。网格步长的取值经过敏感性分析：步长过大可能错过更优悬停位置，过小则耗时剧增；400\,m 时覆盖率已达 100\%，继续细化不再提升覆盖率（见 9.4 节）。
+
+\textbf{（3）选址择优。}对每个需保障架次，在能覆盖其全部中断样本且返航 SOC 达标的候选点中，选择能耗最低者。为避免在 1885 个候选点上做全轨迹扫描，算法先用一次扫描筛出直连中断样本（约占 0\%$\sim$45.3\%，4 个架次为 0），选址只在中断样本上评估；覆盖判定用稀疏探针快速否决。采样步长取 \textbf{$\Delta t=2$\,s}，在一次完整的选址扫描（1885 候选点 $\times$ 全轨迹）下本问总耗时约 \textbf{452.7\,s}（其中单架次的选址评估在毫秒量级）。
+
+\subsection{计算结果}
+
+\subsubsection{链路门限与选址规律}
+
+链路预算是选址的定量依据。由式~\eqref{eq:14}--\eqref{eq:17} 算得三条链路的双向门限如表~\ref{tab:link_thresholds} 所示。
+
+\input{texfile/tab_link_thresholds}
+
+表~\ref{tab:link_thresholds} 的关键含义是：\textbf{中继接入段门限（116\,dB）比直连（122\,dB）还低 6\,dB}，接入段的可达距离仅 6.27\,km（含遮挡时进一步降至 1.98\,km），而回传段门限最宽（126\,dB，可达 19.83\,km）。
+
+这一非对称性直接决定了选址的可行域形状：中继必须\textbf{靠近运输无人机作业空域}以满足接入段要求，而回传段则相当宽松，无需靠近网关。换言之，\textbf{中继的核心价值是抬高视线高度以越过山脊，而不是缩短与网关的距离}。
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.98\textwidth]{figures/fig27_q3_relay_map.png}
+	\caption{中继悬停点空间分布}
+	\label{fig:q3_relay_map}
+\end{figure}
+
+实测结果与上述分析完全一致。图~\ref{fig:q3_relay_map}(a) 显示悬停点普遍布置在\textbf{服务区群的中心偏西}区域（经度集中在 $109.19^\circ\sim109.28^\circ$E），紧贴作业空域；图~\ref{fig:q3_relay_map}(b) 表明中断越严重的架次所需的中继保障能耗越高，二者呈明显正相关。
+
+\subsubsection{中继架次与选址特征}
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.98\textwidth]{figures/fig28_q3_siting.png}
+	\caption{中继悬停参数与保障能耗}
+	\label{fig:q3_siting}
+\end{figure}
+
+由图~\ref{fig:q3_siting}(a) 可见，全部悬停点\textbf{一致取离地高度 250\,m}（低于 300\,m 上限），这说明"离地越高视线越好"是选址的普遍规律——在允许范围内抬高悬停高度可以最大程度越过山脊、扩大接入段的可达范围。图~\ref{fig:q3_siting}(b) 显示单架次保障能耗介于 \textbf{0.40$\sim$0.93\,kWh}，平均 \textbf{0.64\,kWh}；图~\ref{fig:q3_siting}(c) 进一步表明中继服务时长随直连中断占比单调增长（19$\sim$42\,min），即中断越严重的架次需要越长的悬停保障窗口。
+
+24 个需保障架次中，\textbf{全部可由单一悬停点实现全程覆盖}（无一个架次需要分段接力），因此总计产生 \textbf{24 个中继架次}，由 R01（12 个）与 R02（12 个）分别执行。通信保障方式的资源流向如图~\ref{fig:q3_sankey} 所示。
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.86\textwidth]{figures/fig30_q3_sankey.png}
+	\caption{通信保障方式流向}
+	\label{fig:q3_sankey}
+\end{figure}
+
+由图~\ref{fig:q3_sankey} 可见，28 个运输架次中 \textbf{24 个无法全程直连}，被分流至两架中继无人机承担，另 \textbf{4 个架次（14.3\%）由 G01 网关直连全程覆盖}、无需中继；R01 与 R02 的负载完全均衡（\textbf{12 : 12}），说明中继资源得到了合理分配。
+
+\subsubsection{联合调度结果与连续性验证}
+
+最终的联合调度方案为：运输 \textbf{28 个架次}、中继 \textbf{24 个架次}；\textbf{需保障的 24 个架次全部实现 100\% 全程连续通信覆盖}，且每个架次均由\textbf{单一悬停点}保障；运输能耗 \textbf{82.30\,kWh}、中继能耗 \textbf{4.32\,kWh}（占总量 \textbf{5.0\%}）、总能耗 \textbf{86.62\,kWh}；联合任务完成时间 \textbf{2.84\,h}（10219.3\,s）。这里运输能耗 82.30\,kWh 与问题二完全一致，体现了\textbf{后一问严格继承前一问方案}的一致性要求。联合调度时间线如图~\ref{fig:q3_joint_gantt} 所示。
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.98\textwidth]{figures/fig29_q3_joint_gantt.png}
+	\caption{运输与中继联合调度时间线}
+	\label{fig:q3_joint_gantt}
+\end{figure}
+
+图~\ref{fig:q3_joint_gantt} 中上段为 28 个运输架次、下段为 24 个中继架次，可见中继的服务窗口（橙色段）与运输架的飞行时段精确对齐——每个中继架次都先飞往悬停点并建链（浅色段），再在运输机需要保障的时段内悬停服务。这种"按需建链、窗口对齐"的调度方式使中继能耗仅占总量 \textbf{5.0\%}（24 个中继架次平均仅 0.18\,kWh），体现了联合优化的效率。
+
+\textbf{采样步长敏感性。}连续通信判定的可靠性依赖于采样步长：步长过大会漏判短暂的遮挡时段，过小则计算量激增。本文对步长做了敏感性分析（见表~\ref{tab:sensitivity}）：由 5\,s 细化到 2\,s 时中断占比的判定结果变化很小（相对偏差 $<2\%$），说明 \textbf{5\,s 已足以捕捉遮挡特征}；而步长放大到 30\,s 时会漏判约 8\% 的短时中断。为稳妥起见，本文最终取 \textbf{2\,s} 作为采样步长。
+
+\textbf{校验结果。}独立校验器对本问报告 \textbf{0 条违规}——由于本问严格继承问题二的运输方案（运输架次数与能耗均与问题二相同），而问题二方案已使 80 箱全部按时送达（最大迟到量 0\,s），故本问的\textbf{时限类违规也为 0 条}；同时\textbf{通信类、能量类与资源类违规均为 0 条}，即连续通信约束得到完全满足（24 个需保障架次 24/24 全程覆盖、每个架次单点保障）。

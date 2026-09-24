@@ -1,0 +1,19 @@
+\newpage
+\phantomsection
+\addcontentsline{toc}{section}{AI 工具使用声明}
+\begin{center}
+	{\zihao{3}\bfseries AI 工具使用声明}
+\end{center}
+
+本参赛队在竞赛过程中使用了 AI 工具，主要用于\textbf{语言润色、代码调试与图表排版}，详细使用情况见支撑材料中的《AI 工具使用详情.pdf》。具体说明如下：
+
+\begin{enumerate}[label=\arabic*.]
+	\item \textbf{使用环节}：① 论文文字的语言润色与结构梳理；② 求解程序的语法查错与调试建议；③ 绘图脚本的样式统一与导出配置；④ LaTeX 排版与交叉引用检查。
+	\item \textbf{输入内容}：仅为本文作者自行撰写的文字段落、自行编写的程序代码与自行整理的数据表格；\textbf{未向 AI 工具提供任何赛题附件原始数据、未要求其生成建模方案或计算结果}。
+	\item \textbf{输出处理策略}：AI 工具的输出一律作为\textbf{草稿或建议}，由参赛队员逐条核对后方才采用。所有数学公式、模型口径、参数取值、计算结果与结论均来自赛题附件、公开文献或本队自行编写并运行的求解程序，\textbf{不以 AI 输出作为学术依据}。
+	\item \textbf{开发框架与工具}：Python 3.13 科学计算栈（NumPy / SciPy / pandas / Matplotlib / seaborn / NetworkX），求解与绘图脚本见附录；论文以 XeLaTeX 编译。
+	\item \textbf{假设与超参数}：物理口径与超参数均以赛题附件为准并在正文中逐条说明（见模型假设与符号说明章）；随机过程固定种子 SEED $=42$ 以保证可复现。
+	\item \textbf{人工核验情况}：全部求解结果均通过独立编写的校验程序复核；论文中的每一个数值都能追溯到附件数据或求解程序输出文件。凡未能人工核验的内容，本文不予采用。
+\end{enumerate}
+
+本队郑重声明：\textbf{论文的建模思路、模型构建、求解算法设计与结果分析均由参赛队员独立完成}，AI 工具仅起辅助作用；论文内容未直接复制任何 AI 生成的建模方案，亦未使用 `docs/reference/` 中第三方同题解答的文字、公式或数据。

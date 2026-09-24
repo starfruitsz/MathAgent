@@ -1,0 +1,5 @@
+**中继无人机参数**
+
+| code   | name      |   empty_mass_kg |   comms_module_mass_kg |   takeoff_mass_kg |   cruise_speed_ms |   cruise_power_kw |   energy_kwh |   reserve_ratio |   prepare_time_s |   link_setup_time_s |   turnaround_time_s |   climb_speed_ms |   descent_speed_ms |   climb_efficiency |   descent_efficiency |   hover_power_kw |   comms_power_kw |   max_hover_agl_m |
+|:-------|:----------|----------------:|-----------------------:|------------------:|------------------:|------------------:|-------------:|----------------:|-----------------:|--------------------:|--------------------:|-----------------:|-------------------:|-------------------:|---------------------:|-----------------:|-----------------:|------------------:|
+| R      | 中继标准测试多旋翼 |              21 |                    2.5 |              23.5 |                15 |              1.15 |          3.2 |             0.2 |              180 |                  30 |                 300 |                4 |                  3 |               0.72 |                    0 |             1.05 |             0.05 |               300 |

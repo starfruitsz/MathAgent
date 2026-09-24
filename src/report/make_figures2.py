@@ -375,10 +375,17 @@ def fig_sensitivity(D: dict) -> None:
     fig.tight_layout()
     _save(fig, "f22_sensitivity", "四类敏感性分析", "模型检验")
 
+    # ★ 本文取值必须取自 metrics：写死会与 Q3 实际使用的采样步长/网格步长矛盾
+    #   （历史踩坑：表里写 5 s / 800 m，而 q3_metrics.json 是 2 s / 400 m）。
+    _m3 = D.get("q3_metrics", {}) or {}
+    _dt = _m3.get("sample_dt_s")
+    _hv = _m3.get("hover_step_m")
     _tab(pd.DataFrame({
         "敏感性维度": ["通信采样步长", "悬停网格步长", "DEM 高程噪声", "衰落裕量"],
         "取值范围": ["1~30 s", "200~1500 m", "σ = 0~20 m", "M = 2~18 dB"],
-        "本文取值": ["5 s（Q3 最终）/ 1 s（config 默认）", "800 m", "实测 DEM", "8 dB（附件）"],
+        "本文取值": [f"{_dt:g} s（Q3 最终，见 metrics）" if _dt else "见 q3_metrics.json",
+                     f"{_hv:g} m" if _hv else "见 q3_metrics.json",
+                     "实测 DEM", "8 dB（附件）"],
         "主要影响": ["中断占比判定（粗步长漏判）", "覆盖率与计算耗时",
                      "能耗偏移 < 1%（σ=10 m）", "链路可达距离"],
     }), "t_sensitivity", "敏感性分析汇总", "模型检验")

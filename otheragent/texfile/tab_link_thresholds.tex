@@ -1,0 +1,17 @@
+\begin{table}[htbp]
+\caption{三条链路的双向门限与可达距离}
+\label{tab:link_thresholds}
+\centering
+\zihao{-5}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lccc}
+\toprule
+链路 & 双向门限 / dB & 无遮挡可达 / km & 含遮挡可达 / km \\
+\midrule
+直连（运输机↔G01） & 122 & 12.511 & 3.956 \\
+中继接入（运输机↔中继） & 116 & 6.270 & 1.983 \\
+中继回传（中继↔G01） & 126 & 19.828 & 6.270 \\
+\bottomrule
+\end{tabular}
+\\[2pt] \footnotesize 注：含遮挡一列按叠加 10\,dB 地形遮挡附加损耗计算。
+\end{table}

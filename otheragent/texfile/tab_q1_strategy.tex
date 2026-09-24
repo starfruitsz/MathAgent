@@ -1,0 +1,21 @@
+\begin{table}[htbp]
+\caption{各组批策略的多目标对比}
+\label{tab:q1_strategy}
+\centering
+\zihao{-5}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llcccc}
+\toprule
+策略 & 说明 & 架次数 & 总能耗 / kWh & 累计作业 / h & 并行完工 / h \\
+\midrule
+ffd\_volume & FFD 体积降序 + 最大机型优 & 18 & 75.07 & 9.37 & 1.27 \\
+single\_C & 全程只使用 C 型 & 18 & 75.07 & 9.37 & 1.27 \\
+nf\_as\_given & 不排序（按附件顺序）+ 最大机型 & 18 & 75.07 & 9.37 & 1.27 \\
+ffd\_mass & FFD 质量降序 + 最大机型优 & 18 & 75.07 & 9.37 & 1.27 \\
+mixed\_largest\_first & 混合机型，新箱优先选最大机型 & 18 & 75.07 & 9.37 & 1.27 \\
+single\_B & 全程只使用 B 型 & 37 & 72.86 & 16.31 & 2.25 \\
+single\_A & 全程只使用 A 型 & 55 & 118.80 & 26.17 & 3.70 \\
+mixed\_best\_fit & 混合机型，新箱优先选能装下的最小 & 55 & 118.80 & 26.17 & 3.70 \\
+\bottomrule
+\end{tabular}
+\end{table}

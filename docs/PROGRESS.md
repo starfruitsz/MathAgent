@@ -2,7 +2,7 @@
 
 最后更新：**P6 已完成**（论文排版整改：MathType 公式 / 三线表 / 章页分页 / 图表同页） | 当前 HEAD：`<见 git log>`
 
-> **接手步骤**：`git pull --rebase origin main` → 读本文件 → 读 `OPS_SPEC_D题.md`
+> **接手步骤**：`git pull --rebase origin main` → **读 [`AGENT_GUIDE.md`](AGENT_GUIDE.md)**（四问位置索引 + 答案 + 思维链 + 初稿须知）→ 读本文件 → 读 `OPS_SPEC_D题.md`
 
 ---
 
@@ -88,7 +88,7 @@
 
 ## 交接备忘
 
-- 下一个 agent 应先执行：`git pull --rebase origin main`，然后读本文件与 `OPS_SPEC_D题.md`
+- 下一个 agent 应先执行：`git pull --rebase origin main`，然后**先读 `docs/AGENT_GUIDE.md`**（★ 四问的程序/图表/数据位置、答案与思维链、初稿使用须知都在那里），再读本文件与 `OPS_SPEC_D题.md`
 - **铁律 R1：每次更改代码必须提交仓库**（改完即 commit，commit 即 push）
 - 提交入口：`.\scripts\commit.ps1 -Scope <q0|q1|q2|q3|q4|phys|geo|comms|verify|spec|env|repo|report> -Type <feat|fix|data|model|exp|doc|repo|chore> -Message "..."`
 - **物理公式先写测试**：改 `src/physics/`、`src/comms/` 的任何公式，必须同步补测试

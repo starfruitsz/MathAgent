@@ -92,8 +92,10 @@ def main() -> None:
     d = delivered.rename(columns={"货箱编号": "box", "首批保障": "fb", "首批截止（s）": "fb_dl",
                                   "期望送达（s）": "exp", "实际交付（s）": "act"})
     fb = d[d.fb == "是"]
-    print(f"  首批箱 {len(fb)} 个，超时 {int((fb.act > fb.fb_dl + TOL).sum())} 个")
-    print(f"  全部箱 {len(d)} 个，超期望 {int((d.act > d.exp + TOL).sum())} 个")
+    n_fb_late = int((fb.act > fb.fb_dl + TOL).sum())
+    n_exp_late = int((d.act > d.exp + TOL).sum())
+    print(f"  首批箱 {len(fb)} 个，超时 {n_fb_late} 个")
+    print(f"  全部箱 {len(d)} 个，超期望 {n_exp_late} 个")
     print(f"  准时率(期望) = {1 - (d.act > d.exp + TOL).mean():.4f}")
 
     print("\n" + "=" * 78)
@@ -105,8 +107,17 @@ def main() -> None:
     print(f"  时间自洽 : {'✅' if ok_time else '❌'}")
     print(f"  资源无冲突: {'✅' if bad == 0 else '❌'}")
     print("  → 方案在 能量 / 时间 / 资源 三个维度上均自洽，")
-    print("    即独立校验器报出的违规中不含任何物理类硬约束违规；")
-    print("    剩余违规全部为时限类，已由§6.6 的不可行性论证解释。")
+    # ★ 结论按实测数据分叉：时限是否达成由数据决定，不要写死"必然违规"。
+    #   历史教训：旧方案只用 2 架 C 型（异构机队被退化），首批必然超时，
+    #   当时把现象写成了"不可行性论证"；修复后 0 违规，此处必须能自动反映。
+    if n_fb_late == 0 and n_exp_late == 0:
+        print(f"  时限达成 : ✅ 首批 30 箱与全部 80 箱的时限**全部满足**"
+              f"（首批超时 {n_fb_late} 箱 / 期望超时 {n_exp_late} 箱）")
+        print("    ⇒ 本方案不存在任何违规，异构机队（A×4+B×2+C×2）已整体投入。")
+    else:
+        print(f"  时限达成 : ❌ 首批超时 {n_fb_late} 箱 / 期望超时 {n_exp_late} 箱")
+        print("    ⇒ 剩余违规全部为时限类；请按 8 架机口径复核机队是否被退化为单一机型"
+              "（见 ADR-029），再判断是资源不足还是求解器缺陷。")
 
     r.to_csv(ROOT / "data" / "q2_independent_audit.csv", index=False, encoding="utf-8-sig")
     print("\nwritten -> data/q2_independent_audit.csv")

@@ -26,7 +26,11 @@ def _metrics(q: str) -> dict:
 
 M1, M2, M3, M4 = _metrics("q1"), _metrics("q2"), _metrics("q3"), _metrics("q4")
 # 结果盒文本（★ 全部取自 metrics，改动数据后重跑本脚本即可同步）
-TXT_Q2_OUT = (f"输出：{M2.get('n_sorties','?')} 架次（全 C 型）｜"
+# ★ "全 C 型"这类**结论性描述**也要数据驱动：机队一旦从同构改成混合就该跟着变，
+#   历史教训——这句话曾写死为"全 C 型"，而 Q2 修复后实际是 A/B/C 三型混编。
+_TU = M2.get("type_usage", {}) or {}
+_tu_txt = "+".join(f"{k}{v}" for k, v in sorted(_TU.items())) or "全 C 型"
+TXT_Q2_OUT = (f"输出：{M2.get('n_sorties','?')} 架次（{_tu_txt}）｜"
               f"{M2.get('total_energy_kwh',0):.2f} kWh\n"
               f"完工 {M2.get('makespan_h',0):.2f} h｜准时率 "
               f"{M2.get('on_time_rate',0):.1%}（首批超时 "
@@ -36,11 +40,16 @@ TXT_Q3_OUT = (f"输出：{M3.get('n_relay_sorties','?')} 个中继架次｜覆�
               f"总能耗 {M3.get('total_energy_kwh',0):.2f} kWh｜联合完工 "
               f"{M3.get('joint_makespan_h',0):.2f} h")
 _NU = M4.get("n_atomic_units", "?")
+_NBR = M4.get("n_bridge_sorties", "?")
 TXT_Q4_BRANCH = (f"是 ⇒ 合法组数 K ∈ [1, {_NU}]（原子单元数）\n"
                  f"K=2 需拆 {M4.get('k2_edits_required','?')} 个、"
                  f"K=3 需拆 {M4.get('k3_edits_required','?')} 个多点架次")
 TXT_Q4_OUT = ("输出：分区可行性论证 + 桥接架次清单\n"
               f"资源总量 K=1/2/3 见方案对比表；原子单元 {_NU} 个")
+TXT_Q4_BRIDGE = f"定位桥接架次：移除后分量数增加\n共 {_NBR} 个候选"
+TXT_Q4_EDIT = ("按原子单元直接合并即可\n"
+               f"K=2 拆 {M4.get('k2_edits_required','?')} 个、"
+               f"K=3 拆 {M4.get('k3_edits_required','?')} 个架次")
 
 # ---------------------------------------------------------------- 版式常量
 W_CANVAS = 1120
@@ -249,11 +258,13 @@ SPECS = [
     {
         "title": "问题二求解流程：异构多点多架次运输调度",
         "steps": [
-            {"t": "box", "text": "输入：Q1 组批方案 + 8 架实体机\n14 组共享电池 + 两类时限"},
+            {"t": "box", "text": "输入：80 箱清单 + 异构机队 A×4+B×2+C×2\n14 组共享电池 + 两类时限"},
+            {"t": "box", "text": "候选机队：同构 A/B/C 与真实混合机队\n三种装配策略，按真实调度评分取优"},
             {"t": "box", "text": "构造：按「首批优先 → 期望升序 →\n优先系数降序 → 体积降序」入批或新开架次"},
+            {"t": "box", "text": "首批专架次按键队槽位轮转挑机型\n（4A→2B→2C，使 8 个 60 min 档区各占一架）"},
             {"t": "box", "text": "选序：站点 ≤ 6 全排列\n> 6 用最近邻 + 2-opt"},
             {"t": "box", "text": "局部搜索：搬箱 / 合并架次\n字典序目标（及时性 → 架次数 → 能耗）"},
-            {"t": "box", "text": "时段驱动贪心派发\n每决策时刻在资源就绪架次中择优"},
+            {"t": "box", "text": "时限驱动贪心派发：按\n(n_{fb}, fb_{late}, n_{exp}, exp_{late}, slack, E) 择优"},
             {"t": "dec", "text": "资源就绪？",
              "branch": {"text": "否 ⇒ 等待充电周转\nΔ 为两阶段充电时长", "label": "否"}},
             {"t": "box", "text": "资源池周转：无人机 + 共享电池\n两阶段充电（SOC < 90% 占 65%，其后 35%）"},
@@ -283,12 +294,12 @@ SPECS = [
             {"t": "box", "text": "输入：Q3 联合调度方案\n（架次划分、访问顺序、保障关系保持不变）"},
             {"t": "box", "text": "提取「架次—服务区」关联并构图\n15 个服务区为顶点，同架次服务区连边"},
             {"t": "box", "text": "求连通分量 = 原子单元\n（同架次服务区必须同组，不可拆）"},
-            {"t": "dec", "text": "分量数 = 1？",
+            {"t": "dec", "text": "K=2 / K=3 能否由原子单元合并得到？",
              "branch": {"text": TXT_Q4_BRANCH, "label": "是"}},
-            {"t": "box", "text": "定位桥接架次：移除后分量数增加\n得 T010 / T017 / T027 三个"},
-            {"t": "box", "text": "最小改动方案\n拆 1 个架次得 2 组，拆 2 个得 3 组"},
+            {"t": "box", "text": TXT_Q4_BRIDGE},
+            {"t": "box", "text": TXT_Q4_EDIT},
             {"t": "box", "text": "组内资源核算：并行峰值 + 电池周转\n（资源不得跨组调配）"},
-            {"t": "box", "text": "四维对比：配置规模 / 冗余 / 组间均衡 / 缺口\nK=1,2,3 ⇒ 资源总量 13 / 17 / 21"},
+            {"t": "box", "text": "四维对比：配置规模 / 冗余 / 组间均衡 / 缺口\n资源总量与不均衡度见方案对比表"},
             {"t": "box", "text": TXT_Q4_OUT},
         ],
     },

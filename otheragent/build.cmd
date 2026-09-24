@@ -1,18 +1,24 @@
 @echo off
 REM ============================================================
-REM  一键编译论文（XeLaTeX + BibTeX，三遍编译）
-REM  用法：双击本文件，或在命令行执行  build.cmd
+REM  Build the paper: XeLaTeX + BibTeX (3 passes)
+REM  Usage: double-click this file, or run  build.cmd
 REM
-REM  说明：MiKTeX 自带的 bibtex 在本机退出时会返回一个非零码
-REM        （0xC0000005 访问违例），但 .bbl 已经正确写出，
-REM        因此下面的流程对 bibtex 的返回码不作判断。
-REM        若参考文献显示为 [?]，删掉 document.aux / document.bbl
-REM        后重新运行本脚本即可。
+REM  NOTE 1: this file is deliberately ASCII-only. cmd.exe parses
+REM          .cmd files using the OEM codepage (GBK on Chinese
+REM          Windows), so UTF-8 Chinese comments corrupt the script.
+REM
+REM  NOTE 2: some MiKTeX builds of bibtex.exe crash with a heap
+REM          corruption (exit 0xC0000374) when loading a large .bst
+REM          such as gbt7714-*.bst (~88 KB); the .bbl never gets
+REM          written, and it is intermittent. bibtex8 is stable in
+REM          testing, so prefer it and fall back to bibtex+retries.
+REM          If references still show [?], delete document.aux and
+REM          document.bbl and run again.
 REM ============================================================
 setlocal
 cd /d "%~dp0"
 
-REM 定位 xelatex：优先用 PATH 上的，其次试 MiKTeX 的常见安装位置
+REM --- locate xelatex: PATH first, then common install locations ---
 where xelatex >nul 2>&1
 if errorlevel 1 (
   for %%D in (
@@ -27,41 +33,43 @@ if errorlevel 1 (
 )
 where xelatex >nul 2>&1
 if errorlevel 1 (
-  echo [错误] 找不到 xelatex。请先安装 MiKTeX 或 TeX Live，并把其 bin 目录加入 PATH。
+  echo [ERROR] xelatex not found. Install MiKTeX or TeX Live and add its bin directory to PATH.
   pause
   exit /b 1
 )
 
-echo [1/4] XeLaTeX 第一遍...
+echo [1/4] XeLaTeX pass 1 ...
 xelatex -interaction=nonstopmode document.tex >nul
 
-echo [2/4] BibTeX（最多重试 5 次，规避本机 bibtex 退出码异常）...
+echo [2/4] BibTeX ...
+set BIBTOOL=
+where bibtex8 >nul 2>&1 && set BIBTOOL=bibtex8
+if not defined BIBTOOL set BIBTOOL=bibtex
 set BIBTRIES=0
 :bibloop
 set /a BIBTRIES+=1
 if exist document.bbl del document.bbl
-bibtex document >nul 2>&1
+%BIBTOOL% document >nul 2>&1
 for %%A in (document.bbl) do set BBLSIZE=%%~zA
 if not defined BBLSIZE set BBLSIZE=0
 if %BBLSIZE% GTR 1000 goto :bibok
-if %BIBTRIES% GEQ 5 goto :bibok
+if %BIBTRIES% GEQ 10 goto :bibok
 goto :bibloop
 :bibok
-echo     BibTeX 完成（重试 %BIBTRIES% 次，bbl=%BBLSIZE% 字节）
+echo     tool=%BIBTOOL%  tries=%BIBTRIES%  bbl=%BBLSIZE% bytes
+if %BBLSIZE% LSS 1000 echo     [WARN] .bbl not generated; references may show as [?]
 
-echo [3/4] XeLaTeX 第二遍...
+echo [3/4] XeLaTeX pass 2 ...
 xelatex -interaction=nonstopmode document.tex >nul
-echo [4/4] XeLaTeX 第三遍...
+echo [4/4] XeLaTeX pass 3 ...
 xelatex -interaction=nonstopmode document.tex >nul
 
 echo.
-echo ===== 编译结果自检 =====
+echo ===== build check =====
 findstr /C:"Output written" document.log
-findstr /B /C:"!" document.log && echo [警告] 存在 LaTeX 报错 && goto :end
-echo [OK] 无 LaTeX 报错
-findstr /C:"Citation" document.log | findstr /C:"undefined" >nul && echo [警告] 存在未定义引用 || echo [OK] 无未定义引用
-:end
+findstr /B /C:"!" document.log >nul && echo [WARN] LaTeX errors found ^(see document.log^) || echo [OK] no LaTeX errors
+findstr /C:"Citation" document.log | findstr /C:"undefined" >nul && echo [WARN] undefined citations || echo [OK] no undefined citations
 echo.
-echo 输出文件：document.pdf
+echo Output: document.pdf
 endlocal
 pause

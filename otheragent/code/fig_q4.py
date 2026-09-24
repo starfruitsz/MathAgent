@@ -173,7 +173,7 @@ def fig34_group():
     ax.set_xticks(x); ax.set_xticklabels(res, rotation=35, fontsize=8.5)
     ax.set_ylabel("需求数量")
     ax.set_ylim(0, max(k1[res].values[0].max() if len(k1) else 1, 1) * 1.3)
-    ax.set_title("(a) K=1（唯一合法分区）的资源配置", loc="left", fontsize=10.5,
+    ax.set_title("(a) K=1（整队一组，基准方案）的资源配置", loc="left", fontsize=10.5,
                  fontweight="bold")
 
     ax = axes[1]
@@ -223,8 +223,13 @@ def fig35_gap():
                             color=C_RED, fontweight="bold")
         ax.set_yticks(y); ax.set_yticklabels(k1["资源"], fontsize=8.5)
         ax.set_xlabel("数量")
-        ax.set_title("(b) K=1 唯一缺口：1 组 B 型备用电池", loc="left", fontsize=10.5,
-                     fontweight="bold")
+        # ★ 标题按实际缺口动态生成：写死"唯一缺口：1 组 B 型备用电池"在数据
+        #   变化后会与柱子自带的"缺 N"标注矛盾（历史踩坑）。
+        _short = [f"{int(r.缺口)} 组{str(r.资源).replace('组数', '')}"
+                  for r in k1.itertuples() if r.缺口 > 0]
+        _t = ("(b) K=1 无资源缺口（库存恰好满足）" if not _short
+              else "(b) K=1 缺口：" + "、".join(_short))
+        ax.set_title(_t, loc="left", fontsize=10.5, fontweight="bold")
         ax.legend(fontsize=8.5)
     fig.tight_layout()
     save(fig, "fig35_q4_gap")

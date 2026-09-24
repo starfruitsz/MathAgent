@@ -472,3 +472,26 @@
 02:11:33 [INFO]   问题二：图 3 / 表 6 / 数据 10
 02:11:33 [INFO]   问题三：图 4 / 表 4 / 数据 9
 02:11:33 [INFO]   问题四：图 3 / 表 5 / 数据 9
+02:17:51 [INFO] 生成补充图 ...
+02:17:51 [INFO] 图 f18_physics_calculator  统一物理计算器的公式与耦合关系
+02:17:52 [INFO] 图 f19_link_budget  通信链路预算与门限分析
+02:17:52 [INFO] 表 t_link_thresholds  三条链路的门限与可达距离
+02:17:52 [INFO] 图 f20_flight_profile  飞行剖面与能耗构成
+02:17:52 [INFO] 图 f21_verifier  独立可行性校验器架构与结果
+02:17:53 [INFO] 图 f22_sensitivity  四类敏感性分析
+02:17:53 [INFO] 表 t_sensitivity  敏感性分析汇总
+02:17:53 [INFO] 图 f23_model_params  机型与中继参数一览
+02:17:53 [INFO] 表 t_uav_params  三种运输机型参数
+02:17:53 [INFO] 表 t_relay_params  中继无人机参数
+02:17:53 [INFO] 表 t_battery_inventory  共享电池库存
+02:17:53 [INFO] 图 f24_nodes  节点坐标与海拔分布
+02:17:53 [INFO] 表 t_nodes  调度中心与服务区坐标及海拔
+02:17:53 [INFO] 表 t_leg_cache_sample  航段缓存样例（前 300 条有序航段）
+02:17:53 [INFO] 表 t_uav_fleet  逐架实体无人机清单
+02:17:53 [INFO] 表 t_relay_fleet  中继无人机参数
+02:17:53 [INFO] 按问题分目录备份 ...
+02:17:53 [INFO]   总体分析：图 10 / 表 13 / 数据 10
+02:17:53 [INFO]   问题一：图 4 / 表 5 / 数据 11
+02:17:53 [INFO]   问题二：图 3 / 表 6 / 数据 10
+02:17:53 [INFO]   问题三：图 4 / 表 4 / 数据 9
+02:17:53 [INFO]   问题四：图 3 / 表 5 / 数据 9

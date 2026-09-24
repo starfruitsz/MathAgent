@@ -41,7 +41,7 @@ def fig20_gantt():
     ax.set_yticklabels([s.iloc[len(s) - i]["sid"] for i in range(1, len(s) + 1)], fontsize=8)
     ax.set_xlabel("时刻 / s"); ax.set_ylabel("架次（按开始时刻排列）")
     ax.set_xlim(0, s["t1"].max() * 1.62)
-    ax.set_title("问题二运输调度甘特图：22 个架次的时序与访问服务区", loc="left",
+    ax.set_title(f"问题二运输调度甘特图：{len(s)} 个架次的时序与访问服务区", loc="left",
                  fontsize=11, fontweight="bold")
     ax.legend(handles=[Patch(color=c, label=f"{t} 型") for t, c in TYPE_COLOR.items()],
               loc="lower right", fontsize=9)
@@ -129,7 +129,8 @@ def fig22_timeliness():
     ax.annotate("B 型能量预算 3.2 kWh", (0.30, 3.2), xytext=(0, 6),
                 textcoords="offset points", fontsize=8, color=C_GRAY)
     ax.set_xlabel("独立复算返航 SOC"); ax.set_ylabel("独立复算架次能耗 / kWh")
-    ax.set_title("(c) 22 个架次全部满足能量约束", loc="left", fontsize=10.5, fontweight="bold")
+    # ★ 架次数必须由数据推出：写死会在方案变化后与图上点数不符
+    ax.set_title(f"(c) {len(a)} 个架次全部满足能量约束", loc="left", fontsize=10.5, fontweight="bold")
     ax.legend(handles=[Patch(color=c, label=f"{t} 型") for t, c in TYPE_COLOR.items()] +
                       [plt.Line2D([], [], ls="--", color=C_RED, label="SOC 下限 0.20")],
               fontsize=8)

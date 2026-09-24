@@ -31,12 +31,17 @@ outputs/**/*.tmp
 scripts/tools/*/.git/
 
 # ---- 论文生成过程的临时/中间产物 ----
-paper/_mathtype_work/          # MathType 转换中间件（mathml / preview / ole）
-paper/_mathtype_smoke/         # MathType 链路冒烟测试产物
-paper/_preview/                # PDF 页面预览图（人工检查排版留白）
-paper/_probe*.docx             # 诊断用副本
+# MathType 转换中间件（mathml / preview / ole）
+paper/_mathtype_work/
+# MathType 链路冒烟测试产物
+paper/_mathtype_smoke/
+# PDF 页面预览图（人工检查排版留白）
+paper/_preview/
+# 诊断用副本
+paper/_probe*.docx
 paper/*_probe.pdf
-paper/~$*                      # Word 打开文档时留下的锁文件
+# Word 打开文档时留下的锁文件
+paper/~$*
 
 # ---- 编辑器/系统 ----
 .vscode/

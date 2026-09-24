@@ -68,7 +68,9 @@ def fig32_graph():
     nx.draw_networkx_labels(G, pos, ax=ax, font_size=7.5,
                             font_family="SimSun")
     ax.set_aspect("equal"); ax.axis("off")
-    ax.set_title(f"(a) 架次—服务区关联图：1 个连通分量（15 顶点 / {G.number_of_edges()} 边）",
+    ncomp = nx.number_connected_components(G)
+    ax.set_title(f"(a) 架次—服务区关联图：{ncomp} 个连通分量"
+                 f"（15 顶点 / {G.number_of_edges()} 边）",
                  loc="left", fontsize=10.5, fontweight="bold")
     from matplotlib.lines import Line2D
     ax.legend(handles=[Line2D([], [], marker="o", ls="", ms=9, mfc=C_RED, mec="white",
@@ -87,9 +89,15 @@ def fig32_graph():
     ax.set_xlabel("服务区"); ax.set_ylabel("关联架次数（度）")
     ax.tick_params(axis="x", rotation=90)
     ax.set_title("(b) 各服务区的关联度", loc="left", fontsize=10.5, fontweight="bold")
-    ax.annotate("21 个多点架次把 15 个服务区\n串成单一连通分量\n$\\Rightarrow$ 不存在合法的 2/3 组分区",
-                (0.40, 0.80), xycoords="axes fraction", fontsize=9, color=C_RED,
-                bbox=dict(boxstyle="round,pad=0.45", fc="#fdf2f2", ec=C_RED, lw=1.0))
+    concl = ("$\\Rightarrow$ K=2 分区直接可行" if ncomp >= 2
+             else "$\\Rightarrow$ 不存在合法的 2/3 组分区")
+    ax.annotate(f"{len(multi)} 个多点架次把 15 个服务区\n"
+                f"分成 {ncomp} 个连通分量（原子单元）\n{concl}",
+                (0.34, 0.80), xycoords="axes fraction", fontsize=9,
+                color=C_TEAL if ncomp >= 2 else C_RED,
+                bbox=dict(boxstyle="round,pad=0.45",
+                          fc="#eef7f5" if ncomp >= 2 else "#fdf2f2",
+                          ec=C_TEAL if ncomp >= 2 else C_RED, lw=1.0))
     fig.tight_layout()
     save(fig, "fig32_q4_graph")
 
@@ -207,7 +215,9 @@ def fig35_gap():
                             color=C_RED, fontweight="bold")
         ax.set_yticks(y); ax.set_yticklabels(k1["资源"], fontsize=8.5)
         ax.set_xlabel("数量")
-        ax.set_title("(b) K=1 唯一缺口：1 组 B 型备用电池", loc="left", fontsize=10.5,
+        gaps = k1[k1["缺口"] > 0]
+        sub = "、".join(f"{int(r.缺口)} {r.资源}" for r in gaps.itertuples()) if len(gaps) else "无"
+        ax.set_title(f"(b) K=1 的资源缺口：{sub}", loc="left", fontsize=10.5,
                      fontweight="bold")
         ax.legend(fontsize=8.5)
     fig.tight_layout()

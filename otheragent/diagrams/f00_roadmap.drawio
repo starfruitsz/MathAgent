@@ -547,10 +547,10 @@
         <mxCell id="b4_s1" value="Q1 18 架次达下界" style="rounded=0;arcSize=8;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=1;fontSize=16;fontStyle=1;fontColor=#222222;fontFamily=Microsoft YaHei,PingFang SC,Hiragino Sans GB,Helvetica;align=center;verticalAlign=middle;spacingLeft=2;spacingRight=2;" vertex="1" parent="1">
           <mxGeometry x="275" y="856" width="147" height="39.6667" as="geometry" />
         </mxCell>
-        <mxCell id="b4_s2" value="Q2 35 架次 9.78 h" style="rounded=0;arcSize=8;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=1;fontSize=16;fontStyle=1;fontColor=#222222;fontFamily=Microsoft YaHei,PingFang SC,Hiragino Sans GB,Helvetica;align=center;verticalAlign=middle;spacingLeft=2;spacingRight=2;" vertex="1" parent="1">
+        <mxCell id="b4_s2" value="Q2 16 架次 5.73 h" style="rounded=0;arcSize=8;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=1;fontSize=16;fontStyle=1;fontColor=#222222;fontFamily=Microsoft YaHei,PingFang SC,Hiragino Sans GB,Helvetica;align=center;verticalAlign=middle;spacingLeft=2;spacingRight=2;" vertex="1" parent="1">
           <mxGeometry x="275" y="898.667" width="147" height="39.6667" as="geometry" />
         </mxCell>
-        <mxCell id="b4_s3" value="总能耗 83.01 kWh" style="rounded=0;arcSize=8;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=1;fontSize=16;fontStyle=1;fontColor=#222222;fontFamily=Microsoft YaHei,PingFang SC,Hiragino Sans GB,Helvetica;align=center;verticalAlign=middle;spacingLeft=2;spacingRight=2;" vertex="1" parent="1">
+        <mxCell id="b4_s3" value="总能耗 81.34 kWh" style="rounded=0;arcSize=8;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=1;fontSize=16;fontStyle=1;fontColor=#222222;fontFamily=Microsoft YaHei,PingFang SC,Hiragino Sans GB,Helvetica;align=center;verticalAlign=middle;spacingLeft=2;spacingRight=2;" vertex="1" parent="1">
           <mxGeometry x="275" y="941.333" width="147" height="39.6667" as="geometry" />
         </mxCell>
         <mxCell id="e4_l" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;endSize=5;strokeColor=#222222;strokeWidth=1.2;fontSize=16;fontFamily=Microsoft YaHei,PingFang SC,Hiragino Sans GB,Helvetica;" edge="1" parent="1">
@@ -577,10 +577,10 @@
         <mxCell id="b4_v1" value="中继为必需" style="rounded=0;arcSize=8;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=1;fontSize=16;fontStyle=1;fontColor=#222222;fontFamily=Microsoft YaHei,PingFang SC,Hiragino Sans GB,Helvetica;align=center;verticalAlign=middle;spacingLeft=2;spacingRight=2;" vertex="1" parent="1">
           <mxGeometry x="650" y="857" width="89" height="38.3333" as="geometry" />
         </mxCell>
-        <mxCell id="b4_v2" value="覆盖 29/29" style="rounded=0;arcSize=8;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=1;fontSize=16;fontStyle=1;fontColor=#222222;fontFamily=Microsoft YaHei,PingFang SC,Hiragino Sans GB,Helvetica;align=center;verticalAlign=middle;spacingLeft=2;spacingRight=2;" vertex="1" parent="1">
+        <mxCell id="b4_v2" value="覆盖 14/14" style="rounded=0;arcSize=8;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=1;fontSize=16;fontStyle=1;fontColor=#222222;fontFamily=Microsoft YaHei,PingFang SC,Hiragino Sans GB,Helvetica;align=center;verticalAlign=middle;spacingLeft=2;spacingRight=2;" vertex="1" parent="1">
           <mxGeometry x="650" y="898.333" width="89" height="38.3333" as="geometry" />
         </mxCell>
-        <mxCell id="b4_v3" value="单一分量" style="rounded=0;arcSize=8;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=1;fontSize=16;fontStyle=1;fontColor=#222222;fontFamily=Microsoft YaHei,PingFang SC,Hiragino Sans GB,Helvetica;align=center;verticalAlign=middle;spacingLeft=2;spacingRight=2;" vertex="1" parent="1">
+        <mxCell id="b4_v3" value="两个分量" style="rounded=0;arcSize=8;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=1;fontSize=16;fontStyle=1;fontColor=#222222;fontFamily=Microsoft YaHei,PingFang SC,Hiragino Sans GB,Helvetica;align=center;verticalAlign=middle;spacingLeft=2;spacingRight=2;" vertex="1" parent="1">
           <mxGeometry x="650" y="939.667" width="89" height="38.3333" as="geometry" />
         </mxCell>
         <mxCell id="e4_r" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;endSize=5;strokeColor=#333333;strokeWidth=1.2;fontSize=16;fontFamily=Microsoft YaHei,PingFang SC,Hiragino Sans GB,Helvetica;" edge="1" parent="1">
@@ -595,10 +595,10 @@
         <mxCell id="b4_ra2" value="中继" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=16;fontStyle=1;fontColor=#222222;fontFamily=Microsoft YaHei,PingFang SC,Hiragino Sans GB,Helvetica;" vertex="1" parent="1">
           <mxGeometry x="584" y="910" width="64" height="22" as="geometry" />
         </mxCell>
-        <mxCell id="b4_o1" value="中继 30&lt;br&gt;全程覆盖&lt;br&gt;100%" style="rounded=0;arcSize=8;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=1;fontSize=16;fontStyle=1;fontColor=#222222;fontFamily=Microsoft YaHei,PingFang SC,Hiragino Sans GB,Helvetica;align=center;verticalAlign=middle;spacingLeft=2;spacingRight=2;" vertex="1" parent="1">
+        <mxCell id="b4_o1" value="中继 14&lt;br&gt;全程覆盖&lt;br&gt;100%" style="rounded=0;arcSize=8;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=1;fontSize=16;fontStyle=1;fontColor=#222222;fontFamily=Microsoft YaHei,PingFang SC,Hiragino Sans GB,Helvetica;align=center;verticalAlign=middle;spacingLeft=2;spacingRight=2;" vertex="1" parent="1">
           <mxGeometry x="742" y="857" width="76" height="59.5" as="geometry" />
         </mxCell>
-        <mxCell id="b4_o2" value="合法分区&lt;br&gt;K = 2, 3&lt;br&gt;均不存在" style="rounded=0;arcSize=8;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=1;fontSize=16;fontStyle=1;fontColor=#222222;fontFamily=Microsoft YaHei,PingFang SC,Hiragino Sans GB,Helvetica;align=center;verticalAlign=middle;spacingLeft=2;spacingRight=2;" vertex="1" parent="1">
+        <mxCell id="b4_o2" value="K=2 分区&lt;br&gt;直接可行&lt;br&gt;0 处改动" style="rounded=0;arcSize=8;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=1;fontSize=16;fontStyle=1;fontColor=#222222;fontFamily=Microsoft YaHei,PingFang SC,Hiragino Sans GB,Helvetica;align=center;verticalAlign=middle;spacingLeft=2;spacingRight=2;" vertex="1" parent="1">
           <mxGeometry x="742" y="919.5" width="76" height="59.5" as="geometry" />
         </mxCell>
         <mxCell id="b5_p1" value="余量敏感性" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=1;fontSize=16;fontStyle=1;fontColor=#222222;fontFamily=Microsoft YaHei,PingFang SC,Hiragino Sans GB,Helvetica;align=center;verticalAlign=middle;spacingLeft=2;spacingRight=2;" vertex="1" parent="1">

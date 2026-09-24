@@ -163,13 +163,21 @@ def fig38_summary():
          ("期望送达准时率", f"{m2['on_time_rate']*100:.1f}", "%")])
     kpi(fig.add_subplot(gs[0, 2]), "问题三 · 通信协同",
         [("中继架次数", m3["n_relay_sorties"], "架次"),
-         ("覆盖率", f"{m3['coverage_rate']*100:.0f}", "%（29/29）"),
+         ("覆盖率", f"{m3['coverage_rate']*100:.0f}",
+          f"%（{m3['n_sorties_covered']}/{m3['n_sorties_need_relay']}）"),
          ("总能耗", f"{m3['total_energy_kwh']:.2f}", "kWh"),
          ("联合完工", f"{m3['joint_makespan_h']:.2f}", "h")])
-    kpi(fig.add_subplot(gs[1, 0]), "问题四 · 分区配置",
-        [("合法 2/3 组分区", "无", "（单一连通分量）"),
-         ("K=1 资源总量", "13", "台·组"),
-         ("唯一缺口", "1", "组 B 型备用电池")])
+    k2 = m4.get("k2_resources", {})
+    k3 = m4.get("k3_resources", {})
+    tot = lambda d: d.get("uavs", 0) + d.get("batteries", 0) + d.get("relay_uavs", 0) + d.get("relay_packs", 0)
+    k1r = m4.get("baseline_resources_k1", {})
+    q4_items = [
+        ("K=2 合法分区", "存在" if m4.get("partition_feasible_k2") else "不存在",
+         f"额外改动 {m4.get('k2_edits_required', '—')} 个架次"),
+        ("资源总量 K=1/2/3", f"{tot(k1r)}/{tot(k2)}/{tot(k3)}", "台·组"),
+        ("K=3 所需改动", str(m4.get("k3_edits_required", "—")), "个多点架次"),
+    ]
+    kpi(fig.add_subplot(gs[1, 0]), "问题四 · 分区配置", q4_items)
 
     ax = fig.add_subplot(gs[1, 1:])
     names = ["总能耗\n(kWh)", "完工时间\n(h)", "架次数"]

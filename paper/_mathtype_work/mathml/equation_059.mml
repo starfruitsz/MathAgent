@@ -1,0 +1,44 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mml:math xmlns:mml="http://www.w3.org/1998/Math/MathML" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">
+  <mml:mrow>
+    <mml:mo stretchy="false">∑</mml:mo>
+    <mml:mrow/>
+  </mml:mrow>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:msub>
+    <mml:mrow>
+      <mml:mi>m</mml:mi>
+    </mml:mrow>
+    <mml:mrow>
+      <mml:mi>b</mml:mi>
+    </mml:mrow>
+  </mml:msub>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:mo>≤</mml:mo>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:msup>
+    <mml:mrow>
+      <mml:msub>
+        <mml:mrow>
+          <mml:mi>q</mml:mi>
+        </mml:mrow>
+        <mml:mrow>
+          <mml:mi mathvariant="normal">m</mml:mi>
+          <mml:mi mathvariant="normal">a</mml:mi>
+          <mml:mi mathvariant="normal">x</mml:mi>
+        </mml:mrow>
+      </mml:msub>
+    </mml:mrow>
+    <mml:mrow>
+      <mml:mi>s</mml:mi>
+      <mml:mi>a</mml:mi>
+      <mml:mi>f</mml:mi>
+      <mml:mi>e</mml:mi>
+    </mml:mrow>
+  </mml:msup>
+  <mml:mo>(</mml:mo>
+  <mml:mi>g</mml:mi>
+  <mml:mo>,</mml:mo>
+  <mml:mi>i</mml:mi>
+  <mml:mo>)</mml:mo>
+</mml:math>

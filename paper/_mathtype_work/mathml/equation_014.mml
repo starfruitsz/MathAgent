@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mml:math xmlns:mml="http://www.w3.org/1998/Math/MathML" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">
+  <mml:msub>
+    <mml:mrow>
+      <mml:mi>L</mml:mi>
+    </mml:mrow>
+    <mml:mrow>
+      <mml:mi mathvariant="normal">F</mml:mi>
+      <mml:mi mathvariant="normal">S</mml:mi>
+      <mml:mi mathvariant="normal">P</mml:mi>
+      <mml:mi mathvariant="normal">L</mml:mi>
+    </mml:mrow>
+  </mml:msub>
+</mml:math>

@@ -1,0 +1,73 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mml:math xmlns:mml="http://www.w3.org/1998/Math/MathML" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">
+  <mml:msub>
+    <mml:mrow>
+      <mml:msup>
+        <mml:mrow>
+          <mml:mi>E</mml:mi>
+        </mml:mrow>
+        <mml:mrow>
+          <mml:mi>h</mml:mi>
+        </mml:mrow>
+      </mml:msup>
+    </mml:mrow>
+    <mml:mrow>
+      <mml:mi>i</mml:mi>
+    </mml:mrow>
+  </mml:msub>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:mo>=</mml:mo>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:mfrac>
+    <mml:mrow>
+      <mml:msub>
+        <mml:mrow>
+          <mml:mi>d</mml:mi>
+        </mml:mrow>
+        <mml:mrow>
+          <mml:mi>i</mml:mi>
+        </mml:mrow>
+      </mml:msub>
+    </mml:mrow>
+    <mml:mrow>
+      <mml:msub>
+        <mml:mrow>
+          <mml:mi>L</mml:mi>
+        </mml:mrow>
+        <mml:mrow>
+          <mml:mi>g</mml:mi>
+        </mml:mrow>
+      </mml:msub>
+      <mml:msub>
+        <mml:mrow>
+          <mml:mo>(</mml:mo>
+          <mml:mi>q</mml:mi>
+        </mml:mrow>
+        <mml:mrow>
+          <mml:mi>i</mml:mi>
+        </mml:mrow>
+      </mml:msub>
+      <mml:mo>)</mml:mo>
+    </mml:mrow>
+  </mml:mfrac>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:mo>·</mml:mo>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:msub>
+    <mml:mrow>
+      <mml:msup>
+        <mml:mrow>
+          <mml:mi>E</mml:mi>
+        </mml:mrow>
+        <mml:mrow>
+          <mml:mi>u</mml:mi>
+          <mml:mi>s</mml:mi>
+          <mml:mi>e</mml:mi>
+        </mml:mrow>
+      </mml:msup>
+    </mml:mrow>
+    <mml:mrow>
+      <mml:mi>g</mml:mi>
+    </mml:mrow>
+  </mml:msub>
+</mml:math>

@@ -1,0 +1,80 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mml:math xmlns:mml="http://www.w3.org/1998/Math/MathML" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">
+  <mml:mo>∀</mml:mo>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:mi>m</mml:mi>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:mo>:</mml:mo>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:mrow>
+    <mml:munder>
+      <mml:mo stretchy="false">∑</mml:mo>
+      <mml:mrow>
+        <mml:mi>k</mml:mi>
+        <mml:mi mathvariant="normal"> </mml:mi>
+        <mml:mo>≥</mml:mo>
+        <mml:mi mathvariant="normal"> </mml:mi>
+        <mml:mi>m</mml:mi>
+      </mml:mrow>
+    </mml:munder>
+    <mml:mrow/>
+  </mml:mrow>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:msub>
+    <mml:mrow>
+      <mml:mi>m</mml:mi>
+    </mml:mrow>
+    <mml:mrow>
+      <mml:mi>k</mml:mi>
+    </mml:mrow>
+  </mml:msub>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:mo>≤</mml:mo>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:msub>
+    <mml:mrow>
+      <mml:mi>Q</mml:mi>
+    </mml:mrow>
+    <mml:mrow>
+      <mml:mi>g</mml:mi>
+    </mml:mrow>
+  </mml:msub>
+  <mml:mo>,</mml:mo>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:mrow>
+    <mml:munder>
+      <mml:mo stretchy="false">∑</mml:mo>
+      <mml:mrow>
+        <mml:mi>k</mml:mi>
+        <mml:mi mathvariant="normal"> </mml:mi>
+        <mml:mo>≥</mml:mo>
+        <mml:mi mathvariant="normal"> </mml:mi>
+        <mml:mi>m</mml:mi>
+      </mml:mrow>
+    </mml:munder>
+    <mml:mrow/>
+  </mml:mrow>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:msub>
+    <mml:mrow>
+      <mml:mi>v</mml:mi>
+    </mml:mrow>
+    <mml:mrow>
+      <mml:mi>k</mml:mi>
+    </mml:mrow>
+  </mml:msub>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:mo>≤</mml:mo>
+  <mml:mi mathvariant="normal"> </mml:mi>
+  <mml:msub>
+    <mml:mrow>
+      <mml:mi>V</mml:mi>
+    </mml:mrow>
+    <mml:mrow>
+      <mml:mi>g</mml:mi>
+    </mml:mrow>
+  </mml:msub>
+</mml:math>

@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import re
+import tempfile
 from pathlib import Path
 
 # ---------------------------------------------------------------- 符号表
@@ -300,6 +301,18 @@ def set_run_math(run, expr: str) -> None:
 WIN_OMML_XSL = Path(r"C:\Program Files\Microsoft Office\root\Office16\OMML2MML.XSL")
 """Microsoft Office 自带的 OMML→MathML 样式表（MathType 转换的前置步骤）。"""
 
+PREVIEW_PT_PER_PX = 0.23
+"""公式预览图的显示比例（点/像素）。
+
+预览图按 72 px 字号、`--force-device-scale-factor=1` 渲染，量测得到的换算关系为
+**1 pt 字号 ≈ 4.1 px**（大写字母高约 55 px → 12 pt 字号）。因此：
+
+  · 需要与 12 pt 正文相称的行内公式，其"基字高"应约 49 px → 0.23 pt/px；
+  · 在 300 dpi 的成品 PDF 上实测：正文行墨迹高 11.5 pt，行内公式带 12 pt，二者相称。
+
+标定过程见 `scripts/diag/line_heights.py`（逐行量测）与 `scripts/diag/mathtype_scale.py`。
+"""
+
 BROWSER_CANDIDATES = (
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
     r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
@@ -326,6 +339,173 @@ def find_browser() -> Path | None:
     return None
 
 
+# ---------------------------------------------------------------- 预览图重绘
+
+_HTML_TMPL = """<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  html, body {{ margin: 0; padding: 0; background: #fff; }}
+  .box {{ display: inline-flex; align-items: center; justify-content: center;
+          padding: 30px; background: #fff; }}
+  math {{ font-family: "Cambria Math", "STIX Two Math", "Times New Roman", serif;
+          font-size: {font_px}px; math-style: normal; }}
+</style></head>
+<body><div class="box">{mathml}</div></body></html>
+"""
+
+
+def _to_html_mathml(mml_text: str) -> str:
+    """`mml:math` → `math`（去掉前缀与 XML 声明），并压掉多余空白。
+
+    ★ 关键：**HTML 解析器不做命名空间解析**。形如 `mml:math` 的标签在 HTML 中
+    会被当作"未知内联元素"，其内容退化为一行普通文字（上下标、分式全部丢失）。
+    必须去掉 `mml:` 前缀、让根元素就叫 `math`，浏览器才会按 MathML Core 排版。
+    """
+    import re as _re
+
+    t = mml_text
+    t = _re.sub(r"<\?xml[^>]*\?>", "", t)
+    t = _re.sub(r'\s+xmlns:mml="[^"]*"', "", t)
+    t = _re.sub(r"\bmml:", "", t)
+    # 压掉 pretty-print 引入的缩进/换行，避免在 <mi> 里产生多余空格
+    t = _re.sub(r">\s+<", "><", t)
+    return t.strip()
+
+
+def render_previews(
+    mathml_dir: Path,
+    preview_dir: Path,
+    browser: Path | None = None,
+    font_px: int = 72,
+    window: tuple[int, int] = (6000, 1200),
+    padding_px: int = 6,
+) -> int:
+    """用浏览器把 MathML 渲染成**正确排版**的预览图（覆盖库生成的降级版本）。
+
+    背景：`docx-equation` 把 `mml:math` 原样塞进 HTML，Chrome/Edge 会当成未知元素，
+    渲染结果是"一行普通文字"（上下标、分式、大算符全部丢失）。这里改为
+    去前缀后渲染，并用 `--force-device-scale-factor=1` + 高窗口宽度保证长公式不被裁断。
+
+    返回成功渲染的图片数。
+    """
+    import shutil
+    import subprocess
+    import tempfile
+
+    from PIL import Image
+
+    browser = browser or find_browser()
+    if browser is None:
+        raise FileNotFoundError("未找到 Chromium 内核浏览器（Chrome / Edge），无法渲染公式预览图")
+
+    files = sorted(mathml_dir.glob("equation_*.mml"))
+    if not files:
+        raise FileNotFoundError(f"未找到 MathML 文件：{mathml_dir}")
+    preview_dir.mkdir(parents=True, exist_ok=True)
+
+    tmp = Path(tempfile.mkdtemp(prefix="eq_preview_"))
+    n = 0
+    try:
+        for src in files:
+            html = tmp / f"{src.stem}.html"
+            html.write_text(
+                _HTML_TMPL.format(font_px=font_px,
+                                  mathml=_to_html_mathml(src.read_text(encoding="utf-8"))),
+                encoding="utf-8")
+            raw = tmp / f"{src.stem}.raw.png"
+            subprocess.run(
+                [str(browser), "--headless=new", "--disable-gpu", "--hide-scrollbars",
+                 "--force-device-scale-factor=1",
+                 f"--window-size={window[0]},{window[1]}",
+                 f"--screenshot={raw}", html.resolve().as_uri()],
+                check=True, capture_output=True, timeout=180)
+            _crop_png(raw, preview_dir / f"{src.stem}.png", padding_px)
+            n += 1
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return n
+
+
+def _crop_png(source: Path, target: Path, padding_px: int = 6) -> None:
+    """裁掉白边（保留少量内边距），使图片尺寸即公式墨迹尺寸。"""
+    from PIL import Image, ImageChops
+
+    image = Image.open(source).convert("RGB")
+    white = Image.new("RGB", image.size, "white")
+    diff = ImageChops.difference(image, white)
+    mask = diff.convert("L").point(lambda v: 255 if v > 12 else 0)
+    bbox = mask.getbbox()
+    if bbox is None:
+        image.save(target)
+        return
+    box = (max(0, bbox[0] - padding_px), max(0, bbox[1] - padding_px),
+           min(image.width, bbox[2] + padding_px), min(image.height, bbox[3] + padding_px))
+    image.crop(box).save(target)
+
+
+def reembed_previews(docx: Path, preview_dir: Path) -> int:
+    """把重绘后的预览图写回 docx，并按新尺寸修正显示宽高与 `w:dxaOrig/dyaOrig`。"""
+    import shutil
+    import zipfile
+
+    import numpy as np
+    from PIL import Image
+    from lxml import etree
+
+    W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    V = "urn:schemas-microsoft-com:vml"
+    A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+    EMU_PT = 12700
+
+    def q(tag: str) -> str:
+        p, l = tag.split(":")
+        ns = {"w": W, "v": V, "a": A}[p]
+        return f"{{{ns}}}{l}"
+
+    tmp_out = docx.with_name(docx.stem + "_reprev.docx")
+    images: dict[str, bytes] = {}
+    with zipfile.ZipFile(docx) as z:
+        doc_xml = z.read("word/document.xml")
+        root = etree.fromstring(doc_xml)
+        other = {i.filename: z.read(i.filename) for i in z.infolist()
+                 if i.filename != "word/document.xml"}
+
+    shapes = root.findall(f".//{q('v:shape')}")
+    if not shapes:
+        return 0
+
+    for idx, shape in enumerate(shapes, 1):
+        img_path = preview_dir / f"equation_{idx:03d}.png"
+        if not img_path.exists():
+            continue
+        w_px, h_px = Image.open(img_path).size
+        w_pt, h_pt = w_px * PREVIEW_PT_PER_PX, h_px * PREVIEW_PT_PER_PX
+        shape.set("style", f"width:{w_pt:.1f}pt;height:{h_pt:.1f}pt")
+        a_el = shape.find(f".//{q('a:ext')}")
+        if a_el is not None:
+            a_el.set("cx", str(int(w_pt * EMU_PT)))
+            a_el.set("cy", str(int(h_pt * EMU_PT)))
+        obj = shape.getparent()
+        obj.set(q("w:dxaOrig"), str(int(w_pt * 20)))
+        obj.set(q("w:dyaOrig"), str(int(h_pt * 20)))
+        images[f"equation_{idx:03d}.png"] = img_path.read_bytes()
+
+    if not images:
+        return 0
+
+    # 覆盖 word/media/mathtype_preview_XXX.png（按公式序号一一对应）
+    for name, data in images.items():
+        other[f"word/media/mathtype_preview_{name.replace('equation_', '')}"] = data
+
+    with zipfile.ZipFile(tmp_out, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("word/document.xml", etree.tostring(
+            root, xml_declaration=True, encoding="UTF-8", standalone=True))
+        for name, data in other.items():
+            z.writestr(name, data)
+    shutil.move(str(tmp_out), str(docx))
+    return len(images)
+
+
 def convert_to_mathtype(
     src: Path,
     dst: Path,
@@ -333,7 +513,7 @@ def convert_to_mathtype(
     mathtype_version: str = "DSMT4",
     work_dir: Path | None = None,
     browser: Path | None = None,
-    preview_pt_per_px: float = 0.32,
+    preview_pt_per_px: float = PREVIEW_PT_PER_PX,
     inline_height_pt: float = 12.5,
     display_height_pt: float = 21.0,
     max_width_pt: float = 380.0,
@@ -341,14 +521,19 @@ def convert_to_mathtype(
     """把 docx 中的 OMML 公式批量转换为 **MathType 原生公式对象**。
 
     依赖 `docx-equation`（MIT 许可证）。该库通过 OMML→MathML→MTEF 的链路
-    生成 `Equation.DSMT4` OLE 对象，并保留 PNG 预览图用于显示与打印，
-    因此即使阅读环境没有 MathType 也能正常显示公式。
+    生成 `Equation.DSMT4` OLE 对象 + PNG 预览图（预览图保证无 MathType
+    的环境也能正常显示与打印公式）。
 
-    `preview_pt_per_px` 决定预览图在文档中的显示尺寸：库默认 0.15 会使公式
-    比 12 pt 正文偏小；经标定取 0.19，使行内公式的大小与正文协调。
+    ★ 该库的预览图渲染有缺陷：它把 `mml:math` 原样嵌入 HTML，而 **HTML 解析器
+    不做命名空间解析**，`mml:math` 会被当成未知内联元素，渲染成"一行普通文字"
+    （上下标、分式、大算符全部丢失）。因此这里在转换之后**用正确的方式重绘
+    预览图并写回 docx**，使公式排版与 MathType 的呈现一致。
 
     返回转换的公式数量；失败时抛异常（不静默跳过）。
     """
+    import shutil
+    import zipfile
+
     from docx_equation import convert_omml_docx_to_mathtype
     from docx_equation.shared import mathml as _mathml
 
@@ -361,16 +546,29 @@ def convert_to_mathtype(
 
     # 该库只按 PATH 名查找浏览器，找不到 Windows 默认安装路径下的 Edge，
     # 因此这里显式定位并注入；不改动第三方库源码。
-    if browser is None:
-        browser = find_browser()
-        if browser is not None:
-            _mathml._find_chrome = lambda *_a, **_k: Path(browser)  # noqa: SLF001
+    browser = browser or find_browser()
+    if browser is not None:
+        _mathml._find_chrome = lambda *_a, **_k: Path(browser)  # noqa: SLF001
 
-    return int(convert_omml_docx_to_mathtype(
-        str(src), str(dst), work_dir=str(work_dir) if work_dir else None,
-        omml2mathml_xsl=str(xsl), mathtype_version=mathtype_version,
-        preview_pt_per_px=preview_pt_per_px,
-        inline_height_pt=inline_height_pt,
-        display_height_pt=display_height_pt,
-        max_width_pt=max_width_pt,
-    ))
+    work = Path(work_dir) if work_dir else Path(tempfile.mkdtemp(prefix="eq_convert_"))
+    work.mkdir(parents=True, exist_ok=True)
+    keep = work_dir is not None
+    try:
+        n = int(convert_omml_docx_to_mathtype(
+            str(src), str(dst), work_dir=str(work),
+            omml2mathml_xsl=str(xsl), mathtype_version=mathtype_version,
+            preview_pt_per_px=preview_pt_per_px,
+            inline_height_pt=inline_height_pt,
+            display_height_pt=display_height_pt,
+            max_width_pt=max_width_pt,
+        ))
+        # ★ 重绘预览图（修正上下标/分式丢失），并按新尺寸写回 docx
+        mathml_dir = work / "mathml"
+        preview_dir = work / "preview_png"
+        if browser is not None and mathml_dir.exists():
+            render_previews(mathml_dir, preview_dir, browser=browser)
+            reembed_previews(dst, preview_dir)
+    finally:
+        if not keep:
+            shutil.rmtree(work, ignore_errors=True)
+    return n

@@ -90,9 +90,13 @@
 | 浏览器（渲染预览图） | Microsoft Edge（Chromium 内核） | `docx-equation` 需要 Chromium 渲染 MathML；库只按 PATH 名查找，Windows 默认安装路径需由本仓库显式注入（见 `equations.find_browser()`） |
 | MathType 本体 | MathType 9+（`C:\Program Files (x86)\MathType\MathType.exe`） | 阅读/编辑公式对象；`ProgID = Equation.DSMT4` |
 
-**参数标定**：预览图缩放 `preview_pt_per_px = 0.32`。
-标定过程与依据见 `scripts/diag/mathtype_scale.py`（量测公式行与正文行的墨迹高度比），
-使行内公式字高与 12 pt 正文协调。
+**参数标定**：预览图缩放 `preview_pt_per_px = 0.23`。
+标定过程与依据见 `scripts/diag/line_heights.py`（逐行量测墨迹高度，300 dpi）：
+12 pt 字号的公式基字高约 49 px → 0.23 pt/px，使行内公式与正文相称。
+
+> ⚠️ **该库的预览图渲染有缺陷（必须修正）**：它把 `mml:math` 原样嵌入 HTML，
+> 而 HTML 解析器不做命名空间解析，公式会退化成"一行普通文字"（上下标/分式全丢）。
+> 本仓库在转换后用 `equations.render_previews()` + `reembed_previews()` 重绘并写回 docx。
 
 **合规说明**：只使用 **MIT** 许可的 `docx-equation`。另外调研过的
 `biyu0608/mathtype-word-equations-skill` 为 **AGPL-3.0**，

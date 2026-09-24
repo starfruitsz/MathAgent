@@ -134,8 +134,22 @@ def main() -> int:
         print(f"  o:OLEObject 元素                     {n_ole}")
         print(f"     · 位于表格内                      {n_ole_in_tbl}")
         print(f"     · 位于正文段落                    {n_ole - n_ole_in_tbl}")
-        print(f"  预览图 (mathtype_preview_*.png)      "
-              f"{len([n for n in zipfile.ZipFile(DOCX).namelist() if 'mathtype_preview' in n])}")
+        # ★ 预览图健全性检查：若所有公式高度相同（尤其是只有一个高度值），说明
+        #   MathML 被当成普通文字渲染，上下标/分式全部丢失（曾经踩过这个坑）。
+        from PIL import Image
+        import io as _io
+
+        with zipfile.ZipFile(DOCX) as z:
+            pngs = sorted(n for n in z.namelist() if "mathtype_preview" in n)
+            hs = [Image.open(_io.BytesIO(z.read(n))).size[1] for n in pngs]
+        print(f"  预览图                               {len(pngs)} 张，"
+              f"高 {min(hs)}~{max(hs)} px")
+        if len(set(hs)) <= 2:
+            ok = False
+            print(f"  ⚠️  预览图高度几乎全部相同（{sorted(set(hs))}）——"
+                  f"公式很可能被渲染成了普通文字（上下标/分式丢失）")
+        elif max(hs) < 2.2 * min(hs):
+            print("  ⚠️  预览图高度差异偏小，建议抽查确认分式与上下标是否正常")
     print(f"  m:oMath（OMML 回退/未转换）          {n_omml_total}")
     if n_dsmt == 0 and n_omml_total == 0:
         ok = False

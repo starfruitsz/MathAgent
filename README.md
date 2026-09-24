@@ -19,7 +19,7 @@
 | **P2 / Q2** 异构多点多架次调度 | ✅ 完成 | 35 架次 / 83.01 kWh / 完工 587 min；硬约束全部通过 |
 | **P3 / Q3** 通信约束下运输与中继联合调度 | ✅ 完成 | 30 个中继架次 / **29-29 全程通信覆盖** / 总能耗 99.68 kWh |
 | **P4 / Q4** 任务分区与资源配置 | ✅ 完成 | ★ **按规则不存在合法 2/3 组分区**；给出桥接架次与最小改动方案 |
-| **P5** 论文与 Word 生成 | ✅ 完成 | **53 页论文**（24 图 / 28 表 / **79 个 MathType 公式** / 1.9 万字），`paper/` 下含 docx + PDF + 分目录图表备份 |
+| **P5** 论文与 Word 生成 | ✅ 完成 | **57 页论文**（24 图 / 28 表 / **79 个 MathType 公式** / 1.9 万字），`paper/` 下含 docx + PDF + 分目录图表备份 |
 | **P6** 排版整改（MathType / 三线表 / 分页 / 图表同页） | ✅ 完成 | 见「一·六 排版规范」 |
 
 **环境**：Python 3.13.7 / Windows 11 / 24 核；依赖已锁定（`requirements.txt`），`check_env.py` 返回 `status: ok`。
@@ -31,7 +31,7 @@
 
 | 文件 | 说明 |
 |---|---|
-| `paper/山区洪涝灾害下无人机运输与通信协同优化_论文.docx` | **正文 Word**（53 页，符合 50~100 页要求；公式为 MathType 对象，可双击编辑） |
+| `paper/山区洪涝灾害下无人机运输与通信协同优化_论文.docx` | **正文 Word**（57 页，符合 50~100 页要求；公式为 MathType 对象，可双击编辑） |
 | `paper/山区洪涝灾害下无人机运输与通信协同优化_论文.pdf` | 同内容 PDF（防环境差异，便于送审） |
 | `paper/论文体量报告.json` | 页数/字数/表格/图片统计（`scripts/check_paper.py` 生成） |
 | `paper/chart_manifest.csv` | 全部图表的编号、标题、章节与文件清单（24 图 + 32 表） |
@@ -68,13 +68,33 @@ python scripts\verify_paper.py       # 一键回归：结构自检 + 页数核�
 其它配套：表头中文化并把单位渲染为行内公式（如"最大安全载荷 / $\mathrm{kg}$"）、
 符号表改为参考文稿2 的双栏版式、插图内部**不再重复写图号**（避免同一张图两个编号）。
 
+### ★ 公式预览图的坑（决定公式"长得对不对"）
+
+`docx-equation` 生成 `Equation.DSMT4` OLE 对象**同时**生成 PNG 预览图；
+Word 与 PDF 实际显示的是**预览图**。该库原始的预览图渲染是**错的**：
+
+> 它把 OMML2MML 产出的 `mml:math` **原样**塞进 HTML。而 **HTML 解析器不做
+> 命名空间解析**，`mml:math` 被当作"未知内联元素"，于是整条公式退化成
+> **一行普通文字**——上下标、分式、大算符全部丢失（看起来像 `Lg(q) = Lg0 - ...`）。
+
+本仓库的处理：转换完成后**用正确方式重绘预览图并写回 docx**
+（`equations.render_previews()` + `equations.reembed_previews()`）：
+① 去掉 `mml:` 前缀、让根元素就叫 `math`；② `--force-device-scale-factor=1`
+渲染并按新尺寸修正 `v:shape@style` 与 `a:ext`；③ 显示比例按量测标定为
+**0.23 pt/px**（12 pt 字号的公式基字高约 49 px）。
+
+`check_docx_structure.py` 会检查预览图高度分布：若所有公式高度几乎相同，
+即说明又退化成了"普通文字"，会直接报错。
+
 **排版相关自检工具**：
 
 ```powershell
-python scripts\check_docx_structure.py   # 分页/三线表/公式对象/图表同页 结构自检（不依赖 Word）
+python scripts\check_docx_structure.py   # 分页/三线表/公式对象/预览图健全性/图表同页（不依赖 Word）
 python scripts\check_pagination.py       # 逐页量测页尾留白，找排版异常页
 python scripts\render_pdf_pages.py 13 14 # 渲染指定页为 PNG，供人工核对
 python scripts\smoke_mathtype.py         # MathType 链路冒烟测试（含 Word 打开校验）
+python scripts\diag\line_heights.py 15   # 逐行量测墨迹高度（校准公式字号用）
+python scripts\diag\dump_previews.py 6   # 导出公式预览图拼版，肉眼核对上下标/分式
 ```
 
 > ⚠️ **踩过的坑（已修复，勿回退）**：

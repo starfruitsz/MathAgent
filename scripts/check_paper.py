@@ -16,6 +16,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -28,6 +29,19 @@ WD_STAT_WORDS = 0
 WD_STAT_PAGES = 2
 WD_STAT_CHARS = 3
 WD_FORMAT_PDF = 17
+
+
+def _retry(fn, *a, tries: int = 15, delay: float = 2.0, **kw):
+    """Word 忙于加载 MathType OLE 对象时会抛"调用被拒绝"(-2147418111)，退避重试。"""
+    for i in range(tries):
+        try:
+            return fn(*a, **kw)
+        except Exception as exc:  # noqa: BLE001
+            if "-2147418111" not in str(exc):
+                raise
+            if i == tries - 1:
+                raise
+            time.sleep(delay)
 
 
 def main() -> int:
@@ -51,38 +65,59 @@ def main() -> int:
         return 1
 
     word = win32.gencache.EnsureDispatch("Word.Application")
+    # ★ 含 71 个 MathType OLE 的文档必须让 Word 完成真实排版。
+    #   实测：Visible=False + ReadOnly=True 最稳；设 Visible=True 会让
+    #   Word 尝试激活 OLE 服务器，反而使 COM 调用被拒（-2147418111）。
     word.Visible = False
+    word.DisplayAlerts = 0
     rep: dict = {}
     pdf_ok = False
     try:
-        doc = word.Documents.Open(str(DOCX), ReadOnly=False)
+        doc = _retry(word.Documents.Open, str(DOCX), ReadOnly=True)
         try:
-            doc.Fields.Update()
-            for toc in doc.TablesOfContents:
-                toc.Update()
-            doc.Repaginate()
+            time.sleep(2.0)
+            # ★ 顺序很关键：先做一次统计（触发 Word 完成首轮排版），
+            #   再 Repaginate。反过来在含大量 OLE 对象时会被拒（-2147418111）。
+            pages = int(_retry(doc.ComputeStatistics, WD_STAT_PAGES))
+            _retry(doc.Repaginate)
+            pages = int(_retry(doc.ComputeStatistics, WD_STAT_PAGES))
             rep = {
                 "文件": DOCX.name,
                 "大小MB": round(DOCX.stat().st_size / 1024 / 1024, 2),
-                "页数": int(doc.ComputeStatistics(WD_STAT_PAGES)),
-                "字数": int(doc.ComputeStatistics(WD_STAT_WORDS)),
-                "字符数": int(doc.ComputeStatistics(WD_STAT_CHARS)),
-                "表格数": int(doc.Tables.Count),
-                "内嵌图片数": int(doc.InlineShapes.Count),
+                "页数": pages,
+                "字数": int(_retry(doc.ComputeStatistics, WD_STAT_WORDS)),
+                "字符数": int(_retry(doc.ComputeStatistics, WD_STAT_CHARS)),
+                "表格数": int(_retry(lambda: doc.Tables.Count)),
+                "内嵌对象数": int(_retry(lambda: doc.InlineShapes.Count)),
             }
-            doc.Save()
             # ★ 先导出 PDF，再关闭：SaveAs2 会把"当前文档"指向 PDF 导出物，
             #   若之后再用同一个 doc 引用 Save/Close 会抛出"对象已断开连接"。
+            if args.pdf and PDF.exists():
+                PDF.unlink()
             if args.pdf:
                 try:
-                    doc.SaveAs2(str(PDF), FileFormat=WD_FORMAT_PDF)
-                    pdf_ok = True
+                    _retry(doc.ExportAsFixedFormat, str(PDF), WD_FORMAT_PDF)
+                    pdf_ok = PDF.exists()
                 except Exception as e:  # noqa: BLE001
                     print(f"⚠️  PDF 导出失败（不影响页数统计）：{e}")
         finally:
-            doc.Close(SaveChanges=False)
+            try:
+                _retry(doc.Close, SaveChanges=False, tries=5, delay=2.0)
+            except Exception as e:  # noqa: BLE001
+                # 文档含大量 OLE 时 Close 偶尔被拒；此时强制结束 Word 即可，
+                # 统计与 PDF 均已取到，不影响结果。
+                print(f"（提示：文档 Close 被拒，将强制结束 Word：{str(e)[:60]}）")
     finally:
-        word.Quit()
+        try:
+            word.Quit()
+        except Exception:  # noqa: BLE001
+            pass
+        time.sleep(1.0)
+        # 兜底：若 COM 未能正常退出 Word，清理残留进程，避免影响后续构建
+        import subprocess
+
+        subprocess.run(["taskkill", "/F", "/IM", "WINWORD.EXE"],
+                       capture_output=True, check=False)
 
     if pdf_ok and PDF.exists():
         rep["PDF文件"] = PDF.name

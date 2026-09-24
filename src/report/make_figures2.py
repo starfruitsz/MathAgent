@@ -163,7 +163,8 @@ def fig_link_budget(D: dict) -> None:
                hatch="//", label="含 10 dB 遮挡")
     ax.set_ylabel("自由空间可达距离 (km)")
     ax.set_title("(c) 遮挡对可达距离的压缩"); ax.legend(fontsize=7.5)
-    fig.suptitle("图 19  通信链路预算与门限分析", y=1.03, fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle("图 19  通信链路预算与门限分析", y=1.03, fontsize=12, weight="bold")
     _save(fig, "f19_link_budget", "通信链路预算与门限分析", "总体分析")
 
     _tab(pd.DataFrame([
@@ -233,7 +234,8 @@ def fig_flight_profile(D: dict) -> None:
     ax.set_xticks(x); ax.set_xticklabels(labels)
     ax.set_ylabel("单程能耗 (kWh)")
     ax.set_title("(b) 满载单程能耗构成（O01→S015）"); ax.legend(fontsize=8)
-    fig.suptitle("图 20  飞行剖面与能耗构成", y=1.03, fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle("图 20  飞行剖面与能耗构成", y=1.03, fontsize=12, weight="bold")
     _save(fig, "f20_flight_profile", "飞行剖面与能耗构成", "总体分析")
 
 
@@ -295,8 +297,9 @@ def fig_verifier(D: dict) -> None:
     ax.set_ylabel("违规条数")
     ax.set_title("(b) 校验结果：仅剩时限类违规（已论证为物理必然）")
     ax.legend(fontsize=7.5)
-    fig.suptitle("图 21  独立可行性校验器：架构与校验结果", y=1.03,
-                 fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle("图 21  独立可行性校验器：架构与校验结果", y=1.03,
+#                  fontsize=12, weight="bold")
     _save(fig, "f21_verifier", "独立可行性校验器架构与结果", "模型检验")
 
 
@@ -367,7 +370,8 @@ def fig_sensitivity(D: dict) -> None:
     ax.set_xlabel("衰落裕量 M (dB)"); ax.set_ylabel("自由空间可达距离 (km)")
     ax.set_title("(d) 衰落裕量敏感性（M↑ → 门限↓ → 距离↓）")
     ax.legend(fontsize=8)
-    fig.suptitle("图 22  四类敏感性分析", y=1.0, fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle("图 22  四类敏感性分析", y=1.0, fontsize=12, weight="bold")
     fig.tight_layout()
     _save(fig, "f22_sensitivity", "四类敏感性分析", "模型检验")
 
@@ -422,7 +426,8 @@ def fig_model_params(D: dict) -> None:
                 ha="center", fontsize=8)
     ax.set_ylabel("相对量值（已缩放）")
     ax.set_title("(c) 中继无人机关键参数")
-    fig.suptitle("图 23  机型与中继参数一览", y=1.03, fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle("图 23  机型与中继参数一览", y=1.03, fontsize=12, weight="bold")
     _save(fig, "f23_model_params", "机型与中继参数一览", "总体分析")
     _tab(u, "t_uav_params", "三种运输机型参数", "总体分析")
     _tab(D["relay"], "t_relay_params", "中继无人机参数", "总体分析")
@@ -453,7 +458,8 @@ def fig_node_table(D: dict) -> None:
     ax.set_xlabel("地面海拔 (m)"); ax.set_ylabel("节点")
     ax.set_title("(b) 各节点地面海拔（红=调度中心）")
     ax.tick_params(axis="y", labelsize=7.5)
-    fig.suptitle("图 24  节点坐标与海拔分布", y=1.02, fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle("图 24  节点坐标与海拔分布", y=1.02, fontsize=12, weight="bold")
     _save(fig, "f24_nodes", "节点坐标与海拔分布", "总体分析")
     _tab(n, "t_nodes", "调度中心与服务区坐标及海拔", "总体分析")
 

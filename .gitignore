@@ -30,6 +30,14 @@ outputs/**/*.tmp
 # ---- 嵌套仓库（scripts/tools 下拉取的上游工具）----
 scripts/tools/*/.git/
 
+# ---- 论文生成过程的临时/中间产物 ----
+paper/_mathtype_work/          # MathType 转换中间件（mathml / preview / ole）
+paper/_mathtype_smoke/         # MathType 链路冒烟测试产物
+paper/_preview/                # PDF 页面预览图（人工检查排版留白）
+paper/_probe*.docx             # 诊断用副本
+paper/*_probe.pdf
+paper/~$*                      # Word 打开文档时留下的锁文件
+
 # ---- 编辑器/系统 ----
 .vscode/
 .idea/

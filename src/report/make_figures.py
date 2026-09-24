@@ -243,8 +243,9 @@ def fig_box_stats(D: dict) -> None:
     ax.barh(g["service_id"], g["总质量"], color=C["green"])
     ax.set_xlabel("总质量 (kg)"); ax.set_title("(c) 各服务区总需求")
     ax.invert_yaxis()
-    fig.suptitle("图 3  货箱数据特征（80 箱 / 758 kg / 2.011 m³）", y=1.03,
-                 fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle("图 3  货箱数据特征（80 箱 / 758 kg / 2.011 m³）", y=1.03,
+#                  fontsize=12, weight="bold")
     _save(fig, "f03_box_stats", "货箱质量/体积/时限统计", "总体分析")
     _tab(t, "t_box_by_type", "分类物资总量统计", "总体分析")
     _tab(g, "t_box_by_service", "各服务区物资需求", "总体分析")
@@ -290,7 +291,8 @@ def fig_q1_payload(D: dict) -> None:
     ax.set_xlabel("单向距离 (km)"); ax.set_ylabel("最大安全载荷 (kg)")
     ax.set_title("(c) 载荷随距离衰减（虚线=结构上限）")
     ax.legend(fontsize=8)
-    fig.suptitle("图 4  问题一：最大安全载荷计算结果", y=1.03, fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle("图 4  问题一：最大安全载荷计算结果", y=1.03, fontsize=12, weight="bold")
     _save(fig, "f04_q1_payload", "最大安全载荷热力图与生效约束", "问题一")
     _tab(p, "t_q1_payload", "3 机型 × 15 服务区最大安全载荷", "问题一")
 
@@ -324,8 +326,9 @@ def fig_q1_groups(D: dict) -> None:
                s=42, edgecolor="k", lw=0.5)
     ax.set_xlabel("往返时间 (min)"); ax.set_ylabel("架次能耗 (kWh)")
     ax.set_title("(c) 时间—能耗关系")
-    fig.suptitle(f"图 5  问题一：货箱组批方案（{len(g)} 架次）", y=1.03,
-                 fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle(f"图 5  问题一：货箱组批方案（{len(g)} 架次）", y=1.03,
+#                  fontsize=12, weight="bold")
     _save(fig, "f05_q1_groups", "货箱组批方案构成", "问题一")
     _tab(g, "t_q1_groups", "货箱组批方案明细（交付模板列序）", "问题一")
 
@@ -364,8 +367,9 @@ def fig_q1_strategy(D: dict) -> None:
     ax.set_xticks(x); ax.set_xticklabels(lb["服务区编号"], rotation=90, fontsize=7.5)
     ax.set_ylabel("架次数"); ax.set_title("(c) 逐区下界 vs 启发式（差距全为 0）")
     ax.legend(fontsize=8)
-    fig.suptitle("图 6  问题一：策略对比、Pareto 前沿与最优性证据", y=1.03,
-                 fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle("图 6  问题一：策略对比、Pareto 前沿与最优性证据", y=1.03,
+#                  fontsize=12, weight="bold")
     _save(fig, "f06_q1_strategy", "策略对比与 Pareto 前沿", "问题一")
     _tab(c, "t_q1_strategy", "各策略多目标对比", "问题一")
     _tab(lb, "t_q1_lowerbound", "逐服务区架次数下界与差距", "问题一")
@@ -414,8 +418,9 @@ def fig_q1_rho(D: dict) -> None:
     ax.axvline(0.20, color="k", ls="--", lw=1)
     ax.set_xlabel(r"$\rho_g$"); ax.set_ylabel("服务区×机型 组合数")
     ax.set_title("(c) 生效约束构成随 ρ 迁移"); ax.legend(fontsize=8, loc="center left")
-    fig.suptitle(r"图 7  问题一：返航安全余量 $\rho_g$ 敏感性分析", y=1.03,
-                 fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle(r"图 7  问题一：返航安全余量 $\rho_g$ 敏感性分析", y=1.03,
+#                  fontsize=12, weight="bold")
     _save(fig, "f07_q1_rho", "返航安全余量敏感性分析", "问题一")
     _tab(sw, "t_q1_rho_sweep", "ρ_g 扫描汇总", "问题一")
 
@@ -454,8 +459,9 @@ def fig_q2_gantt(D: dict) -> None:
     fig.colorbar(sc, ax=ax, label="访问服务区数")
     ax.set_xlabel("开始时刻 (h)"); ax.set_ylabel("架次能耗 (kWh)")
     ax.set_title("(b) 架次能耗随开工时刻分布")
-    fig.suptitle(f"图 8  问题二：运输调度甘特图（{len(s)} 架次 / 8 架实体机）",
-                 y=1.02, fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle(f"图 8  问题二：运输调度甘特图（{len(s)} 架次 / 8 架实体机）",
+#                  y=1.02, fontsize=12, weight="bold")
     _save(fig, "f08_q2_gantt", "运输调度甘特图", "问题二")
     _tab(s, "t_q2_sorties", "问题二运输架次明细（交付模板列序）", "问题二")
 
@@ -496,7 +502,8 @@ def fig_q2_timeliness(D: dict) -> None:
     ax.axvline(0, color="k", ls="--", lw=1.2)
     ax.set_xlabel("迟到量 (min，负值=提前)"); ax.set_ylabel("箱数")
     ax.set_title("(c) 迟到量分布")
-    fig.suptitle("图 9  问题二：物资时限达成分析", y=1.03, fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle("图 9  问题二：物资时限达成分析", y=1.03, fontsize=12, weight="bold")
     _save(fig, "f09_q2_timeliness", "物资时限达成分析", "问题二")
     _tab(tl, "t_q2_timeliness", "逐箱时限达成明细", "问题二")
 
@@ -526,7 +533,8 @@ def fig_q2_resources(D: dict) -> None:
            autopct="%1.1f%%", colors=[C[i] for i in tc.index],
            startangle=90, textprops={"fontsize": 9})
     ax.set_title("(c) 机型使用占比")
-    fig.suptitle("图 10  问题二：资源使用情况", y=1.03, fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle("图 10  问题二：资源使用情况", y=1.03, fontsize=12, weight="bold")
     _save(fig, "f10_q2_resources", "资源使用情况", "问题二")
     _tab(uu, "t_q2_uav_use", "实体无人机使用统计", "问题二")
     _tab(bu, "t_q2_battery_use", "共享电池周转明细", "问题二")
@@ -566,8 +574,9 @@ def fig_q3_diag(D: dict) -> None:
     fig.colorbar(sc, ax=ax, label="访问服务区数")
     ax.set_xlabel("直连可达比例 (%)"); ax.set_ylabel("中断占比 (%)")
     ax.set_title("(c) 直连可达性与中断的关系")
-    fig.suptitle("图 11  问题三：连续通信诊断（轨迹逐秒采样）", y=1.03,
-                 fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle("图 11  问题三：连续通信诊断（轨迹逐秒采样）", y=1.03,
+#                  fontsize=12, weight="bold")
     _save(fig, "f11_q3_diagnosis", "连续通信诊断", "问题三")
     _tab(d, "t_q3_diagnosis", "逐架次直连状态诊断", "问题三")
 
@@ -650,9 +659,10 @@ def fig_q3_coverage(D: dict) -> None:
     ax.set_xlabel("中继架次编号"); ax.set_ylabel("架次能耗 (kWh)")
     ax.set_title("(c) 各中继架次能耗")
     ax.tick_params(axis="x", rotation=90, labelsize=6); ax.legend(fontsize=8)
-    fig.suptitle(f"图 13  问题三：中继选址特征（{len(rs)} 架次 / "
-                 f"{rs['架次能耗（kWh）'].sum():.2f} kWh）", y=1.03,
-                 fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle(f"图 13  问题三：中继选址特征（{len(rs)} 架次 / "
+#                  f"{rs['架次能耗（kWh）'].sum():.2f} kWh）", y=1.03,
+#                  fontsize=12, weight="bold")
     _save(fig, "f13_q3_coverage", "中继选址特征", "问题三")
     _tab(pd.DataFrame({"指标": ["中继架次数", "总能耗(kWh)", "平均能耗(kWh)",
                                 "最长服务(min)", "最短服务(min)", "悬停海拔范围(m)"],
@@ -734,8 +744,9 @@ def fig_q4_graph(D: dict) -> None:
     ax.set_xlim(0, 1); ax.set_xticks([])
     ax.set_title("(b) 桥接架次（移除后即可断开连通）")
     ax.invert_yaxis()
-    fig.suptitle("图 15  问题四：原子单元（连通分量）分析", y=1.0,
-                 fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle("图 15  问题四：原子单元（连通分量）分析", y=1.0,
+#                  fontsize=12, weight="bold")
     _save(fig, "f15_q4_graph", "原子单元连通分量分析", "问题四")
     _tab(br, "t_q4_bridge", "桥接架次清单", "问题四")
     _tab(D["q4_units"], "t_q4_units", "原子单元（连通分量）", "问题四")
@@ -773,8 +784,9 @@ def fig_q4_compare(D: dict) -> None:
     ax.set_ylabel("组间工作量不均衡度")
     ax.set_title("(c) 组间均衡性（越小越好）")
     ax.tick_params(axis="x", rotation=16, labelsize=8)
-    fig.suptitle("图 16  问题四：分区方案多指标对比", y=1.03,
-                 fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle("图 16  问题四：分区方案多指标对比", y=1.03,
+#                  fontsize=12, weight="bold")
     _save(fig, "f16_q4_compare", "分区方案多指标对比", "问题四")
     _tab(c, "t_q4_compare", "分区方案对比", "问题四")
     _tab(g, "t_q4_gap", "逐方案逐类资源缺口", "问题四")
@@ -810,8 +822,9 @@ def fig_q4_detail(D: dict) -> None:
     ax.set_xlabel("任务组序号"); ax.set_ylabel("组工作量 (h)")
     ax.set_title("(b) 各组工作量分布")
     ax.legend(fontsize=8)
-    fig.suptitle("图 17  问题四：逐组资源配置与工作量", y=1.03,
-                 fontsize=12, weight="bold")
+    # 题注由论文 docx 统一生成，避免与正文编号冲突
+#     fig.suptitle("图 17  问题四：逐组资源配置与工作量", y=1.03,
+#                  fontsize=12, weight="bold")
     _save(fig, "f17_q4_detail", "逐组资源配置与工作量", "问题四")
     _tab(grp, "t_q4_group", "逐组资源与工作量明细", "问题四")
 

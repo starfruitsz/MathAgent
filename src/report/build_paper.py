@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -21,12 +22,13 @@ import pandas as pd
 from docx import Document
 from docx.enum.section import WD_SECTION
 from docx.enum.table import WD_TABLE_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
-from docx.shared import Cm, Inches, Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK, WD_TAB_ALIGNMENT
+from docx.oxml import OxmlElement, parse_xml
+from docx.oxml.ns import nsdecls, qn
+from docx.shared import Cm, Emu, Inches, Pt, RGBColor, Twips
 
 from src.common.config import REPO_ROOT
+from src.report import equations as EQM
 
 PAPER = REPO_ROOT / "paper"
 FIG = PAPER / "figures"
@@ -36,6 +38,8 @@ OUT = PAPER / "山区洪涝灾害下无人机运输与通信协同优化_论文.
 CN_FONT = "宋体"
 CN_HEI = "黑体"
 EN_FONT = "Times New Roman"
+
+TEXT_WIDTH_CM = 21.0 - 2.6 - 2.6  # A4 宽 − 左右页边距 = 15.8 cm
 
 
 # ================================================================ 样式
@@ -81,6 +85,13 @@ def setup(doc: Document) -> None:
         s.paragraph_format.space_after = Pt(6)
         s.paragraph_format.first_line_indent = Pt(0)
 
+    # ★ 修改要求 2：每一章（一级标题）必须另起新页。
+    #   直接写进 Heading 1 样式，比逐处插分页符更可靠（也便于目录/导航）。
+    doc.styles["Heading 1"].paragraph_format.page_break_before = True
+    doc.styles["Heading 1"].paragraph_format.keep_with_next = True
+    for lv in ("Heading 2", "Heading 3", "Heading 4"):
+        doc.styles[lv].paragraph_format.keep_with_next = True
+
 
 def _page_number_footer(doc: Document) -> None:
     for section in doc.sections:
@@ -96,35 +107,494 @@ def _page_number_footer(doc: Document) -> None:
         _set_font(run, 9)
 
 
-# ================================================================ 基础写入
+# ================================================================ 排版工具
 
-def H(doc, text, level=1, page_break=False):
-    if page_break:
-        doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
-    p = doc.add_heading("", level=level)
-    _set_font(p.add_run(text), {1: 16, 2: 14, 3: 12.5, 4: 12}[level],
+def _no_split(row) -> None:
+    """禁止表格行跨页断开。"""
+    trPr = row._tr.get_or_add_trPr()
+    if trPr.find(qn("w:cantSplit")) is None:
+        trPr.append(OxmlElement("w:cantSplit"))
+
+
+def _repeat_header(row) -> None:
+    """表头行跨页重复。"""
+    trPr = row._tr.get_or_add_trPr()
+    if trPr.find(qn("w:tblHeader")) is None:
+        trPr.append(OxmlElement("w:tblHeader"))
+
+
+def _cell_margin(tbl, top=40, bottom=40, left=80, right=80) -> None:
+    """单元格内边距（单位 twips，1 pt = 20 twips）。"""
+    tblPr = tbl._tbl.tblPr
+    mar = OxmlElement("w:tblCellMar")
+    for tag, val in (("top", top), ("left", left), ("bottom", bottom), ("right", right)):
+        e = OxmlElement(f"w:{tag}")
+        e.set(qn("w:w"), str(val)); e.set(qn("w:type"), "dxa")
+        mar.append(e)
+    tblPr.append(mar)
+
+
+def _three_line_borders(tbl, top_sz=12, mid_sz=6, bottom_sz=12) -> None:
+    """三线表边框：顶线、表头下中线、底线；**无竖线**（参照参考文稿2）。"""
+    tblPr = tbl._tbl.tblPr
+    old = tblPr.find(qn("w:tblBorders"))
+    if old is not None:
+        tblPr.remove(old)
+    xml = (
+        f'<w:tblBorders {nsdecls("w")}>'
+        f'<w:top w:val="single" w:sz="{top_sz}" w:space="0" w:color="000000"/>'
+        f'<w:bottom w:val="single" w:sz="{bottom_sz}" w:space="0" w:color="000000"/>'
+        f'<w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+        f'<w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+        f'<w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+        f'<w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
+        f'</w:tblBorders>'
+    )
+    tblPr.append(parse_xml(xml))
+    # 表格样式自带的边框优先级更高，必须清掉，否则竖线仍在
+    tbl.style = None
+
+
+def _header_bottom_rule(row, sz=6) -> None:
+    """给表头行的每个单元格加下框线（三线表的"中线"）。"""
+    for cell in row.cells:
+        tcPr = cell._tc.get_or_add_tcPr()
+        old = tcPr.find(qn("w:tcBorders"))
+        if old is not None:
+            tcPr.remove(old)
+        tcPr.append(parse_xml(
+            f'<w:tcBorders {nsdecls("w")}>'
+            f'<w:bottom w:val="single" w:sz="{sz}" w:space="0" w:color="000000"/>'
+            f'</w:tcBorders>'
+        ))
+
+
+def _est_len(s: str) -> float:
+    """估算单元格显示宽度（中日韩字符按 2、其余按 1）。
+
+    公式片段（`$...$`）先剥掉 `\\mathrm{}`、`\\cdot`、`^{-1}` 等命令再计宽，
+    否则 `$\\mathrm{m \\cdot s^{-1}}$` 会被高估十倍。
+    """
+    import re as _re
+
+    txt = s.replace("$", "")
+    txt = _re.sub(r"\\mathrm\{([^{}]*)\}", r"\1", txt)
+    txt = _re.sub(r"\\(?:cdot|times)", "·", txt)
+    txt = _re.sub(r"\^\{[^{}]*\}", "X", txt)
+    txt = _re.sub(r"[{}]", "", txt)
+    txt = txt.replace("\\,", "").replace("\\ ", " ")
+    txt = _re.sub(r"\\[A-Za-z]+", "X", txt)
+    n = 0.0
+    for ch in txt:
+        n += 2.0 if ("\u2e80" <= ch <= "\u9fff" or "\uff00" <= ch <= "\uffef") else 1.0
+    return max(n, 2.0)
+
+
+def _col_widths(tbl, headers: list[str], rows: list[list[str]],
+                total_cm: float = TEXT_WIDTH_CM, min_cm: float = 1.2,
+                power: float = 0.55) -> None:
+    """按内容自适应分配列宽。
+
+    等宽列会让中文表头逐字换行（列高暴增甚至跨页），因此按
+    "表头宽 + 该列内容宽" 估计所需宽度，再用幂函数压缩长短差异，
+    最后归一化到版心宽度，保证任何两列宽度比不超过约 4:1。
+    """
+    n = len(headers)
+    if n == 0:
+        return
+    est = []
+    for j, h in enumerate(headers):
+        w = _est_len(h)
+        for r in rows:
+            if j < len(r):
+                w = max(w, _est_len(r[j]))
+        est.append(max(w, 2.0))
+    raw = [e ** power for e in est]
+    tot = sum(raw) or 1.0
+    widths = [total_cm * r / tot for r in raw]
+
+    deficit = sum(max(0.0, min_cm - w) for w in widths)
+    if deficit > 0:
+        donors = [i for i, w in enumerate(widths) if w > min_cm * 1.5]
+        pool = sum(widths[i] - min_cm for i in donors) or 1.0
+        for i, w in enumerate(widths):
+            if w < min_cm:
+                widths[i] = min_cm
+            elif i in donors:
+                widths[i] = w - deficit * (w - min_cm) / pool
+    scale = total_cm / (sum(widths) or 1.0)
+    widths = [w * scale for w in widths]
+
+    tbl.autofit = False
+    tblPr = tbl._tbl.tblPr
+    old = tblPr.find(qn("w:tblW"))
+    if old is not None:
+        tblPr.remove(old)
+    tblW = OxmlElement("w:tblW")
+    tblW.set(qn("w:w"), str(int(Cm(total_cm).twips))); tblW.set(qn("w:type"), "dxa")
+    tblPr.append(tblW)
+    oldg = tblPr.find(qn("w:tblLayout"))
+    if oldg is not None:
+        tblPr.remove(oldg)
+    lay = OxmlElement("w:tblLayout"); lay.set(qn("w:type"), "fixed")
+    tblPr.append(lay)
+
+    grid = tbl._tbl.find(qn("w:tblGrid"))
+    if grid is not None:
+        for gc, w in zip(grid.findall(qn("w:gridCol")), widths):
+            # ★ 必须写成 twips：`int(Cm(w))` 得到的是 EMU（差 635 倍），
+            #   会让 Word 拿到荒谬的列宽而排版失败。
+            gc.set(qn("w:w"), str(int(Cm(w).twips)))
+    for row in tbl.rows:
+        for cell, w in zip(row.cells, widths):
+            cell.width = Cm(w)
+    _order_tblpr(tbl)
+
+
+_TBLPR_ORDER = [
+    "tblStyle", "tblpPr", "tblOverlap", "bidiVisual", "tblStyleRowBandSize",
+    "tblStyleColBandSize", "tblW", "jc", "tblCellSpacing", "tblInd",
+    "tblBorders", "shd", "tblLayout", "tblCellMar", "tblLook",
+    "tblCaption", "tblDescription", "tblPrChange",
+]
+_TBLPR_IDX = {name: i for i, name in enumerate(_TBLPR_ORDER)}
+
+
+def _local(tag: str) -> str:
+    return tag.split("}", 1)[-1] if "}" in tag else tag
+
+
+def _order_tblpr(tbl) -> None:
+    """按 CT_TblPrBase schema 顺序重排 `w:tblPr` 子元素。
+
+    Word 对 `w:tblPr` 的子元素顺序敏感：顺序错会被判为文档损坏，
+    表现为无法分页、无法导出 PDF（"无法准备用于导出的文档"）。
+    """
+    tblPr = tbl._tbl.tblPr
+    children = list(tblPr)
+    children.sort(key=lambda e: _TBLPR_IDX.get(_local(e.tag), len(_TBLPR_ORDER)))
+    for e in children:
+        tblPr.remove(e)
+    for e in children:
+        tblPr.append(e)
+
+
+# ---------------------------------------------------------------- 数值与表头格式
+
+# 列名 → (显示名, 单位或小数位, 显示精度说明)
+#   单位以 `$...$` 包裹 → 渲染为行内公式；否则原样输出
+COL_HINT: dict[str, tuple[str, str]] = {
+    "node_id": ("节点", ""), "kind": ("类型", ""), "lon": ("经度", r"$^\circ$"),
+    "lat": ("纬度", r"$^\circ$"), "ground_elev_m": ("地面高程", r"$\mathrm{m}$"),
+    "box_id": ("货箱", ""), "service_id": ("服务区", ""), "type": ("机型", ""),
+    "mass_kg": ("质量", r"$\mathrm{kg}$"), "volume_m3": ("体积", r"$\mathrm{m^3}$"),
+    "mass": ("质量", r"$\mathrm{kg}$"), "volume": ("体积", r"$\mathrm{m^3}$"),
+    "count": ("数量", ""), "n_boxes": ("箱数", ""), "boxes": ("货箱", ""),
+    "payload_bottleneck": ("生效约束", ""), "max_safe_payload_kg": ("最大安全载荷", r"$\mathrm{kg}$"),
+    "structure_limit_kg": ("结构上限", r"$\mathrm{kg}$"), "energy_limit_kg": ("能量反解上限", r"$\mathrm{kg}$"),
+    "empty_range_m": ("空载航程", r"$\mathrm{m}$"), "full_range_m": ("满载航程", r"$\mathrm{m}$"),
+    "usable_energy_kwh": ("可用能量", r"$\mathrm{kWh}$"), "max_volume_m3": ("舱容", r"$\mathrm{m^3}$"),
+    "cruise_speed_mps": ("巡航速度", r"$\mathrm{m \cdot s^{-1}}$"),
+    "climb_speed_mps": ("爬升速度", r"$\mathrm{m \cdot s^{-1}}$"),
+    "descent_speed_mps": ("下降速度", r"$\mathrm{m \cdot s^{-1}}$"),
+    "full_charge_min": ("满充时间", r"$\mathrm{min}$"), "uav_id": ("无人机", ""),
+    "uav_type": ("机型", ""), "battery_id": ("电池", ""), "battery_type": ("适配机型", ""),
+    "initial_soc": ("初始 SOC", "2"), "relay_id": ("中继机", ""),
+    "energy_id": ("能源组件", ""), "takeoff_mass_kg": ("起飞总质量", r"$\mathrm{kg}$"),
+    "cruise_power_kw": ("巡航功率", r"$\mathrm{kW}$"), "hover_power_kw": ("悬停功率", r"$\mathrm{kW}$"),
+    "comms_power_kw": ("通信附加功率", r"$\mathrm{kW}$"),
+    "max_hover_agl_m": ("悬停离地上限", r"$\mathrm{m}$"),
+    "sortie_id": ("架次", ""), "stop_seq": ("站点序", ""),
+    "arrive_s": ("到达时刻", r"$\mathrm{s}$"), "depart_s": ("离开时刻", r"$\mathrm{s}$"),
+    "start_time_s": ("开始时刻", r"$\mathrm{s}$"), "end_time_s": ("结束时刻", r"$\mathrm{s}$"),
+    "total_energy_kwh": ("总能耗", r"$\mathrm{kWh}$"), "energy_kwh": ("能耗", r"$\mathrm{kWh}$"),
+    "distance_m": ("距离", r"$\mathrm{m}$"), "duration_s": ("用时", r"$\mathrm{s}$"),
+    "makespan_h": ("完工时间", r"$\mathrm{h}$"), "makespan_s": ("完工时间", r"$\mathrm{s}$"),
+    "on_time": ("准时", ""), "deadline_s": ("时限", r"$\mathrm{s}$"),
+    "violation": ("违规", ""), "n_violations": ("违规数", ""),
+    "rho_g": (r"$\rho_{g}$", "2"), "n_sorties": ("架次数", ""),
+    "lower_bound": ("下界", ""), "gap": ("差距", ""), "ratio": ("比值", "3"),
+    "soc_end": ("结束 SOC", "3"), "relay_position_lon": ("悬停经度", r"$^\circ$"),
+    "relay_position_lat": ("悬停纬度", r"$^\circ$"),
+    "hover_alt_m": ("悬停海拔", r"$\mathrm{m}$"), "hover_agl_m": ("离地高度", r"$\mathrm{m}$"),
+    "n_covered": ("覆盖架次", ""), "n_need_relay": ("需保障架次", ""),
+    "coverage_rate": ("覆盖率", "3"), "group_id": ("组号", ""),
+    "n_uav": ("运输机", r"$\mathrm{架}$"), "n_battery": ("电池", r"$\mathrm{组}$"),
+    "n_relay": ("中继机", r"$\mathrm{架}$"), "n_energy": ("能源组件", r"$\mathrm{组}$"),
+    "total": ("合计", ""), "status": ("状态", ""), "note": ("说明", ""),
+    "path": ("文件路径", ""), "file": ("文件", ""), "chapter": ("章节", ""),
+    "caption": ("标题", ""), "section": ("章节", ""), "fig_id": ("编号", ""),
+    "tab_id": ("编号", ""), "kind_label": ("类别", ""), "q": ("问题", ""),
+    # 逐问指标表 / 下界表常见列
+    "rho": (r"$\rho_{g}$", ""), "feasible": ("可行", ""),
+    "n_infeasible_areas": ("不可行服务区数", ""), "strategy": ("策略", ""),
+    "types": ("机型构成", ""), "serial_total_time_s": ("累计作业时间", r"$\mathrm{s}$"),
+    "total_time_s": ("累计时间", r"$\mathrm{s}$"), "total_mass_kg": ("总质量", r"$\mathrm{kg}$"),
+    "total_volume_m3": ("总体积", r"$\mathrm{m^3}$"), "lb": ("下界", ""),
+    "n_stops": ("站点数", ""), "stops": ("站点序列", ""), "boxes_per_stop": ("逐站箱数", ""),
+    "load_kg": ("载荷", r"$\mathrm{kg}$"), "soc": ("SOC", "3"),
+    "start_s": ("开始", r"$\mathrm{s}$"), "finish_s": ("结束", r"$\mathrm{s}$"),
+    "wait_s": ("等待", r"$\mathrm{s}$"), "charge_s": ("充电", r"$\mathrm{s}$"),
+    "used_times": ("使用次数", ""), "n_used": ("使用次数", ""),
+    "index": ("序号", ""), "item": ("项目", ""), "value": ("数值", ""),
+    "参数": ("参数", ""), "数值": ("数值", ""), "指标": ("指标", ""),
+    "符号": ("符号", ""), "说明": ("说明", ""),
+    "链路": ("链路", ""), "双向门限(dB)": ("双向门限 / $\\mathrm{dB}$", ""),
+    "无遮挡可达(km)": ("无遮挡可达 / $\\mathrm{km}$", ""),
+    "含遮挡可达(km)": ("含遮挡可达 / $\\mathrm{km}$", ""),
+    "货箱编号": ("货箱编号", ""), "服务区": ("服务区", ""), "架次": ("架次", ""),
+    "首批保障": ("首批保障", ""), "首批截止（s）": ("首批截止 / $\\mathrm{s}$", ""),
+    "期望送达（s）": ("期望送达 / $\\mathrm{s}$", ""),
+    "实际交付（s）": ("实际交付 / $\\mathrm{s}$", ""),
+    "首批达标": ("首批达标", ""), "期望达标": ("期望达标", ""),
+    # 机型 / 电池 / 中继清单类英文列名
+    "code": ("编号", ""), "name": ("名称", ""),
+    "cruise_speed_mps": ("巡航速度", r"$\mathrm{m \cdot s^{-1}}$"),
+    "cruise_speed_ms": ("巡航速度", r"$\mathrm{m \cdot s^{-1}}$"),
+    "range_empty_m": ("空载航程", r"$\mathrm{m}$"),
+    "range_full_m": ("满载航程", r"$\mathrm{m}$"),
+    "prepare_time_s": ("准备时间", r"$\mathrm{s}$"),
+    "load_time_per_box_s": ("单箱装载时间", r"$\mathrm{s}$"),
+    "handover_base_s": ("交接基础时间", r"$\mathrm{s}$"),
+    "handover_per_box_s": ("逐箱交接时间", r"$\mathrm{s}$"),
+    "type_code": ("机型编号", ""), "n_battery_packs": ("配套电池组数", r"$\mathrm{组}$"),
+    "t_full_s": ("满充时间", r"$\mathrm{s}$"),
+    "initial_position": ("初始位置", ""), "op_height_offset_m": ("作业高度偏移", r"$\mathrm{m}$"),
+    "population": ("服务人口", r"$\mathrm{人}$"), "id": ("编号", ""),
+}
+
+# 英文列名 = 基本名 + 单位后缀；先查基名再拼单位，可覆盖绝大多数附件列
+BASE_HINT: dict[str, str] = {
+    "code": "编号", "name": "名称", "empty_mass": "空载质量", "payload": "载荷",
+    "max_payload": "最大载荷", "volume": "舱容", "cruise_speed": "巡航速度",
+    "climb_speed": "爬升速度", "descent_speed": "下降速度",
+    "range_empty": "空载航程", "range_full": "满载航程", "range": "航程",
+    "energy": "能量", "reserve_ratio": "返航安全余量", "prepare_time": "准备时间",
+    "box_load_time": "单箱装载时间", "load_time_per_box": "单箱装载时间",
+    "handover_base": "交接基础时间", "handover_per_box": "逐箱交接时间",
+    "climb_efficiency": "爬升效率", "descent_efficiency": "下降效率",
+    "comms_module_mass": "通信模块质量", "takeoff_mass": "起飞总质量",
+    "cruise_power": "巡航功率", "hover_power": "悬停功率", "comms_power": "通信附加功率",
+    "link_setup_time": "建链时间", "turnaround_time": "周转时间",
+    "max_hover_agl": "悬停离地上限", "n_battery_packs": "配套电池组数",
+    "t_full": "满充时间", "distance": "距离", "duration": "用时", "time": "时间",
+    "mass": "质量", "speed": "速度", "efficiency": "效率", "n": "数量",
+    "ground_elev": "地面高程", "op_height_offset": "作业高度偏移",
+    "cruise_alt": "巡航海拔", "hover_alt": "悬停海拔", "hover_agl": "离地高度",
+}
+
+UNIT_SUFFIX: dict[str, str] = {
+    "kg": r"$\mathrm{kg}$", "g": r"$\mathrm{g}$",
+    "m3": r"$\mathrm{m^3}$", "m": r"$\mathrm{m}$", "km": r"$\mathrm{km}$",
+    "s": r"$\mathrm{s}$", "min": r"$\mathrm{min}$", "h": r"$\mathrm{h}$",
+    "kwh": r"$\mathrm{kWh}$", "kw": r"$\mathrm{kW}$", "wh": r"$\mathrm{Wh}$",
+    "ms": r"$\mathrm{m \cdot s^{-1}}$", "mps": r"$\mathrm{m \cdot s^{-1}}$",
+    "db": r"$\mathrm{dB}$", "dbm": r"$\mathrm{dBm}$", "mhz": r"$\mathrm{MHz}$",
+}
+
+# 宽表（列数多）使用的紧凑表头：避免逐字换行把表撑高甚至跨页
+COMPACT_COL: dict[str, str] = {
+    "code": "编号", "name": "名称", "empty_mass_kg": "空机质量",
+    "max_payload_kg": "载荷", "volume_m3": "舱容",
+    "cruise_speed_ms": "巡航速度", "range_empty_m": "空载航程",
+    "range_full_m": "满载航程", "energy_kwh": "能量",
+    "reserve_ratio": "余量", "prepare_time_s": "准备",
+    "box_load_time_s": "装载", "handover_base_s": "交接",
+    "handover_per_box_s": "逐箱", "climb_speed_ms": "爬升速度",
+    "descent_speed_ms": "下降速度", "climb_efficiency": "爬升效率",
+    "descent_efficiency": "下降效率",
+    "服务区编号": "服务区", "机型编号": "机型", "架次编号": "架次",
+    "货箱编号列表": "货箱列表", "中继架次编号": "架次",
+    "中继无人机编号": "中继机", "能源组件编号": "能源组件",
+    "无人机编号": "无人机", "电池编号": "电池",
+    "访问服务区顺序": "访问顺序", "返回O01时刻（s）": "返回时刻",
+    "建链完成时刻（s）": "建链时刻", "服务结束时刻（s）": "服务结束",
+    "开始时刻（s）": "开始时刻", "架次能耗（kWh）": "能耗",
+    "实际交付（s）": "实际交付", "期望送达（s）": "期望送达",
+    "首批截止（s）": "首批截止", "最大组工作量h": "最大组工作量",
+}
+
+
+def _auto_font(ncol: int, base: float) -> float:
+    """列数多时自动缩小字号，保证表宽与表高可控。"""
+    if ncol >= 14:
+        return min(base, 7.0)
+    if ncol >= 11:
+        return min(base, 7.5)
+    if ncol >= 9:
+        return min(base, 8.0)
+    return base
+
+NUM_COLS_3 = {
+    "soc", "soc_start", "rate", "coverage", "fraction", "share", "utilization",
+    "imbalance", "mean", "std",
+}
+NUM_COLS_1 = {"elev", "capacity", "count", "n_", "num", "times", "usage"}
+
+UNIT_MATH: dict[str, str] = {
+    "kg": r"$\mathrm{kg}$", "g": r"$\mathrm{g}$",
+    "m": r"$\mathrm{m}$", "km": r"$\mathrm{km}$",
+    "m³": r"$\mathrm{m^3}$", "m3": r"$\mathrm{m^3}$",
+    "s": r"$\mathrm{s}$", "min": r"$\mathrm{min}$", "h": r"$\mathrm{h}$",
+    "kWh": r"$\mathrm{kWh}$", "kW": r"$\mathrm{kW}$", "Wh": r"$\mathrm{Wh}$",
+    "dB": r"$\mathrm{dB}$", "dBm": r"$\mathrm{dBm}$",
+    "MHz": r"$\mathrm{MHz}$", "m/s": r"$\mathrm{m \cdot s^{-1}}$",
+    "°": r"$^\circ$", "%": r"$\%$", "架": r"$\mathrm{架}$",
+    "组": r"$\mathrm{组}$", "台": r"$\mathrm{台}$",
+}
+
+INT_HINT = re.compile(
+    r"(^n_|_n$|_count$|count$|^n$|_id$|^id$|seq$|rank$|index$|^k$|boxes$|times$|"
+    r"on_time$|violation)", re.I)
+SCI_HINT = re.compile(r"(energy|kwh|power|loss|db|dist|range|mass|volume|payload)", re.I)
+
+
+def fmt_cell(v, col: str) -> str:
+    """按列名语义格式化单元格（整数不带小数点、大数用科学计数、比例定小数位）。"""
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        s = v.strip()
+        if s.lower() in ("nan", "none"):
+            return ""
+        if col in ("name", "名称") and len(s) > 5:
+            return s[:5]          # 名称类列过长会把整张表撑高
+        return s
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    if f != f:  # NaN
+        return ""
+    if INT_HINT.search(col) and abs(f - round(f)) < 1e-9:
+        return str(int(round(f)))
+    a = abs(f)
+    if a and (a >= 1e5 or a < 1e-3):
+        return f"{f:.3e}"
+    if INT_HINT.search(col):
+        return f"{f:.0f}"
+    if col in NUM_COLS_3 or col in ("coverage_rate", "ratio"):
+        return f"{f:.3f}"
+    if a >= 100:
+        return f"{f:.1f}"
+    return f"{f:.3f}"
+
+
+def col_header(col: str) -> str:
+    """列名 → 中文表头（含单位/符号，单位用行内公式）。
+
+    依次尝试：
+      1. 精确匹配 `COL_HINT`（含人工校正的中文表头）；
+      2. 后缀匹配 `COL_HINT`（`n_uav_used` → `_used`）；
+      3. 拆出单位后缀后用 `BASE_HINT` 拼装（`empty_mass_kg` → 空载质量 / kg）；
+      4. 中文列名里的"（单位）"或紧凑单位（`能耗kWh`）。
+    """
+    import re as _re
+
+    c = str(col)
+    if c in COMPACT_COL:
+        return COMPACT_COL[c]
+    if c in COL_HINT:
+        name, unit = COL_HINT[c]
+        return f"{name} / {unit}" if unit else name
+    for key in sorted(COL_HINT, key=len, reverse=True):
+        if len(key) >= 4 and c.endswith(key):
+            name, unit = COL_HINT[key]
+            return f"{name} / {unit}" if unit else name
+
+    m = _re.match(r"^(?P<base>[a-z0-9_]+?)_(?P<unit>[a-z0-9]{1,5})$", c)
+    if m and m.group("unit") in UNIT_SUFFIX and m.group("base") in BASE_HINT:
+        return f"{BASE_HINT[m.group('base')]} / {UNIT_SUFFIX[m.group('unit')]}"
+
+    m = _re.match(r"^(?P<name>.+?)\s*[（(]\s*(?P<unit>[^）)]+?)\s*[）)]$", c)
+    if m:
+        name = m.group("name").strip()
+        unit = m.group("unit").strip()
+        if unit in UNIT_MATH:
+            return f"{name} / {UNIT_MATH[unit]}"
+        if _re.fullmatch(r"[A-Za-z%°]+", unit):
+            return f"{name} / ${{\\mathrm{{{unit}}}}}$"
+        return name
+    # 无括号的紧凑写法："能耗kWh"、"最大组工作量h"
+    m2 = _re.match(r"^(?P<name>.+?)\s*(?P<unit>[A-Za-z%°]{1,5})$", c)
+    if m2 and m2.group("unit") in UNIT_MATH:
+        return f"{m2.group('name')} / {UNIT_MATH[m2.group('unit')]}"
+    # 最后兜底：把下划线换成空格，并把末尾的单位记号转成公式
+    parts = c.rsplit("_", 1)
+    if len(parts) == 2 and parts[1].lower() in UNIT_SUFFIX:
+        base = parts[0].replace("_", " ")
+        return f"{base} / {UNIT_SUFFIX[parts[1].lower()]}"
+    return c.replace("_", " ")
+
+
+# ---------------------------------------------------------------- 富文本
+
+_INLINE_RE = re.compile(r"\*\*(.+?)\*\*|\$(.+?)\$", re.S)
+
+
+def _add_text_runs(p, text, size, bold, cn=None):
+    """按 `**加粗**` 与 `$行内公式$` 切分并写入段落。"""
+    pos = 0
+    for m in _INLINE_RE.finditer(text):
+        if m.start() > pos:
+            _set_font(p.add_run(text[pos:m.start()]), size, bold=bold,
+                      cn=cn or (CN_HEI if bold else CN_FONT))
+        if m.group(1) is not None:
+            _set_font(p.add_run(m.group(1)), size, bold=True, cn=CN_HEI)
+        else:
+            EQM.append_omml(p, m.group(2), display=False)
+        pos = m.end()
+    if pos < len(text):
+        _set_font(p.add_run(text[pos:]), size, bold=bold,
+                  cn=cn or (CN_HEI if bold else CN_FONT))
+
+
+def H(doc, text, level=1, page_break=None):
+    """标题。**一级标题自动另起新页**（由 Heading 1 样式保证）。
+
+    `page_break` 仅用于封面前/目录等特殊情况显式覆盖：
+    传 False 表示该标题不要分页（例如目录页已单独分页）。
+    """
+    n = doc.add_heading("", level=level)
+    if page_break is not None:
+        n.paragraph_format.page_break_before = bool(page_break)
+    n.paragraph_format.first_line_indent = Pt(0)
+    _set_font(n.add_run(text), {1: 16, 2: 14, 3: 12.5, 4: 12}[level],
               bold=True, cn=CN_HEI)
-    return p
+    return n
 
 
-def P(doc, text, indent=True, size=12, align=None, bold=False):
+def P(doc, text, indent=True, size=12, align=None, bold=False, keep_with_next=False):
     p = doc.add_paragraph()
     if not indent:
         p.paragraph_format.first_line_indent = Pt(0)
     if align == "center":
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _set_font(p.add_run(text), size, bold=bold)
+    if keep_with_next:
+        p.paragraph_format.keep_with_next = True
+    _add_text_runs(p, text, size, bold)
     return p
 
 
-def EQ(doc, text, num=None):
-    """居中公式行（用制表位近似编号）。"""
+def EQ(doc, text, num=None, size=12):
+    """居中公式行（MathType / OMML），编号右对齐。
+
+    用"居中制表位 + 右制表位"排布：公式居中、编号贴右边界，
+    与教材/论文排版惯例一致。
+    """
     p = doc.add_paragraph()
-    p.paragraph_format.first_line_indent = Pt(0)
-    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = p.add_run(text + (f"        ({num})" if num else ""))
-    _set_font(run, 12, cn=CN_FONT)
-    run.italic = False
+    pf = p.paragraph_format
+    pf.first_line_indent = Pt(0)
+    pf.space_before = Pt(4)
+    pf.space_after = Pt(4)
+    pf.keep_together = True
+    pf.tab_stops.add_tab_stop(Emu(int(Cm(TEXT_WIDTH_CM) / 2)), WD_TAB_ALIGNMENT.CENTER)
+    pf.tab_stops.add_tab_stop(Cm(TEXT_WIDTH_CM), WD_TAB_ALIGNMENT.RIGHT)
+    p.add_run("\t")
+    EQM.append_omml(p, text, display=False)
+    if num:
+        p.add_run("\t")
+        _set_font(p.add_run(f"({num})"), size)
     return p
 
 
@@ -133,68 +603,128 @@ def BULLETS(doc, items, size=11.5):
         p = doc.add_paragraph(style="List Bullet")
         p.paragraph_format.first_line_indent = Pt(0)
         p.paragraph_format.line_spacing = 1.35
-        _set_font(p.add_run(it), size)
+        p.paragraph_format.left_indent = Pt(24)
+        _add_text_runs(p, it, size, False)
 
 
-def FIGURE(doc, name: str, caption: str, width_cm=15.4):
+def FIGURE(doc, name: str, caption: str, width_cm=15.4, max_h_cm=9.0):
+    """插图 + 图题。要求 4：图与图题必须同页 —— 图与图题都设 keep_with_next。
+
+    为兼顾"图不跨页"与"少留白"，按图幅比例反算宽度：高图自动缩窄，
+    使显示高度不超过 `max_h_cm`，从而更容易与题注一起落在同一页。
+    """
     p = FIG / f"{name}.png"
     if not p.exists():
         P(doc, f"[缺图 {name}]", indent=False)
         return
+    try:
+        from PIL import Image
+
+        w_px, h_px = Image.open(p).size
+        if w_px > 0:
+            width_cm = min(width_cm, max_h_cm * w_px / h_px)
+            width_cm = max(width_cm, 7.5)
+    except Exception:  # noqa: BLE001
+        pass
     doc.add_picture(str(p), width=Cm(width_cm))
-    doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
-    doc.paragraphs[-1].paragraph_format.first_line_indent = Pt(0)
+    ip = doc.paragraphs[-1]
+    ip.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    ip.paragraph_format.first_line_indent = Pt(0)
+    ip.paragraph_format.space_before = Pt(6)
+    ip.paragraph_format.space_after = Pt(2)
+    ip.paragraph_format.keep_with_next = True   # 图片与其下方题注同页
+    ip.paragraph_format.keep_together = True
+
     cap = doc.add_paragraph()
     cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
     cap.paragraph_format.first_line_indent = Pt(0)
-    cap.paragraph_format.space_after = Pt(8)
-    _set_font(cap.add_run(caption), 10.5, bold=True, cn=CN_HEI)
+    cap.paragraph_format.space_after = Pt(10)
+    cap.paragraph_format.keep_together = True
+    # ★ 图题**不**设 keep_with_next：否则"图 + 图题 + 下一段"会被当成一个
+    #   不可分割的整体，只要放不下就把三块一起推到下页，制造大片留白。
+    #   图片段落已设 keep_with_next，足以保证"图与其图题同页"。
+    _add_text_runs(cap, caption, 10.5, True, cn=CN_HEI)
 
 
-def TABLE(doc, name: str, caption: str, max_rows: int = 40, font=8.5):
-    """插入表格（读取同名 CSV）。行数超过 max_rows 时截断并注明。"""
-    p = TAB / f"{name}.csv"
-    if not p.exists():
-        P(doc, f"[缺表 {name}]", indent=False)
-        return
-    df = pd.read_csv(p)
+def _fill_row(row, values, font, header=False):
+    for j, v in enumerate(values):
+        cell = row.cells[j]
+        cell.text = ""
+        para = cell.paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        para.paragraph_format.first_line_indent = Pt(0)
+        para.paragraph_format.space_after = Pt(1)
+        para.paragraph_format.space_before = Pt(1)
+        para.paragraph_format.line_spacing = 1.15
+        text = "" if v is None else str(v)
+        if text.lower() in ("nan", "none"):
+            text = ""
+        if header:
+            _set_font(para.add_run(text), font, bold=True, cn=CN_HEI)
+        else:
+            _add_text_runs(para, text, font, False)
+
+
+def TABLE(doc, name: str, caption: str, max_rows: int = 40, font=8.5,
+          df: pd.DataFrame | None = None, keep_intro: bool = True):
+    """三线表（参照参考文稿2）：顶线 / 表头下线 / 底线，**无竖线**。
+
+    要求 4：表与表题同页 —— 表题设 keep_with_next，行禁止跨页断开。
+    `df` 给定时直接用它（用于在代码中构造的符号表等）。
+    """
+    if df is None:
+        p = TAB / f"{name}.csv"
+        if not p.exists():
+            P(doc, f"[缺表 {name}]", indent=False)
+            return
+        df = pd.read_csv(p)
+    else:
+        df = df.copy()
     total = len(df)
     show = df.head(max_rows)
+    ncol = len(show.columns)
+    font = _auto_font(ncol, font)
+
     cap = doc.add_paragraph()
     cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
     cap.paragraph_format.first_line_indent = Pt(0)
-    cap.paragraph_format.space_before = Pt(6)
-    _set_font(cap.add_run(caption), 10.5, bold=True, cn=CN_HEI)
+    cap.paragraph_format.space_before = Pt(8)
+    cap.paragraph_format.space_after = Pt(3)
+    cap.paragraph_format.keep_with_next = True     # 表题与表体同页
+    cap.paragraph_format.keep_together = True
+    _add_text_runs(cap, caption, 10.5, True, cn=CN_HEI)
 
     t = doc.add_table(rows=1, cols=len(show.columns))
-    t.style = "Table Grid"
     t.alignment = WD_TABLE_ALIGNMENT.CENTER
-    for j, c in enumerate(show.columns):
-        cell = t.rows[0].cells[j]
-        cell.text = ""
-        _set_font(cell.paragraphs[0].add_run(str(c)), font, bold=True, cn=CN_HEI)
-        cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        cell.paragraphs[0].paragraph_format.first_line_indent = Pt(0)
+    headers = [col_header(c) for c in show.columns]
+    _fill_row(t.rows[0], headers, font, header=True)
+    body_rows: list[list[str]] = []
     for _, r in show.iterrows():
-        cells = t.add_row().cells
-        for j, c in enumerate(show.columns):
-            v = r[c]
-            if isinstance(v, float):
-                v = f"{v:.4g}"
-            cells[j].text = ""
-            _set_font(cells[j].paragraphs[0].add_run(str(v)), font)
-            cells[j].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-            cells[j].paragraphs[0].paragraph_format.first_line_indent = Pt(0)
+        vals = [fmt_cell(r[c], str(c)) for c in show.columns]
+        body_rows.append(vals)
+        row = t.add_row()
+        _fill_row(row, vals, font)
+
+    _three_line_borders(t)
+    _header_bottom_rule(t.rows[0])
+    _col_widths(t, headers, body_rows)
+    _cell_margin(t)
+    for row in t.rows:
+        _no_split(row)
+    _repeat_header(t.rows[0])
+
     if total > max_rows:
         note = doc.add_paragraph()
         note.alignment = WD_ALIGN_PARAGRAPH.CENTER
         note.paragraph_format.first_line_indent = Pt(0)
+        note.paragraph_format.space_before = Pt(2)
         note.paragraph_format.space_after = Pt(8)
         _set_font(note.add_run(
             f"（表中共 {total} 行，此处列出前 {max_rows} 行；完整数据见随文附件 "
             f"paper/tables/{name}.csv）"), 9)
     else:
-        doc.add_paragraph().paragraph_format.space_after = Pt(4)
+        doc.add_paragraph().paragraph_format.space_after = Pt(2)
+    return t
 
 
 def TOC(doc) -> None:
@@ -213,16 +743,19 @@ def TOC(doc) -> None:
     _set_font(run, 10.5)
 
 
-def RICH(doc, parts, indent=True, size=12, align=None, space_after=4):
-    """混排中英文的段落：parts = [(文本, 是否加粗), ...]。"""
+def RICH(doc, parts, indent=True, size=12, align=None, space_after=4,
+         keep_with_next=False):
+    """混排段落：parts = [(文本, 是否加粗), ...]；文本内可用 `$...$` 嵌入公式。"""
     p = doc.add_paragraph()
     if not indent:
         p.paragraph_format.first_line_indent = Pt(0)
     if align == "center":
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.paragraph_format.space_after = Pt(space_after)
+    if keep_with_next:
+        p.paragraph_format.keep_with_next = True
     for text, bold in parts:
-        _set_font(p.add_run(text), size, bold=bold, cn=CN_HEI if bold else CN_FONT)
+        _add_text_runs(p, text, size, bold)
     return p
 
 
@@ -238,11 +771,73 @@ def T(name: str) -> pd.DataFrame:
     return pd.read_csv(p) if p.exists() else pd.DataFrame()
 
 
+SYMBOLS: list[tuple[str, str]] = [
+    (r"$O01$", "临时调度中心（与固定网关 G01 同址）"),
+    (r"$S_{i}$", "第 i 个服务区，i = 1,…,15"),
+    (r"$G01$", "固定通信网关"),
+    (r"$g$", "运输机型，g ∈ {A, B, C}"),
+    (r"$R_{k}$", "第 k 架中继无人机，k = 1, 2"),
+    (r"$Q_{g}$", "机型 g 的结构载重上限，kg"),
+    (r"$V_{g}$", "机型 g 的货舱容积上限，m³"),
+    (r"$E_{g}^{use}$", "机型 g 单组电池可用能量，kWh"),
+    (r"$T_{full}$", "电池由 0% 充至 100% 的满充时间，min"),
+    (r"$L_{g}(q)$", "机型 g 携带载荷 q 时的等效航程，m"),
+    (r"$L_{g0},\,L_{gF}$", "空载 / 满载标准航程，m"),
+    (r"$q_{max}^{safe}(g,i)$", "机型 g 在服务区 i 的最大安全载荷，kg"),
+    (r"$\rho_{g}$", "返航安全余量比例，附件取 0.20"),
+    (r"$H_{cruise}$", "航段计划巡航海拔，m"),
+    (r"$h^{+},\,h^{-}$", "爬升 / 下降高度，m"),
+    (r"$v_{g}^{up},v_{g}^{c},v_{g}^{down}$", "爬升 / 巡航 / 下降速度，m·s⁻¹"),
+    (r"$d_{ij}$", "节点 i 与 j 的水平直线距离，m"),
+    (r"$t_{gij}$", "航段飞行时间，s"),
+    (r"$E_{gij}^{hor},\,E_{gij}^{up}$", "水平巡航 / 爬升附加能耗，kWh"),
+    (r"$\eta_{up}$", "爬升能耗效率，取 0.72"),
+    (r"$s$", "荷电状态 SOC，s ∈ [0, 1]"),
+    (r"$t_{chg}(s)$", "由 SOC = s 充满所需时间，min"),
+    (r"$m_{b},\,v_{b}$", "货箱 b 的质量 kg / 体积 m³"),
+    (r"$n_{box}$", "架次装载的货箱数"),
+    (r"$t_{p}$", "架次总作业时间，s"),
+    (r"$P_{t,a}$", "发射端 a 的发射功率，dBm"),
+    (r"$P_{sens,b}$", "接收端 b 的接收灵敏度，dBm"),
+    (r"$M_{b}$", "接收端 b 的衰落裕量，dB"),
+    (r"$P_{th,b}$", "接收端 b 的有效接收门限，dBm"),
+    (r"$L_{max,a \to b}$", "a→b 方向的最大允许路径损耗，dB"),
+    (r"$L_{max,a \leftrightarrow b}$", "双向链路门限（取两方向较小值），dB"),
+    (r"$L_{FSPL}$", "自由空间路径损耗，dB"),
+    (r"$L_{obs}$", "地形遮挡附加损耗，取 10 dB"),
+    (r"$b_{ijt}$", "时刻 t 链路 (i,j) 的地形遮挡指示变量"),
+    (r"$A_{ijt}$", "时刻 t 链路可用性指示变量"),
+    (r"$D_{ijt}$", "时刻 t 链路两端三维距离，km"),
+    (r"$P_{hover},\,P_{comms}$", "中继悬停功率 / 通信附加功率，kW"),
+    (r"$t_{svc}$", "中继服务时段，s"),
+    (r"$K$", "任务组数，K ∈ {1, 2, 3}"),
+]
+
+
+def symbol_table() -> pd.DataFrame:
+    """双栏符号表（符号 | 说明 | 符号 | 说明），与参考文稿2 的符号表版式一致。"""
+    rows = []
+    half = (len(SYMBOLS) + 1) // 2
+    left, right = SYMBOLS[:half], SYMBOLS[half:]
+    for k in range(half):
+        a = left[k]
+        b = right[k] if k < len(right) else ("", "")
+        rows.append({"符号": a[0], "说明": a[1], "符号": b[0], "说明": b[1]})
+    return pd.DataFrame(rows)
+
+
 def main() -> int:
+    import argparse
+
     try:
         sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
     except Exception:
         pass
+
+    ap = argparse.ArgumentParser(description="生成论文 docx（公式转 MathType）")
+    ap.add_argument("--no-mathtype", action="store_true",
+                    help="跳过 MathType 转换，保留 OMML 原生公式（便于排查）")
+    args = ap.parse_args()
 
     m1, m2, m3, m4 = metrics("q1"), metrics("q2"), metrics("q3"), metrics("q4")
     nodes = T("t_nodes"); uav = T("t_uav_params"); relay = T("t_relay_params")
@@ -286,8 +881,8 @@ def main() -> int:
       f"Martello–Toth 型解析下界；推荐方案 {int(m1.get('chosen_n_sorties',18))} 架次、"
       f"总能耗 {m1.get('chosen_total_energy_kwh',0):.2f} kWh，"
       f"**逐服务区达到下界，可证最优**。"
-      f"返航安全余量敏感性分析显示：ρ_g 由 0.20 增至 0.35 时总架次数由 18 升至 25，"
-      f"且当 ρ_g > 0.40 时部分高海拔服务区**无可行解**。")
+      f"返航安全余量敏感性分析显示：$\\\\rho_{{g}}$ 由 0.20 增至 0.35 时总架次数由 18 升至 25，"
+      f"且当 $\\\\rho_{{g}} > 0.40$ 时部分高海拔服务区**无可行解**。")
 
     P(doc,
       f"针对问题二，联合确定货箱组批、服务区访问顺序、机型、执行无人机、共享电池与开工时刻。"
@@ -342,12 +937,10 @@ def main() -> int:
                ("无人机应急物流；等效航程；二维装箱下界；时限驱动调度；"
                 "时空集合覆盖；连通分量分区", False)], indent=False)
 
-    doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
-
-    # ============================================================ 目录
-    H(doc, "目  录", 1)
+    # ★ 修改要求 2：每章另起新页，由 Heading 1 样式统一控制；
+    #   目录页与摘要页各自独立，故此处显式关掉目录标题的分页。
+    H(doc, "目  录", 1, page_break=False)
     TOC(doc)
-    doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
     build_body(doc, {
         "m1": m1, "m2": m2, "m3": m3, "m4": m4,
@@ -360,7 +953,27 @@ def main() -> int:
     doc.save(OUT)
     print(f"已生成：{OUT}")
     print(f"大小：{OUT.stat().st_size/1024/1024:.2f} MB")
+
+    # ★ 修改要求 1：公式使用 MathType。
+    #   OMML → MathType（Equation.DSMT4）OLE 对象，覆盖正文、行内与表格内公式。
+    if not args.no_mathtype:
+        convert_math(OUT)
     return 0
+
+
+def convert_math(path: Path) -> None:
+    """把 docx 中的 OMML 公式转换为 MathType 原生公式对象。"""
+    tmp = path.with_name(path.stem + "_omml.docx")
+    try:
+        n = EQM.convert_to_mathtype(path, tmp, work_dir=path.parent / "_mathtype_work")
+    except Exception as exc:  # noqa: BLE001
+        print(f"⚠️  MathType 转换失败，保留 OMML 公式版本：{type(exc).__name__}: {exc}")
+        if tmp.exists():
+            tmp.unlink()
+        return
+    tmp.replace(path)
+    print(f"MathType 转换完成：{n} 个公式 → Equation.DSMT4 对象")
+    print(f"大小：{path.stat().st_size/1024/1024:.2f} MB")
 
 
 # ================================================================ 正文装配
@@ -425,7 +1038,7 @@ def build_body(doc: Document, D: dict) -> None:
            "算法互证与敏感性分析贯穿四个问题。")
 
     # ---------------- 二、总体分析 ----------------
-    H(doc, "二、总体分析", 1, page_break=True)
+    H(doc, "二、总体分析", 1)
     H(doc, "2.1 数据特征分析", 2)
     H(doc, "2.1.1 空间与地形", 3)
     edge = D["nodes"]
@@ -491,20 +1104,19 @@ def build_body(doc: Document, D: dict) -> None:
         "中继不进行多跳转发，运输机任一时刻只由 G01 或一架中继保障。",
     ])
     P(doc, "主要符号如表 7。", indent=False)
-    TABLE(doc, "t_symbols" if (TAB / "t_symbols.csv").exists() else "t_uav_params",
-          "表 7  主要符号说明", max_rows=25)
+    TABLE(doc, "t_symbols", "表 7  主要符号说明", df=symbol_table(), font=9)
 
 
     # ---------------- 三、公共物理模型 ----------------
-    H(doc, "三、公共物理模型与通信链路模型", 1, page_break=True)
+    H(doc, "三、公共物理模型与通信链路模型", 1)
     H(doc, "3.1 航段几何与作业高度", 2)
     P(doc, "以调度中心为起点、服务区为终点构成任务节点集。任意两个任务节点之间的"
            "运输航段采用两点水平直线，计划巡航海拔取该航段所经过 DEM 像元的"
            "**最高地面高程以上 50 m**；O01 的作业高度取其地面海拔，服务区的作业高度"
            "取其地面海拔以上 30 m；连续访问多个服务区时，每次投送后均从 30 m 作业高度"
            "重新爬升。爬升与下降高度由巡航海拔与两端作业高度之差确定：")
-    EQ(doc, "H_cruise(i,j) = max{ DEM(p) : p ∈ 直线段(i,j) } + 50 m", "1")
-    EQ(doc, "h⁺(i,j) = H_cruise − H_op(i) ,  h⁻(i,j) = H_cruise − H_op(j)", "2")
+    EQ(doc, r"H_{cruise}(i,j) = \max\{ \mathrm{DEM}(p) : p \in \overline{ij} \} + 50\ \mathrm{m}", "1")
+    EQ(doc, r"h^{+}(i,j) = H_{cruise} - H_{op}(i), \quad h^{-}(i,j) = H_{cruise} - H_{op}(j)", "2")
     P(doc, "由于经纬度不能直接用于距离计算（1° 经度与 1° 纬度对应的米数不同），"
            "所有水平距离均在以研究区形心为原点的局部切平面上计算，"
            "并使用 WGS84 子午圈/卯酉圈曲率半径换算，"
@@ -512,36 +1124,39 @@ def build_body(doc: Document, D: dict) -> None:
 
     H(doc, "3.2 载荷—航程关系与最大安全载荷", 2)
     P(doc, "机型 g 携带载荷 q 时的等效航程按题目附录 2 给出：")
-    EQ(doc, "L_g(q) = L_g0 − (L_g0 − L_gF)·(q / Q_g)^(3/2) ,  0 ≤ q ≤ Q_g", "3")
-    P(doc, "该关系关于 q 单调不增且为凸函数（指数 3/2 > 1），因此载荷越大等效航程越短。"
-           "单点往返任务中，去程载货 q、回程空载，往返总能耗须满足返航安全余量约束：")
-    EQ(doc, "E_g^T(q) = Σ E_gij(q_pij) ≤ (1 − ρ_g)·E_g^use", "4")
-    P(doc, "**最大安全载荷**定义为使上式取等号的 q。由于 (q/Q_g)^{3/2} 无初等反函数，"
-           "该方程必须**数值反解**：E_g^T(q) 关于 q 单调递增，故在 [0, Q_g] 上用"
-           "Brent 法求根；若端点处预算仍有余，则结构上限 Q_g 起作用。"
-           "最终安全载荷取能量反解值与 Q_g、体积瓶颈对应质量三者之最小。")
+    EQ(doc, r"L_{g}(q) = L_{g0} - (L_{g0} - L_{gF}) \cdot \left( \frac{q}{Q_{g}} \right)^{3/2}, \quad 0 \le q \le Q_{g}", "3")
+    P(doc, "该关系关于 $q$ 单调不增且为凸函数（指数 $3/2 > 1$），因此载荷越大等效航程越短。"
+           "单点往返任务中，去程载货 $q$、回程空载，往返总能耗须满足返航安全余量约束：")
+    EQ(doc, r"E_{g}^{T}(q) = \sum_{(i,j) \in p} E_{gij}(q_{pij}) \le (1 - \rho_{g}) \cdot E_{g}^{use}", "4")
+    P(doc, "**最大安全载荷**定义为使上式取等号的 $q$。由于 $(q/Q_{g})^{3/2}$ 无初等反函数，"
+           "该方程必须**数值反解**：$E_{g}^{T}(q)$ 关于 $q$ 单调递增，故在 $[0, Q_{g}]$ 上用"
+           "Brent 法求根；若端点处预算仍有余，则结构上限 $Q_{g}$ 起作用。"
+           "最终安全载荷取能量反解值与 $Q_{g}$、体积瓶颈对应质量三者之最小。")
 
     H(doc, "3.3 飞行时间与能耗", 2)
     P(doc, "航段飞行时间按爬升、巡航、下降三阶段相加；航段能耗由水平巡航能耗与"
            "爬升附加能耗两部分构成，下降能耗效率取 0（题目附录 2），即**不单独计算"
            "下降附加能耗**：")
-    EQ(doc, "t_gij = h⁺/v_g↑ + d_ij/v_g^c + h⁻/v_g↓", "5")
-    EQ(doc, "E_gij(q) = E_gij^hor(q) + E_gij^up(q)", "6")
+    EQ(doc, r"t_{gij} = \frac{h^{+}}{v_{g}^{up}} + \frac{d_{ij}}{v_{g}^{c}} + \frac{h^{-}}{v_{g}^{down}}", "5")
+    EQ(doc, r"E_{gij}(q) = E_{gij}^{hor}(q) + E_{gij}^{up}(q)", "6")
     P(doc, "**能耗口径说明（重要的建模选择）**：题目附录 2 给出了运输机的空载/满载"
            "标准航程与电池可用能量，但**未给出运输机的巡航功率**（仅中继机给出功率）。"
            "因此本文采用“由航程反推”的自洽口径：飞满一个标准航程恰好耗尽一组可用能量，"
-           "即 E_gij^hor(q) = (d_ij / L_g(q))·E_g^use；爬升附加能耗按机械功除以爬升效率"
-           "计算：E_gij^up = m·g·h⁺ / η_up，其中 η_up = 0.72 为附件给出的爬升能耗效率。"
-           "该口径下返航安全余量约束自然退化为“水平距离不超过 (1−ρ)·L_g(q)”，物理含义清晰。")
+           "即 $E_{gij}^{hor}(q) = (d_{ij} / L_{g}(q)) \\cdot E_{g}^{use}$；"
+           "爬升附加能耗按机械功除以爬升效率计算："
+           "$E_{gij}^{up} = m \\cdot g \\cdot h^{+} / \\eta_{up}$，"
+           "其中 $\\eta_{up} = 0.72$ 为附件给出的爬升能耗效率。"
+           "该口径下返航安全余量约束自然退化为“水平距离不超过 "
+           "$(1-\\rho_{g}) \\cdot L_{g}(q)$”，物理含义清晰。")
     FIGURE(doc, "f20_flight_profile", "图 7  飞行剖面与能耗构成")
 
     H(doc, "3.4 能源周转模型", 2)
     P(doc, "共享电池与中继能源组件均作为独立资源记录荷电状态（SOC），初始 SOC = 100%。"
            "两类资源统一采用两阶段等效充电模型：")
-    EQ(doc, "t_chg(s) = T_full·[0.65·(0.90 − s)/0.90 + 0.35] ,  0 ≤ s < 0.90", "7")
-    EQ(doc, "t_chg(s) = T_full·0.35·(1 − s)/0.10 ,  0.90 ≤ s ≤ 1", "8")
-    P(doc, "该分段函数在 s = 0.90 处连续（两段取值均为 0.35·T_full），"
-           "t_chg(0) = T_full、t_chg(1) = 0。同一资源的任务占用与充电时段不得重叠，"
+    EQ(doc, r"t_{chg}(s) = T_{full} \cdot \left[ 0.65 \cdot \frac{0.90 - s}{0.90} + 0.35 \right], \quad 0 \le s < 0.90", "7")
+    EQ(doc, r"t_{chg}(s) = T_{full} \cdot 0.35 \cdot \frac{1 - s}{0.10}, \quad 0.90 \le s \le 1", "8")
+    P(doc, "该分段函数在 $s = 0.90$ 处连续（两段取值均为 $0.35 \\cdot T_{full}$），"
+           "$t_{chg}(0) = T_{full}$、$t_{chg}(1) = 0$。同一资源的任务占用与充电时段不得重叠，"
            "不同资源可并行充电；同一机型的共享电池可在该机型不同实体无人机之间调度，"
            "不同机型之间不可混用。")
 
@@ -551,18 +1166,19 @@ def build_body(doc: Document, D: dict) -> None:
            "不允许中继之间多跳转发。链路判定包含地形遮挡、传播损耗与双向链路预算三部分。")
     P(doc, "**（1）地形遮挡判定**：根据两端点三维位置与 30 m DEM，沿视线水平投影采样，"
            "比较各采样点地面高程与视线插值高度，若地形高过视线则该航段存在遮挡"
-           "（b_ijt = 1）。需要强调：遮挡**只附加 10 dB 损耗**（附件 L_obs），"
+           "（$b_{ijt} = 1$）。需要强调：遮挡**只附加 10 dB 损耗**（附件 $L_{obs}$），"
            "而不是直接判定链路中断——链路是否可用仍需比较总损耗与门限。")
     P(doc, "**（2）接收门限与双向链路预算**：")
-    EQ(doc, "P_th,b = P_sens,b + M_b", "9")
-    EQ(doc, "L_max,a→b = P_t,a + G_t,a + G_r,b − L_sys − P_th,b", "10")
-    EQ(doc, "L_max,a↔b = min( L_max,a→b , L_max,b→a )", "11")
+    EQ(doc, r"P_{th,b} = P_{sens,b} + M_{b}", "9")
+    EQ(doc, r"L_{max,a \to b} = P_{t,a} + G_{t,a} + G_{r,b} - L_{sys} - P_{th,b}", "10")
+    EQ(doc, r"L_{max,a \leftrightarrow b} = \min\left( L_{max,a \to b}, L_{max,b \to a} \right)", "11")
     P(doc, "其中式 (11) 体现题目要求：运输控制与状态回传均需保障，"
            "故按**双向链路**判定并取两个方向门限中的较小值。")
     P(doc, "**（3）传播损耗与可用性**：")
-    EQ(doc, "L_FSPL,ijt = 32.45 + 20·log10(f) + 20·log10(D_ijt)", "12")
-    EQ(doc, "L_path,ijt = L_FSPL,ijt + L_obs·b_ijt ,  A_ijt = 1 若 L_path ≤ L_max", "13")
-    P(doc, "式中 f 以 MHz、D 以 **km** 计（单位陷阱：内部距离以 m 存储，代入前须除以 1000，"
+    EQ(doc, r"L_{FSPL,ijt} = 32.45 + 20 \cdot \log_{10}(f) + 20 \cdot \log_{10}(D_{ijt})", "12")
+    EQ(doc, r"L_{path,ijt} = L_{FSPL,ijt} + L_{obs} \cdot b_{ijt}, \quad A_{ijt} = 1 \iff L_{path} \le L_{max}", "13")
+    P(doc, "式中 $f$ 以 $\\mathrm{MHz}$、$D$ 以 $\\mathrm{km}$ 计"
+           "（单位陷阱：内部距离以 m 存储，代入前须除以 1000，"
            "差 1000 倍即差 60 dB）。运输机在任一时刻的通信状态按如下优先级判定："
            "与 G01 直连可用记为**直连**；直连不可用但接入链路与回传链路**同时可用**"
            "记为**中继**；其余记为**中断**。")
@@ -575,15 +1191,16 @@ def build_body(doc: Document, D: dict) -> None:
 
 
     # ---------------- 四、问题一 ----------------
-    H(doc, "四、问题一：单点往返运输能力与货箱组批", 1, page_break=True)
+    H(doc, "四、问题一：单点往返运输能力与货箱组批", 1)
     H(doc, "4.1 问题分析与模型建立", 2)
     P(doc, "问题一不考虑实体无人机与共享电池调度，每个架次采用 O01→Si→O01 直接往返、"
            "仅服务一个服务区，同一服务区可由多个架次分批服务。因此问题分解为两层："
            "第一层求各 (服务区, 机型) 组合的**最大安全载荷**；"
            "第二层在该载荷约束下做**货箱组批**（装箱），并优化架次数、总能耗与累计作业时间。")
     P(doc, "货箱组批是一个**质量—体积二维装箱问题**：货箱不可拆，每个货箱恰用一次，"
-           "需同时满足质量约束 Σm_b ≤ q_max^safe(g,i)、体积约束 Σv_b ≤ V_g 与"
-           "返航安全能量余量（已包含在 q_max^safe 中）。")
+           "需同时满足质量约束 $\\sum m_{b} \\le q_{max}^{safe}(g,i)$、"
+           "体积约束 $\\sum v_{b} \\le V_{g}$ 与"
+           "返航安全能量余量（已包含在 $q_{max}^{safe}$ 中）。")
 
     H(doc, "4.2 求解算法", 2)
     P(doc, "最大安全载荷用 Brent 法二分反解（式 3、4），收敛容差 1e-6，"
@@ -591,7 +1208,7 @@ def build_body(doc: Document, D: dict) -> None:
            "货箱按体积降序排列（体积是本题的主要瓶颈），依次尝试放入已有箱，"
            "放不下则开新箱并选择能容纳该箱的最小机型。"
            "为评估解的质量，本文推导了**解析下界**：")
-    EQ(doc, "LB = max( ceil(Σm_b / max_g q_max) , ceil(Σv_b / max_g V_g) )", "14")
+    EQ(doc, r"LB = \max\left( \left\lceil \frac{\sum_{b} m_{b}}{\max_{g} q_{max}^{safe}} \right\rceil, \left\lceil \frac{\sum_{b} v_{b}}{\max_{g} V_{g}} \right\rceil \right)", "14")
     P(doc, "即分别按质量与体积的最佳机型容量估算所需架次数并取较大者。"
            "若启发式结果等于下界，则该服务区的架次数**可证最优**。")
 
@@ -605,7 +1222,7 @@ def build_body(doc: Document, D: dict) -> None:
            "载重（结合体积）才是瓶颈；而对 C 型机，远距离飞行时返航能量成为紧约束。**"
            "两类机型的性质相反，在组批与调度中应区别对待。")
     FIGURE(doc, "f04_q1_payload", "图 9  最大安全载荷热力图与生效约束")
-    TABLE(doc, "t_q1_payload", "表 9  3 机型 × 15 服务区最大安全载荷与生效约束", max_rows=45)
+    TABLE(doc, "t_q1_payload", "表 9  3 机型 × 15 服务区最大安全载荷与生效约束", max_rows=32)
 
     P(doc, f"（2）货箱组批。推荐方案共 {int(m1.get('chosen_n_sorties', 18))} 个架次，"
            f"全部使用 C 型机，总能耗 {m1.get('chosen_total_energy_kwh', 0):.2f} kWh，"
@@ -631,21 +1248,21 @@ def build_body(doc: Document, D: dict) -> None:
     TABLE(doc, "t_q1_lowerbound", "表 12  逐服务区架次数下界与启发式差距", max_rows=20)
 
     H(doc, "4.5 返航安全余量敏感性分析", 2)
-    P(doc, "题目要求讨论返航安全余量 ρ_g 变化对最大安全载荷与组批结果的影响。"
-           "本文把 ρ_g 从 0 扫到 0.50（步长 0.025），对每个取值重算载荷并重跑组批，"
+    P(doc, "题目要求讨论返航安全余量 $\\rho_{g}$ 变化对最大安全载荷与组批结果的影响。"
+           "本文把 $\\rho_{g}$ 从 0 扫到 0.50（步长 0.025），对每个取值重算载荷并重跑组批，"
            "结果见表 13、表 14 与图 12。")
-    TABLE(doc, "t_q1_rho_sweep", "表 13  ρ_g 扫描：架次数、能耗与可行性")
-    P(doc, f"**主要结论**：ρ_g 由 0.20 增至 0.35 时，总架次数由 "
+    TABLE(doc, "t_q1_rho_sweep", "表 13  $\rho_{g}$ 扫描：架次数、能耗与可行性")
+    P(doc, "**主要结论**：$\\rho_{g}$ 由 0.20 增至 0.35 时，总架次数由 "
            f"{int(m1.get('chosen_n_sorties', 18))} 升至 25（+39%），"
            f"总能耗由 75.07 升至 106.60 kWh（+42%）；"
-           f"当 ρ_g > 0.40 时，部分高海拔服务区（S003、S014 等）即使空载也无法返回，"
-           f"出现**无可行解**。附件取值 ρ_g = 0.20 恰好位于效率最优的区间内，"
+           f"当 $\\rho_{{g}} > 0.40$ 时，部分高海拔服务区（S003、S014 等）即使空载也无法返回，"
+           f"出现**无可行解**。附件取值 $\\rho_{{g}} = 0.20$ 恰好位于效率最优的区间内，"
            f"说明该安全余量设置在安全性与运输效率之间取得了合理平衡。")
-    FIGURE(doc, "f07_q1_rho", "图 12  返航安全余量 ρ_g 敏感性分析")
+    FIGURE(doc, "f07_q1_rho", "图 12  返航安全余量 $\rho_{g}$ 敏感性分析")
 
 
     # ---------------- 五、问题二 ----------------
-    H(doc, "五、问题二：异构无人机多点多架次运输调度", 1, page_break=True)
+    H(doc, "五、问题二：异构无人机多点多架次运输调度", 1)
     H(doc, "5.1 问题分析与模型建立", 2)
     P(doc, "问题二允许每个运输架次访问一个或多个服务区，需联合确定"
            "货箱组批、服务区访问顺序、运输机型、具体执行无人机、共享电池分配"
@@ -658,13 +1275,13 @@ def build_body(doc: Document, D: dict) -> None:
         "**物资时限**：医疗物资与首批保障货箱有硬性截止时间，"
         "时限与资源周转相互制约。",
     ])
-    P(doc, "设某架次访问顺序为 (S_a, S_b, …)，则第 m 段航段上机载荷为尚未投送的"
+    P(doc, "设某架次访问顺序为 $(S_{a}, S_{b}, \\ldots)$，则第 $m$ 段航段上机载荷为尚未投送的"
            "货箱质量之和。前缀可行性条件为：")
-    EQ(doc, "∀m :  Σ_{k≥m} m_k ≤ Q_g  且  Σ_{k≥m} v_k ≤ V_g", "15")
-    P(doc, "架次能耗为逐段能耗之和，其中第 m 段载荷为 q_m：")
-    EQ(doc, "E_p^T = Σ_m E_g( seg_m , q_m ) ≤ (1 − ρ_g)·E_g^use", "16")
+    EQ(doc, r"\forall m : \sum_{k \ge m} m_{k} \le Q_{g}, \quad \sum_{k \ge m} v_{k} \le V_{g}", "15")
+    P(doc, "架次能耗为逐段能耗之和，其中第 $m$ 段载荷为 $q_{m}$：")
+    EQ(doc, r"E_{p}^{T} = \sum_{m} E_{g}(seg_{m}, q_{m}) \le (1 - \rho_{g}) \cdot E_{g}^{use}", "16")
     P(doc, "架次作业时间由准备、装载、飞行与投送交接四部分构成：")
-    EQ(doc, "t_p = t_prep + n_box·t_load + Σ_m t_g(seg_m) + Σ_stops (t_h0 + k_s·t_h1)", "17")
+    EQ(doc, r"t_{p} = t_{prep} + n_{box} \cdot t_{load} + \sum_{m} t_{g}(seg_{m}) + \sum_{s \in stops} \left( t_{h0} + k_{s} \cdot t_{h1} \right)", "17")
     P(doc, "目标为多目标优化：配送及时性、全部任务完成时间（所有运输机完成最后一个"
            "架次并返回 O01 的最晚时刻）、运输能耗与架次数。")
 
@@ -694,7 +1311,7 @@ def build_body(doc: Document, D: dict) -> None:
            f"方案全部通过独立校验器的载荷、体积、能量、资源冲突类检查，"
            f"违规仅存在于时限类约束。")
     FIGURE(doc, "f08_q2_gantt", "图 13  运输调度甘特图")
-    TABLE(doc, "t_q2_sorties", "表 15  问题二运输架次明细（交付模板列序）", max_rows=40)
+    TABLE(doc, "t_q2_sorties", "表 15  问题二运输架次明细（交付模板列序）", max_rows=30)
     FIGURE(doc, "f10_q2_resources", "图 14  资源使用情况")
     TABLE(doc, "t_q2_uav_use", "表 16  实体无人机使用统计")
     TABLE(doc, "t_q2_battery_count", "表 17  共享电池使用次数")
@@ -721,11 +1338,11 @@ def build_body(doc: Document, D: dict) -> None:
            "论文中应将首批时限报告为尽力而为（soft）目标，并给出上述不可行性论证；"
            "若要完全满足，唯一途径是增加机队/电池或放宽截止时间。")
     FIGURE(doc, "f09_q2_timeliness", "图 15  物资时限达成分析")
-    TABLE(doc, "t_q2_timeliness", "表 18  逐箱时限达成明细（节选）", max_rows=45)
+    TABLE(doc, "t_q2_timeliness", "表 18  逐箱时限达成明细（节选）", max_rows=30)
 
 
     # ---------------- 六、问题三 ----------------
-    H(doc, "六、问题三：通信约束下的运输与中继联合调度", 1, page_break=True)
+    H(doc, "六、问题三：通信约束下的运输与中继联合调度", 1)
     H(doc, "6.1 问题分析与模型建立", 2)
     P(doc, "问题三在问题二方案上叠加通信约束：运输无人机在**爬升、巡航、下降及物资"
            "投送阶段均应保持连续通信**。这带来两个建模难点：")
@@ -746,8 +1363,8 @@ def build_body(doc: Document, D: dict) -> None:
     H(doc, "6.2 中继架次的时间与能耗模型", 2)
     P(doc, "中继机由 O01 出发，到达悬停位置并完成建链后提供通信服务，服务结束后返回。"
            "其时间与能耗按附录 2 计算：")
-    EQ(doc, "t_link = t_prep + t_fly(O01→P) + t_setup ,  t_svc = [t_link , 窗口结束]", "18")
-    EQ(doc, "E_R = E_up(m_takeoff, h⁺) + P_cruise·t_cruise + (P_hover + P_comms)·t_svc", "19")
+    EQ(doc, r"t_{link} = t_{prep} + t_{fly}(O01 \to P) + t_{setup}, \quad t_{svc} = [\, t_{link},\ T_{win}^{end} \,]", "18")
+    EQ(doc, r"E_{R} = E_{up}(m_{takeoff}, h^{+}) + P_{cruise} \cdot t_{cruise} + (P_{hover} + P_{comms}) \cdot t_{svc}", "19")
     P(doc, f"其中计划起飞总质量取附件值 {D['relay'].iloc[0]['takeoff_mass_kg']:.1f} kg，"
            f"巡航功率 {D['relay'].iloc[0]['cruise_power_kw']:.2f} kW，"
            f"悬停功率 {D['relay'].iloc[0]['hover_power_kw']:.2f} kW，"
@@ -775,7 +1392,7 @@ def build_body(doc: Document, D: dict) -> None:
            f"这直接证明**中继无人机是必需项而非可选项**——"
            f"若没有中继，这些架次在中断时段将失去指挥与遥测链路。")
     FIGURE(doc, "f11_q3_diagnosis", "图 16  连续通信诊断（轨迹逐时刻采样）")
-    TABLE(doc, "t_q3_diagnosis", "表 19  逐架次直连状态诊断", max_rows=40)
+    TABLE(doc, "t_q3_diagnosis", "表 19  逐架次直连状态诊断", max_rows=30)
 
     P(doc, f"（2）中继选址与覆盖。最终生成 "
            f"{int(m3.get('n_relay_sorties', 0))} 个中继架次，"
@@ -785,7 +1402,7 @@ def build_body(doc: Document, D: dict) -> None:
            f"1 个架次因中断时段沿轨迹分布较散而由 2 架中继分段接力覆盖。")
     FIGURE(doc, "f12_q3_relay_map", "图 17  中继悬停点与通信保障关系")
     FIGURE(doc, "f13_q3_coverage", "图 18  中继选址特征")
-    TABLE(doc, "t_q3_relay_sorties", "表 20  中继架次明细（交付模板列序）", max_rows=35)
+    TABLE(doc, "t_q3_relay_sorties", "表 20  中继架次明细（交付模板列序）", max_rows=28)
 
     P(doc, f"（3）能耗与完工时间。运输能耗 {m3.get('transport_energy_kwh', 0):.2f} kWh，"
            f"中继能耗 {m3.get('relay_energy_kwh', 0):.2f} kWh"
@@ -805,7 +1422,7 @@ def build_body(doc: Document, D: dict) -> None:
 
 
     # ---------------- 七、问题四 ----------------
-    H(doc, "七、问题四：救援任务分区与资源配置优化", 1, page_break=True)
+    H(doc, "七、问题四：救援任务分区与资源配置优化", 1)
     H(doc, "7.1 问题分析与关键规则形式化", 2)
     P(doc, "问题四要求以问题三的联合调度方案为基础，把 15 个服务区划分为 2 组和 3 组，"
            "并保持问题三已确定的货箱组批、服务区访问顺序、运输与中继任务安排、"
@@ -886,7 +1503,7 @@ def build_body(doc: Document, D: dict) -> None:
 
 
     # ---------------- 八、模型检验 ----------------
-    H(doc, "八、模型检验与敏感性分析", 1, page_break=True)
+    H(doc, "八、模型检验与敏感性分析", 1)
     H(doc, "8.1 独立可行性校验器", 2)
     P(doc, "为避免“求解器与校验器同源、自证清白”，本文另行构建**独立可行性校验器**："
            "它不导入任何求解器模块，直接从附件与 DEM 重算全部物理量"
@@ -945,7 +1562,7 @@ def build_body(doc: Document, D: dict) -> None:
     ])
 
     # ---------------- 九、结论 ----------------
-    H(doc, "九、结论", 1, page_break=True)
+    H(doc, "九、结论", 1)
     P(doc, "本文围绕山区洪涝灾害下的无人机运输与通信协同优化问题，"
            "建立了统一的物理计算器与独立校验器，并对四个问题完成了建模、求解与验证。"
            "主要结论如下：")
@@ -956,7 +1573,7 @@ def build_body(doc: Document, D: dict) -> None:
         f"{int(m1.get('chosen_n_sorties', 18))} 架次、"
         f"总能耗 {m1.get('chosen_total_energy_kwh', 0):.2f} kWh，"
         f"逐服务区达到装箱下界，架次数可证最优。"
-        f"ρ_g 由 0.20 增至 0.35 使架次数升至 25，超过 0.40 则部分服务区无解；",
+        f"$\\rho_{{g}}$ 由 0.20 增至 0.35 使架次数升至 25，超过 0.40 则部分服务区无解；",
         f"**问题二**：给出 {int(m2.get('n_sorties', 35))} 架次调度方案，"
         f"总能耗 {m2.get('total_energy_kwh', 0):.2f} kWh、"
         f"完工时间 {m2.get('makespan_h', 0):.2f} h。"
@@ -984,7 +1601,7 @@ def build_body(doc: Document, D: dict) -> None:
            "这比通过放松约束制造可行解更具工程价值。")
 
     # ---------------- 参考文献 ----------------
-    H(doc, "参考文献", 1, page_break=True)
+    H(doc, "参考文献", 1)
     refs = [
         "[1] Copernicus Data Space Ecosystem. Copernicus DEM—Global and European Digital "
         "Elevation Model[DB/OL]. DOI: 10.5270/ESA-c5d3d65.",
@@ -1018,7 +1635,7 @@ def build_body(doc: Document, D: dict) -> None:
 
 
     # ---------------- 附录 ----------------
-    H(doc, "附录", 1, page_break=True)
+    H(doc, "附录", 1)
     H(doc, "附录 A  图表与数据备份清单", 2)
     P(doc, "按竞赛要求，本文全部数据与图片均在对应文件夹下备份。目录结构如下：")
     BULLETS(doc, [
@@ -1035,18 +1652,8 @@ def build_body(doc: Document, D: dict) -> None:
         TABLE(doc, "t_chart_manifest", "表 A1  图表清单（含文件路径）", max_rows=60)
     bman = PAPER / "backup_manifest.csv"
     if bman.exists():
-        df = pd.read_csv(bman)
-        t = doc.add_table(rows=1, cols=len(df.columns))
-        t.style = "Table Grid"
-        for j, c in enumerate(df.columns):
-            _set_font(t.rows[0].cells[j].paragraphs[0].add_run(str(c)), 9, bold=True)
-        for _, r in df.iterrows():
-            cells = t.add_row().cells
-            for j, c in enumerate(df.columns):
-                _set_font(cells[j].paragraphs[0].add_run(str(r[c])), 9)
-        cap = doc.add_paragraph(); cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        cap.paragraph_format.first_line_indent = Pt(0)
-        _set_font(cap.add_run("表 A2  按问题分目录备份统计"), 10.5, bold=True, cn=CN_HEI)
+        TABLE(doc, "t_backup_manifest", "表 A2  按问题分目录备份统计",
+              df=pd.read_csv(bman), font=8.5)
 
     H(doc, "附录 B  四问关键指标汇总", 2)
     TABLE(doc, "t_all_metrics", "表 B1  四问关键指标汇总", max_rows=60)

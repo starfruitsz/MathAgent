@@ -1,0 +1,28 @@
+{
+  "question": "q4",
+  "git_commit": "28452853e27941280ee602e1ece85cc228762b60",
+  "timestamp": "2026-09-24T16:54:37.467947+08:00",
+  "seed": 42,
+  "data_sources": [
+    "调度中心与服务区.xlsx",
+    "运输无人机数据.xlsx",
+    "中继无人机数据.xlsx",
+    "Q3 方案"
+  ],
+  "params": {
+    "inventory": {
+      "A": 4,
+      "B": 2,
+      "C": 2
+    },
+    "battery_inventory": {
+      "A": 6,
+      "B": 4,
+      "C": 4
+    },
+    "relay_inventory": {
+      "relay_uavs": 2,
+      "relay_packs": 6
+    }
+  }
+}

@@ -17,12 +17,12 @@
 | **P0b** 物理 / 地理 / 通信 / 校验器 | ✅ 完成 | `src/physics/`、`src/geo/`、`src/comms/`、`src/verify/` |
 | **P1 / Q1** 载荷能力与货箱组批 | ✅ 完成 | 18 架次（**达到下界，可证最优**）、ρ_g 敏感性、Pareto 前沿 |
 | **P2 / Q2** 异构多点多架次调度 | ✅ 完成 | 35 架次 / 83.01 kWh / 完工 587 min；硬约束全部通过 |
-| **P3 / Q3** 通信约束下运输与中继联合调度 | 🔄 **进行中** | — |
-| **P4 / Q4** 任务分区与资源配置 | ⬜ 待做 | — |
+| **P3 / Q3** 通信约束下运输与中继联合调度 | ✅ 完成 | 30 个中继架次 / **29-29 全程通信覆盖** / 总能耗 99.68 kWh |
+| **P4 / Q4** 任务分区与资源配置 | ✅ 完成 | ★ **按规则不存在合法 2/3 组分区**；给出桥接架次与最小改动方案 |
 | **P5** 论文与 Word 生成 | ⬜ 待做 | 以 `docs/reference/` 的第三方版本为**格式模板** |
 
 **环境**：Python 3.13.7 / Windows 11 / 24 核；依赖已锁定（`requirements.txt`），`check_env.py` 返回 `status: ok`。
-**测试**：`189 passed`。
+**测试**：`227 passed`。
 
 ---
 
@@ -50,7 +50,7 @@ python -m src.q0_data.build_processed     # → data/processed/*.csv
 python -m src.physics.leg_cache           # → leg_cache.parquet（首次约 0.1 s）
 python -m src.q1_payload_grouping.run_q1  # Q1
 python -m src.q2_transport_schedule.run_q2 # Q2
-python -m src.q3_comms_relay.run_q3       # Q3（进行中）
+python -m src.q3_comms_relay.run_q3       # Q3
 python -m src.q4_partitioning.run_q4      # Q4
 python -m pytest tests\ -v
 ```
@@ -112,10 +112,10 @@ MathAgent/
 │   │   ├── los.py               地形遮挡判定
 │   │   └── service.py           直连 / 中继 / 中断 三态判定
 │   ├── verify/                  ★ 独立可行性校验器（18 类 + 负样本测试）
-│   ├── q1_payload_grouping/     Q1：载荷表 / 装箱 / Pareto / ρ_g 敏感性
+│   ├── q1_payload_grouping/     Q1：载荷表 / 装箱 / Pareto / rho_g 敏感性
 │   ├── q2_transport_schedule/   Q2：多点串飞 / 资源周转 / 时限驱动派发
-│   ├── q3_comms_relay/          Q3：中继联合调度（进行中）
-│   ├── q4_partitioning/         Q4：分区与资源配置
+│   ├── q3_comms_relay/          Q3：中继选址 / 轨迹覆盖 / 联合调度
+│   ├── q4_partitioning/         Q4：分区（原子单元/连通分量）与资源核算
 │   └── report/                  论文表格与图
 ├── outputs/                     ★ 证据链：metrics / params / 图表 / 校验报告
 │   ├── q1/  q2/                 每问含 metrics.json、params.json、tables/、figures/
@@ -135,7 +135,7 @@ MathAgent/
 │   ├── TOOLS.md                 外部工具来源/版本/许可证
 │   ├── reference/               第三方同题解答（仅作模板/交叉验证）
 │   └── legacy_D题/              废弃的 D 题方案归档（只读）
-└── tests/                       189 项测试（物理公式逐条锁死 + 负样本）
+└── tests/                       227 项测试（物理公式逐条锁死 + 负样本）
 ```
 
 ---
@@ -163,8 +163,8 @@ L0 常量层   common/config.py
 |---|---|---|
 | **Q1** | 单点往返最大安全载荷 + 货箱组批 | A 型 **15/15**、B 型 14/15 全区受**结构载重**约束，能量仅为次要约束；最优 **18 架次**（逐区达到下界）；ρ_g 0.20→0.35 使架次 18→25，**>0.40 无解** |
 | **Q2** | 异构多点多架次调度 | 35 架次 / 83.01 kWh / 完工 587 min；★ **首批时限在本机队下物理不可行**（前 60 min 最多 8~10 架次，但有 9 个区要求 60 min 内送达） |
-| **Q3** | 通信约束下运输与中继联合调度 | ★ 实测 **12/15 航段存在直连中断**（平均中断占比 24.7%）→ **中继为必需项**；链路门限：直连 122 dB / 中继接入 116 dB / 中继回传 126 dB |
-| **Q4** | 任务分区与资源配置 | 待做；分区须**先聚类架次**再归组服务区（同架次多服务区必须同组） |
+| **Q3** | 通信约束下运输与中继联合调度 | ★ 实测 **29/35 航段存在直连中断**（平均中断占比 31.3%）→ **中继为必需项**；链路门限：直连 122 dB / 中继接入 116 dB / 中继回传 126 dB；中继 30 架次、总能耗 99.68 kWh |
+| **Q4** | 任务分区与资源配置 | ★ **按题目规则不存在合法的 2 组或 3 组分区** —— Q3 的 21 个多点架次把 15 区串成**单一连通分量**，唯一合法分区是「全部一组」。且分区越多资源需求越大（K=1/2/3 → 13/17/21 台·组），**分区无收益** |
 
 ---
 

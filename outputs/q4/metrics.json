@@ -1,7 +1,7 @@
 {
   "question": "q4",
-  "git_commit": "cc2499735806455db46399c21224c5324ab62a8d",
-  "timestamp": "2026-09-26T01:08:16.252066+08:00",
+  "git_commit": "24387b8786fef64d0d533a97a2c979ccd0a2cc61",
+  "timestamp": "2026-09-26T01:50:26.108922+08:00",
   "seed": 42,
   "data_sources": [
     "调度中心与服务区.xlsx",
@@ -25,20 +25,20 @@
     },
     "k2_edits_required": 0,
     "k3_edits_required": 0,
-    "runtime_sec": 74.79,
+    "runtime_sec": 99.3,
     "k2_resources": {
-      "uavs": 8,
+      "uavs": 9,
       "batteries": 15,
       "relay_uavs": 2,
       "relay_packs": 3,
-      "imbalance": 0.6012
+      "imbalance": 0.2289
     },
     "k3_resources": {
       "uavs": 10,
       "batteries": 15,
       "relay_uavs": 2,
       "relay_packs": 3,
-      "imbalance": 1.2494
+      "imbalance": 0.8425
     }
   }
 }

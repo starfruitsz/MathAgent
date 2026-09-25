@@ -32,8 +32,8 @@ from src.common.io_utils import get_logger, save_table  # noqa: E402
 plt.rcParams.update({
     "font.sans-serif": ["Microsoft YaHei", "SimHei", "DejaVu Sans"],
     "axes.unicode_minus": False,
-    "figure.dpi": 200,
-    "savefig.dpi": 200,
+    "figure.dpi": 300,
+    "savefig.dpi": 300,
     "savefig.bbox": "tight",
     "font.size": 10,
     "axes.titlesize": 11,
@@ -335,8 +335,8 @@ def fig_q1_groups(D: dict) -> None:
 
 
 def fig_q1_strategy(D: dict) -> None:
-    """策略对比与 Pareto 前沿 + 下界。"""
-    c = D["q1_cmp"]; lb = D["q1_lb"]; pf = D["q1_pareto"]
+    """策略对比与"下界—精确 DP"差距 + 能耗构成。"""
+    c = D["q1_cmp"]; lb = D["q1_lb"]
     fig, axes = plt.subplots(1, 3, figsize=(14.2, 4.3))
 
     ax = axes[0]
@@ -349,24 +349,23 @@ def fig_q1_strategy(D: dict) -> None:
 
     ax = axes[1]
     ax.scatter(c["总运输能耗（kWh）"], c["累计作业时间（s）"] / 3600,
-               s=70, c=C["green"], edgecolor="k", zorder=3)
+               s=90, c=C["green"], edgecolor="k", zorder=3, label="候选策略")
     for _, r in c.iterrows():
-        ax.annotate(r["策略"], (r["总运输能耗（kWh）"], r["累计作业时间（s）"] / 3600),
-                    fontsize=7.5, xytext=(5, 3), textcoords="offset points")
-    if len(pf):
-        ax.scatter(pf["总运输能耗（kWh）"], pf["累计作业时间（s）"] / 3600,
-                   s=190, facecolor="none", edgecolor=C["red"], lw=1.8,
-                   zorder=2, label="Pareto 前沿")
-        ax.legend(fontsize=8)
+        ax.annotate(f"{r['策略']}\n({int(r['往返架次数'])} 架次)",
+                    (r["总运输能耗（kWh）"], r["累计作业时间（s）"] / 3600),
+                    fontsize=7.5, xytext=(6, 4), textcoords="offset points")
     ax.set_xlabel("总运输能耗 (kWh)"); ax.set_ylabel("累计作业时间 (h)")
-    ax.set_title("(b) 能耗—时间权衡与 Pareto 前沿")
+    ax.set_title("(b) 能耗—时间权衡（同一组批仅换机型）")
+    ax.legend(fontsize=8)
 
     ax = axes[2]
     x = np.arange(len(lb))
-    ax.bar(x - 0.2, lb["架次数下界"], 0.4, label="架次数下界", color=C["gray"])
-    ax.bar(x + 0.2, lb["最少架次策略"], 0.4, label="启发式结果", color=C["blue"])
+    ax.bar(x - 0.2, lb["架次数下界"], 0.4, label="装箱下界", color=C["gray"])
+    ax.bar(x + 0.2, lb["精确DP架次数"], 0.4, label="精确字典序 DP", color=C["blue"])
     ax.set_xticks(x); ax.set_xticklabels(lb["服务区编号"], rotation=90, fontsize=7.5)
-    ax.set_ylabel("架次数"); ax.set_title("(c) 逐区下界 vs 启发式（差距全为 0）")
+    gap = int(lb["与下界差距"].sum())
+    ax.set_ylabel("架次数")
+    ax.set_title(f"(c) 逐区下界 vs 精确 DP（总差距 {gap}）")
     ax.legend(fontsize=8)
     # 题注由论文 docx 统一生成，避免与正文编号冲突
 #     fig.suptitle("图 6  问题一：策略对比、Pareto 前沿与最优性证据", y=1.03,
@@ -680,27 +679,121 @@ def fig_q3_coverage(D: dict) -> None:
 
 
 def fig_q3_joint_gantt(D: dict) -> None:
-    """运输 + 中继 联合甘特图。"""
-    s = D["q3_sorties"]; rs = D["q3_relay"]
-    fig, ax = plt.subplots(figsize=(12.6, 5.6))
+    """运输 + 中继 联合甘特图（含实体机行、电池行与中继服务窗口）。"""
+    s = D["q3_sorties"].copy(); rs = D["q3_relay"].copy()
+    bu = D["q2_batuse"].copy()
+    fig, axes = plt.subplots(3, 1, figsize=(12.8, 9.2),
+                             gridspec_kw={"height_ratios": [1.35, 1.0, 1.0],
+                                          "hspace": 0.42})
+
+    # (a) 实体机时间线
+    ax = axes[0]
+    uavs = sorted(s["无人机编号"].unique())
+    yi = {u: i for i, u in enumerate(uavs)}
     for _, r in s.iterrows():
-        y = 0
+        y = yi[r["无人机编号"]]
         ax.barh(y, (r["返回O01时刻（s）"] - r["开始时刻（s）"]) / 3600,
-                left=r["开始时刻（s）"] / 3600, height=0.8,
-                color=C["blue"], alpha=0.35, edgecolor="none")
-    for _, r in rs.iterrows():
-        ax.barh(1, (r["返回O01时刻（s）"] - r["开始时刻（s）"]) / 3600,
-                left=r["开始时刻（s）"] / 3600, height=0.8,
-                color=C["relay"], alpha=0.5, edgecolor="none")
-        ax.barh(1, (r["服务结束时刻（s）"] - r["建链完成时刻（s）"]) / 3600,
-                left=r["建链完成时刻（s）"] / 3600, height=0.8,
+                left=r["开始时刻（s）"] / 3600, height=0.66,
+                color=C.get(r["机型编号"], C["blue"]), edgecolor="white", lw=0.5)
+        ax.text(r["开始时刻（s）"] / 3600 + 0.015, y, r["架次编号"],
+                fontsize=5.6, va="center", color="white", weight="bold")
+    ax.set_yticks(range(len(uavs))); ax.set_yticklabels(uavs, fontsize=8)
+    ax.set_xlabel("时间 (h)"); ax.set_ylabel("运输实体机")
+    ax.set_title("(a) 运输架次时间线（颜色=机型；共 "
+                 f"{len(s)} 架次 / {len(uavs)} 架实体机）")
+    hs = [plt.Rectangle((0, 0), 1, 1, color=C[c])
+          for c in ("A", "B", "C") if c in set(s["机型编号"])]
+    ax.legend(hs, [f"{c} 型" for c in ("A", "B", "C")
+                   if c in set(s["机型编号"])], fontsize=8, ncol=3)
+
+    # (b) 共享电池：占用 = 架次 + 充满
+    ax = axes[1]
+    bids = sorted(bu["电池编号"].unique())
+    bi = {k: i for i, k in enumerate(bids)}
+    for _, r in bu.iterrows():
+        y = bi[r["电池编号"]]
+        ax.barh(y, (r["占用结束（s）"] - r["占用开始（s）"]) / 3600,
+                left=r["占用开始（s）"] / 3600, height=0.62,
+                color=C.get(r["机型"], C["green"]), edgecolor="white", lw=0.5)
+        ax.text(r["占用开始（s）"] / 3600 + 0.015, y, r["架次"],
+                fontsize=5.6, va="center", color="white", weight="bold")
+    ax.set_yticks(range(len(bids))); ax.set_yticklabels(bids, fontsize=8)
+    ax.set_xlabel("时间 (h)"); ax.set_ylabel("共享电池")
+    ax.set_title("(b) 电池占用时间线（占用 = 架次历时 + 两阶段充满时间）")
+
+    # (c) 中继：飞行段 + 在站服务窗口
+    ax = axes[2]
+    for i, (_, r) in enumerate(rs.iterrows()):
+        ax.barh(0, (r["服务结束时刻（s）"] - r["建链完成时刻（s）"]) / 3600,
+                left=r["建链完成时刻（s）"] / 3600, height=0.7,
                 color=C["red"], alpha=0.9, edgecolor="none")
+        ax.barh(1, (r["返回O01时刻（s）"] - r["开始时刻（s）"]) / 3600,
+                left=r["开始时刻（s）"] / 3600, height=0.7,
+                color=C["relay"], alpha=0.45, edgecolor="none")
+        ax.text((r["建链完成时刻（s）"] + r["服务结束时刻（s）"]) / 2 / 3600, 0,
+                f"{r['中继架次编号']}@{r['悬停点']}", fontsize=6.6,
+                ha="center", va="center", color="white", weight="bold")
     ax.set_yticks([0, 1])
-    ax.set_yticklabels([f"运输（{len(s)} 架次）", f"中继（{len(rs)} 架次）"])
-    ax.set_xlabel("时间 (h）")
-    ax.set_title("图 14  问题三：运输与中继联合调度时间线（红=通信服务窗口）")
-    ax.set_ylim(-0.6, 1.6)
+    ax.set_yticklabels([f"在站服务（{len(rs)} 架次）",
+                        "飞行/转场"], fontsize=8)
+    for _, r in s.iterrows():
+        ax.barh(2, (r["返回O01时刻（s）"] - r["开始时刻（s）"]) / 3600,
+                left=r["开始时刻（s）"] / 3600, height=0.7,
+                color=C["blue"], alpha=0.35, edgecolor="none")
+    ax.set_yticks([0, 1, 2])
+    ax.set_yticklabels([f"中继在站（{len(rs)} 架次）", "中继转场",
+                        f"运输（{len(s)} 架次）"], fontsize=8)
+    ax.set_ylim(-0.7, 2.7)
+    ax.set_xlabel("时间 (h，t=0 为任务开始）")
+    hs2 = [plt.Rectangle((0, 0), 1, 1, color=C["red"]),
+           plt.Rectangle((0, 0), 1, 1, color=C["relay"], alpha=0.45),
+           plt.Rectangle((0, 0), 1, 1, color=C["blue"], alpha=0.35)]
+    ax.legend(hs2, ["中继在站服务窗口", "中继飞行/转场", "运输在飞"],
+              fontsize=8, ncol=3, loc="upper right")
+    ax.set_title("(c) 中继服务窗口与运输时间线（红=通信服务窗口）")
+    fig.suptitle("图 19  问题三：运输与中继联合调度时间线", y=0.995,
+                 fontsize=12, weight="bold")
     _save(fig, "f14_q3_joint_gantt", "运输与中继联合调度时间线", "问题三")
+
+
+def fig_q3_margin(D: dict) -> None:
+    """逐时刻**最小链路裕量**（SKILL 要求的“最小链路裕量图”）。
+
+    数据由 `src/q3_comms_relay/timeline.py` 的 `to_min_margin_series()` 直接落盘，
+    这里只做可视化：裕量 ≥ 0 即可用；< 0 为不可用（直连或中继都不可用即中断）。
+    """
+    p = TAB / "t_q3_margin_series.csv"
+    if not p.exists():
+        return
+    d = pd.read_csv(p)
+    if d.empty:
+        return
+    fig, axes = plt.subplots(2, 1, figsize=(12.6, 7.4),
+                             gridspec_kw={"hspace": 0.35})
+
+    ax = axes[0]
+    cmap = {"直连": C["direct"], "中继": C["relay"], "中断": C["outage"]}
+    for st, sub in d.groupby("状态"):
+        ax.scatter(sub["时刻（s）"] / 3600, sub["链路裕量（dB）"], s=3,
+                   c=cmap.get(st, C["gray"]), label=f"{st}（{len(sub)} 点）",
+                   alpha=0.75, linewidths=0)
+    ax.axhline(0, color="k", ls="--", lw=1.2)
+    ax.set_xlabel("时间 (h)"); ax.set_ylabel("链路裕量 (dB)")
+    ax.set_title("(a) 全部架次逐时刻链路裕量（裕量 ≥ 0 即可用；0 线为可用门限）")
+    ax.legend(fontsize=8, markerscale=8)
+
+    ax = axes[1]
+    need = d[d["状态"] != "直连"]
+    if len(need):
+        ax.hist(need["链路裕量（dB）"], bins=60,
+                color=C["relay"], edgecolor="white")
+    ax.axvline(0, color="k", ls="--", lw=1.2)
+    ax.set_yscale("log")
+    ax.set_xlabel("链路裕量 (dB)"); ax.set_ylabel("采样点数（对数）")
+    ax.set_title("(b) 非直连样本的裕量分布（0 线左侧即真正中断）")
+    fig.suptitle("图 18b  问题三：逐时刻最小链路裕量", y=0.98,
+                 fontsize=12, weight="bold")
+    _save(fig, "f14b_q3_margin", "逐时刻最小链路裕量", "问题三")
 
 
 # ================================================================ Q4 图
@@ -849,7 +942,8 @@ def main() -> int:
     _log.info("生成问题二图 ...")
     fig_q2_gantt(D); fig_q2_timeliness(D); fig_q2_resources(D)
     _log.info("生成问题三图 ...")
-    fig_q3_diag(D); fig_q3_relay_map(D); fig_q3_coverage(D); fig_q3_joint_gantt(D)
+    fig_q3_diag(D); fig_q3_relay_map(D); fig_q3_coverage(D)
+    fig_q3_margin(D); fig_q3_joint_gantt(D)
     _log.info("生成问题四图 ...")
     fig_q4_graph(D); fig_q4_compare(D); fig_q4_detail(D)
 

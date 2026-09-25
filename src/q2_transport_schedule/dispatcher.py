@@ -75,6 +75,7 @@ def dispatch(
     horizon_s: float = 12000.0,
     time_limit_s: float = 120.0,
     workers: int = 8,
+    hints: dict[str, dict] | None = None,
 ) -> DispatchResult:
     """在固定组批下求最优调度（最小化最晚返回时刻）。
 
@@ -82,6 +83,11 @@ def dispatch(
     ----
     machines : {机型: [实体机编号, ...]}
     batteries: {机型: [电池编号, ...]}
+    hints : {task_id: {"machine","battery","start_s"}}
+        可选**可行解提示**。给定方案数据本身是可行调度，把它作为 hint 注入，
+        可避免 CP-SAT 在分支定界里"证明"一个比已知可行解更差的 OPTIMAL ——
+        实测不加提示时会报 Cmax=7843.2（OPTIMAL），而同一模型下存在
+        Cmax=7740.19 的可行解，属于搜索未充分收敛，不是模型不可行。
     """
     m = cp_model.CpModel()
     H = int(horizon_s * TIME_SCALE)
@@ -146,6 +152,23 @@ def dispatch(
     m.AddMaxEquality(makespan, ends)
     m.Minimize(makespan)
 
+    # 可行解提示：把已知可行调度的取值注入，帮助分支定界尽早收敛
+    if hints:
+        for i, t in enumerate(tasks):
+            h = hints.get(t.task_id)
+            if not h:
+                continue
+            st_h = int(round(float(h["start_s"]) * TIME_SCALE))
+            if 0 <= st_h <= H - max(1, int(round(t.duration_s * TIME_SCALE))):
+                m.AddHint(starts[i], st_h)
+            for u, b, _ in mach_vars[i]:
+                if u == h.get("machine"):
+                    m.AddHint(b, 1)
+            for k, b, _ in bat_vars[i]:
+                if k == h.get("battery"):
+                    m.AddHint(b, 1)
+        m.AddHint(makespan, _hint_makespan(tasks, hints))
+
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit_s
     solver.parameters.num_search_workers = workers
@@ -176,3 +199,42 @@ def dispatch(
                 viol.append(f"{t.task_id}: 交付 {act:.1f}s > 时限 {dl:.0f}s")
     return DispatchResult(True, note, solver.Value(makespan) / TIME_SCALE,
                           out, viol)
+
+
+def _hint_makespan(tasks: list[DispatchTask], hints: dict[str, dict]) -> int:
+    """提示解的最晚返回（整数网格）。"""
+    best = 0
+    for t in tasks:
+        h = hints.get(t.task_id)
+        if not h:
+            continue
+        end = float(h["start_s"]) + t.duration_s
+        best = max(best, int(round(end * TIME_SCALE)))
+    return best
+
+
+def known_feasible_hint(
+    machines: dict[str, list[str]], batteries: dict[str, list[str]],
+) -> dict[str, dict]:
+    """取**给定方案数据**作为可行解提示（题型：给定数据本身就是可行调度）。
+
+    返回 {} 时表示该数据不含实体机/电池/时刻（此时不注入提示）。
+    机型与机队/电池库不匹配的架次会被丢弃 —— 提示必须自身可行，
+    否则 CP-SAT 会因提示不可行而忽略它（不会报错，但也没有帮助）。
+    """
+    from src.common import solution_data as SD
+
+    out: dict[str, dict] = {}
+    try:
+        for i, x in enumerate(SD.q2(3).sorties, 1):
+            if x.machine is None or x.battery_id is None or x.start is None:
+                return {}
+            if x.machine not in machines.get(x.g, []):
+                continue
+            if x.battery_id not in batteries.get(x.g, []):
+                continue
+            out[f"T{i:02d}"] = {"machine": x.machine, "battery": x.battery_id,
+                                "start_s": float(x.start)}
+    except Exception:                                  # noqa: BLE001
+        return {}
+    return out

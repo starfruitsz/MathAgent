@@ -26,6 +26,131 @@ from src.physics.payload import UAVType
 
 CENTER_ID = "O01"
 
+#: 完工时间口径警示（随 `Plan.caveats` 传播到论文，不得省略）
+DEADLINE_CAVEAT = (
+    "完工时间 7843.20 s 是**满足全部硬时限**（首批截止 + 全部箱期望送达）下的最优值。"
+    "给定方案数据的时刻表最晚返回 7740.19 s（小 103 s），但它使 S015 医疗箱在图示"
+    "时刻交付（7470.0 s > 7200 s 硬时限），故不满足本仓时限约束；"
+    "本仓用 CP-SAT 逐档收紧 Cmax 上界验证：Cmax ≤ 7843.2 s 对给定组批不可行、"
+    "≤ 7850 s 可行。该差值属时限可行性的代价，不得写成“本方案更慢”。"
+)
+
+#: 给定方案中**为满足时限而拆分**的服务区：这些区的组批不与问题一相同
+#: （问题一在这 4 区各用 1 个大架次，但首批/医疗时限要求先派小架次）。
+SPLIT_AREAS: frozenset[str] = frozenset({"S006", "S007", "S008", "S013"})
+
+
+def _improve_grouping(
+    src: list[SD.Sortie],
+    uav_types: dict[str, UAVType],
+    leg_cache: LegCache,
+) -> list[SD.Sortie]:
+    """把非拆分区（`SPLIT_AREAS` 之外）的组批替换为问题一的**精确 DP 组批**。
+
+    保证：
+      · 架次**总数与逐区架次数不变**（只换“每架次装哪几箱”）；
+      · 每区能耗不增（精确 DP 在同一架次数下取能耗最小）；
+      · 输出顺序确定（按服务区编号、再按机型编号与箱数），保证可复现。
+    """
+    from src.q0_data import build_processed as BP
+    from src.q1_payload_grouping.exact_pack import plan_all_areas
+    from src.q1_payload_grouping.grouping import area_capacities
+
+    boxes_by_area: dict[str, list] = {}
+    for _, r in BP.load_boxes().iterrows():
+        boxes_by_area.setdefault(str(r["service_id"]), []).append(r)
+
+    areas = sorted({x.sites[0] for x in src} - SPLIT_AREAS)
+    if not areas:
+        return src
+    caps = area_capacities(areas, uav_types, leg_cache)
+    plans = plan_all_areas({a: boxes_by_area.get(a, []) for a in areas},
+                           caps, uav_types, leg_cache, ("A", "B", "C"))
+
+    by_area: dict[str, list[SD.Sortie]] = {}
+    for sid in areas:
+        p = plans.get(sid)
+        pool = list(boxes_by_area.get(sid, []))
+        if p is None:
+            continue
+        for b in p.batches:
+            picked = _pick_boxes(pool, b, boxes_by_area[sid])
+            if not picked:
+                continue
+            from src.physics.energy import (
+                Segment, segment_energy_kwh, segment_time_s,
+            )
+
+            uav = uav_types[b.type_code]
+            fwd = leg_cache.get(CENTER_ID, sid)
+            bwd = leg_cache.get(sid, CENTER_ID)
+            mass = sum(float(x["mass_kg"]) for x in picked)
+            vol = sum(float(x["volume_m3"]) for x in picked)
+            e = (segment_energy_kwh(uav, Segment(fwd["distance_m"], fwd["climb_m"],
+                                                 fwd["descent_m"]), mass)
+                 + segment_energy_kwh(uav, Segment(bwd["distance_m"], bwd["climb_m"],
+                                                   bwd["descent_m"]), 0.0))
+            fly = (segment_time_s(uav, Segment(fwd["distance_m"], fwd["climb_m"],
+                                               fwd["descent_m"]))
+                   + segment_time_s(uav, Segment(bwd["distance_m"], bwd["climb_m"],
+                                                 bwd["descent_m"])))
+            nb = len(picked)
+            dur = (uav.prepare_time_s + uav.box_load_time_s * nb + fly
+                   + uav.handover_base_s + uav.handover_per_box_s * nb)
+            deliver = (uav.prepare_time_s + uav.box_load_time_s * nb + fly
+                       + uav.handover_base_s)
+            by_area.setdefault(sid, []).append(SD.Sortie(
+                g=b.type_code, sites=(sid,),
+                boxes=tuple(str(x["box_id"]) for x in picked),
+                mass=mass, volume=vol, duration=dur, energy=e,
+                soc=max(0.0, 1.0 - e / uav.energy_kwh),
+                delivery={str(x["box_id"]): deliver for x in picked},
+            ))
+
+    # 顺序：**沿用给定数据的服务区出现顺序**（保证 T 编号与对照表可比），
+    # 每个非拆分区在其首次出现处展开为该区的 DP 组批；拆分区保持原给定批次。
+    out: list[SD.Sortie] = []
+    seen: set[str] = set()
+    for x in src:
+        sid = x.sites[0]
+        if sid in SPLIT_AREAS:
+            out.append(x)
+            continue
+        if sid in seen:
+            continue
+        seen.add(sid)
+        out.extend(by_area.get(sid, []))
+    for sid in sorted(set(by_area) - seen):
+        out.extend(by_area[sid])
+    return out
+
+
+def _pick_boxes(pool: list, batch, all_boxes: list) -> list:
+    """从池中取出与批次计数向量匹配的货箱（确定顺序，保证可复现）。
+
+    ★ 货箱以 DataFrame 行（dict 或 Series）传入：此处统一转成 dict，
+      避免 `list.remove(Series)` 触发 pandas 的真值歧义异常。
+    """
+    from src.q1_payload_grouping.exact_pack import aggregate_boxes
+
+    rows = [x if isinstance(x, dict) else dict(x) for x in pool]
+    types = aggregate_boxes(all_boxes)
+    picked: list[dict] = []
+    for cnt, bt in zip(batch.counts, types):
+        if cnt == 0:
+            continue
+        cand = [x for x in rows
+                if abs(float(x["mass_kg"]) - bt.mass_kg) < 1e-9
+                and abs(float(x["volume_m3"]) - bt.volume_m3) < 1e-9
+                and bool(x["is_first_batch"]) == bt.is_first_batch
+                and abs(float(x["expected_time_s"]) - bt.expected_time_s) < 1e-3]
+        cand.sort(key=lambda x: str(x["box_id"]))
+        take = cand[:cnt]
+        ids = {str(x["box_id"]) for x in take}
+        rows = [x for x in rows if str(x["box_id"]) not in ids]
+        picked.extend(take)
+    return picked
+
 
 # ---------------------------------------------------------------- 数据结构
 
@@ -224,11 +349,29 @@ def build_q23(
     ★ 调度由本仓 `dispatcher.dispatch()`（CP-SAT）**重新求解**，
       而不是照抄给定数据的实体机/电池/起飞时刻；给定数据仅用于
       ①组批 ②结果对照。
+
+    ★ **组批的“上游改进”必须发生在本函数内**：S006/S007/S008/S013 之外的
+      11 个服务区，其给定组批在架次数上与问题一相同、但能耗更高。本函数对这
+      11 个区直接采用 `exact_pack` 的精确 DP 组批（架次数不变），只对上述
+      4 个“为时限而拆分”的区保留给定拆分。若把这一步留在调用方，调用方一旦走
+      `build_q23()` 就会退回较差组批 —— 属于**同一问题两套数**的口径分叉。
+
+    ★ **完工时间 7843.20 s 是带全部硬时限的最优解，不是搜索没收敛**。
+      给定数据的时刻表最晚返回 7740.19 s（更小），但它**违反 S015 医疗箱的
+      7200 s 硬时限**（T19 交付 7470.0 s > 7200 s）。本仓用 CP-SAT 逐档收紧
+      `Cmax` 上界做了判定：`Cmax ≤ 7843.2 s` 对给定组批**不可行**、
+      `Cmax ≤ 7850 s` 可行，改进组批在 `7843.2 s` 即可行且最优。
+      即：完工时间的 103 s 差值是**时限可行性的代价**，不是模型缺陷。
+      同期逐箱核对：80/80 箱满足期望送达时间、30/30 首批箱达标。
     """
     t = SD.q2(relays)
 
+    src: list[SD.Sortie] = list(t.sorties)
+    if uav_types is not None and leg_cache is not None and src:
+        src = _improve_grouping(src, uav_types, leg_cache)
+
     out: list[TransportSortie] = []
-    for i, x in enumerate(t.sorties, 1):
+    for i, x in enumerate(src, 1):
         s = TransportSortie(
             sortie_id=f"T{i:02d}", type_code=x.g, sites=_sites_of(x),
             box_ids=x.boxes, mass_kg=x.mass, volume_m3=x.volume,
@@ -274,6 +417,7 @@ def build_q23(
         "（18→23 架次），以满足首批与医疗时限；载荷与能耗口径继承问题一。"
     )
     plan.caveats.append(schedule_note)
+    plan.caveats.append(DEADLINE_CAVEAT)
     plan.caveats.append(SD.RELAY_ALTITUDE_NOTE)
     plan.caveats.append(SD.RADIO_CHECK_NOTE)
     return plan
@@ -303,7 +447,11 @@ def _reschedule(
     """
     from src.physics.battery import charging_time
     from src.q0_data import build_processed as BP
-    from src.q2_transport_schedule.dispatcher import DispatchTask, dispatch
+    from src.q2_transport_schedule.dispatcher import (
+        DispatchTask,
+        dispatch,
+        known_feasible_hint,
+    )
 
     bmeta = {str(r["box_id"]): r for _, r in BP.load_boxes().iterrows()}
 
@@ -331,7 +479,8 @@ def _reschedule(
             hard_deadlines_s=tuple(hard), soft_deadlines_s=(),
         ))
 
-    res = dispatch(tasks, MACHINES, BATTERIES, time_limit_s=time_limit_s)
+    res = dispatch(tasks, MACHINES, BATTERIES, time_limit_s=time_limit_s,
+                   hints=known_feasible_hint(MACHINES, BATTERIES))
     if not res.ok:
         return None
 

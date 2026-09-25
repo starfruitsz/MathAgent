@@ -41,6 +41,9 @@ EN_FONT = "Times New Roman"
 
 TEXT_WIDTH_CM = 21.0 - 2.6 - 2.6  # A4 宽 − 左右页边距 = 15.8 cm
 
+_TBL_FONTS: list[dict] = []
+"""逐表记录最终字号，便于生成后核对（`paper/_table_fonts.json`）。"""
+
 
 # ================================================================ 样式
 
@@ -123,9 +126,17 @@ def _repeat_header(row) -> None:
         trPr.append(OxmlElement("w:tblHeader"))
 
 
-def _cell_margin(tbl, top=40, bottom=40, left=80, right=80) -> None:
-    """单元格内边距（单位 twips，1 pt = 20 twips）。"""
+def _cell_margin(tbl, top=30, bottom=30, left=30, right=30) -> None:
+    """单元格内边距（单位 twips，1 pt = 20 twips）。
+
+    ★ 左右各 30 twips（0.053 cm）是"窄到不影响表头排一行、又宽到不贴边"的折中。
+      早先用 80 twips（0.14 cm）时，15 列表格每列被吃掉 0.28 cm，
+      中文表头因此逐字换成两行。
+    """
     tblPr = tbl._tbl.tblPr
+    old = tblPr.find(qn("w:tblCellMar"))
+    if old is not None:
+        tblPr.remove(old)
     mar = OxmlElement("w:tblCellMar")
     for tag, val in (("top", top), ("left", left), ("bottom", bottom), ("right", right)):
         e = OxmlElement(f"w:{tag}")
@@ -191,17 +202,38 @@ def _est_len(s: str) -> float:
 
 
 def _col_widths(tbl, headers: list[str], rows: list[list[str]],
-                total_cm: float = TEXT_WIDTH_CM, min_cm: float = 1.2,
-                power: float = 0.55) -> None:
-    """按内容自适应分配列宽。
+                total_cm: float = TEXT_WIDTH_CM, min_cm: float = 1.05,
+                font_pt: float | None = None) -> list[float]:
+    """按内容自适应分配列宽，并**保证表头字号不低于可读下限**。
 
-    等宽列会让中文表头逐字换行（列高暴增甚至跨页），因此按
-    "表头宽 + 该列内容宽" 估计所需宽度，再用幂函数压缩长短差异，
-    最后归一化到版心宽度，保证任何两列宽度比不超过约 4:1。
+    分配口径（"两轮受约束的按需分配"）：
+
+      1. 先把列宽**平均分**，算出该宽度下"表头不换行"能用的字号上限
+         $f_{\\min}$（对所有列取最严者）；
+      2. 若 $f_{\\min} < $ `font_pt`（即平均分配下表头会换行），
+         则把每列宽设为"按**表头**在该字号下所需宽度"，剩余空间再按
+         **内容宽度**比例分配；否则全部按内容宽度比例分配。
+
+    为什么必须这样做（踩过的坑）：
+      · 只按"内容最宽单元格"比例分配 ⇒ 长内容列吃掉大半宽度
+        （如"货箱编号列表"30+ 字符），中文表头列只剩 0.7 cm，
+        15 列表格的表头字号被逼到 6 pt 才能不换行 —— 字太小不可读；
+      · 只按表头分配 ⇒ 长内容列放不下，正文换行成多行；
+      · 幂律压缩（$w^{0.55}$）是"拍脑袋折中"，会把中间长度的列也压变形。
+    两轮分配把"表头可读"作为**硬约束**、把"内容"作为**软目标**，
+    并在返回前做一次**表头复检**：若仍有列表头在小数点后差一点放不下，
+    就把最宽的列让一点给它（最多让到刚好满足），确保字号不会跌破下限。
     """
     n = len(headers)
     if n == 0:
-        return
+        return []
+    import math as _math
+
+    f_target = float(font_pt or 8.5)
+    # 表头在 f_target 下所需列宽（含左右内边距）
+    need_hdr = [_est_len(h) / 2.0 * f_target / 72.0 * 2.54 + 2 * _CELL_MARGIN_CM
+                for h in headers]
+    need_hdr = [max(w, min_cm) for w in need_hdr]
     est = []
     for j, h in enumerate(headers):
         w = _est_len(h)
@@ -209,13 +241,32 @@ def _col_widths(tbl, headers: list[str], rows: list[list[str]],
             if j < len(r):
                 w = max(w, _est_len(r[j]))
         est.append(max(w, 2.0))
-    raw = [e ** power for e in est]
-    tot = sum(raw) or 1.0
-    widths = [total_cm * r / tot for r in raw]
 
+    # 平均分配下的可用字号（用于判断是否需要启用"表头优先"）
+    per_col = total_cm / n
+    f_min = 1e9
+    for h in headers:
+        em = max(_est_len(h) / 2.0, 1e-9)
+        avail = max(0.05, per_col - 2 * _CELL_MARGIN_CM)
+        f_min = min(f_min, (avail / 2.54 * 72.0) / em)
+
+    if f_min >= f_target:
+        # 平均分配已够表头用 ⇒ 内容优先
+        widths = [total_cm * e / sum(est) for e in est]
+    else:
+        # 表头优先：先满足表头，再把余量按内容宽度比例分配
+        if sum(need_hdr) >= total_cm:
+            k = total_cm / sum(need_hdr)     # 极端情况：整体等比缩
+            widths = [w * k for w in need_hdr]
+        else:
+            rest = total_cm - sum(need_hdr)
+            tot_e = sum(est) or 1.0
+            widths = [nh + rest * e / tot_e for nh, e in zip(need_hdr, est)]
+
+    # 下界抬升 + 缺口由最宽列让出
     deficit = sum(max(0.0, min_cm - w) for w in widths)
     if deficit > 0:
-        donors = [i for i, w in enumerate(widths) if w > min_cm * 1.5]
+        donors = [i for i, w in enumerate(widths) if w > min_cm * 1.3]
         pool = sum(widths[i] - min_cm for i in donors) or 1.0
         for i, w in enumerate(widths):
             if w < min_cm:
@@ -224,6 +275,30 @@ def _col_widths(tbl, headers: list[str], rows: list[list[str]],
                 widths[i] = w - deficit * (w - min_cm) / pool
     scale = total_cm / (sum(widths) or 1.0)
     widths = [w * scale for w in widths]
+
+    # 表头复检：仍放不下的，从最宽列借（借到刚好满足为止）
+    for _ in range(4):
+        bad = []
+        for j, h in enumerate(headers):
+            em = max(_est_len(h) / 2.0, 1e-9)
+            need = em * f_target / 72.0 * 2.54 + 2 * _CELL_MARGIN_CM
+            if widths[j] < need - 1e-9:
+                bad.append((j, need - widths[j]))
+        if not bad:
+            break
+        for j, gap in bad:
+            donors = sorted((i for i in range(n) if i != j),
+                            key=lambda i: -widths[i])
+            for i in donors:
+                room = widths[i] - min_cm
+                if room <= 1e-9:
+                    continue
+                take = min(room, gap)
+                widths[i] -= take
+                widths[j] += take
+                gap -= take
+                if gap <= 1e-9:
+                    break
 
     tbl.autofit = False
     tblPr = tbl._tbl.tblPr
@@ -249,6 +324,7 @@ def _col_widths(tbl, headers: list[str], rows: list[list[str]],
         for cell, w in zip(row.cells, widths):
             cell.width = Cm(w)
     _order_tblpr(tbl)
+    return widths
 
 
 _TBLPR_ORDER = [
@@ -416,7 +492,11 @@ COMPACT_COL: dict[str, str] = {
 
 
 def _auto_font(ncol: int, base: float) -> float:
-    """列数多时自动缩小字号，保证表宽与表高可控。"""
+    """列数多时自动缩小字号（**粗筛**）。
+
+    精确的字号由 `_fit_font_to_headers()` 依据"表头文字实际宽度 ≤ 列宽"反解，
+    本函数只提供上界，避免列数很多时字号过大。
+    """
     if ncol >= 14:
         return min(base, 7.0)
     if ncol >= 11:
@@ -424,6 +504,33 @@ def _auto_font(ncol: int, base: float) -> float:
     if ncol >= 9:
         return min(base, 8.0)
     return base
+
+
+_CELL_MARGIN_CM = 0.075
+"""单侧单元格内边距（与 `_cell_margin(left=30, right=30)` 保持一致：
+30 twips = 0.0529 cm，取 0.075 cm 略保守，留出安全余量）。"""
+
+
+def _fit_font_to_headers(headers: list[str], widths_cm: list[float],
+                         base: float) -> float:
+    """反解"表头不换行"所需的最大字号（pt），并夹在 [6.0, base] 内。
+
+    为什么需要它：中文表头（如"首个中断时刻（s）"）在固定列宽下若字号过大，
+    Word 会逐字换行（甚至把表头顶成两行、行高翻倍、整表跨页）。
+    这里用与列宽分配**同一套** `_est_len` 宽度度量反解字号：
+        needed_pt ≈ (列宽 − 内边距) / (字数 × 每字宽度系数)
+    其中 CJK 字符按 1 em、ASCII 按 0.5 em（与 `_est_len` 的 2:1 一致），
+    1 em = 字号（pt）。取所有列的最小值即可保证"任何表头都不换行"。
+    """
+    best = base
+    for h, w in zip(headers, widths_cm):
+        avail_cm = max(0.05, w - 2 * _CELL_MARGIN_CM)
+        em = _est_len(h) / 2.0          # 折算为 em 数（CJK=1em，ASCII=0.5em）
+        if em <= 0:
+            continue
+        pt = (avail_cm / 2.54 * 72.0) / em   # cm → pt，再除以 em 数
+        best = min(best, pt)
+    return max(6.0, min(base, best))
 
 NUM_COLS_3 = {
     "soc", "soc_start", "rate", "coverage", "fraction", "share", "utilization",
@@ -729,7 +836,6 @@ def TABLE(doc, name: str, caption: str, max_rows: int = 40, font=8.5,
     total = len(df)
     show = df.head(max_rows)
     ncol = len(show.columns)
-    font = _auto_font(ncol, font)
 
     cap = doc.add_paragraph()
     cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -740,24 +846,36 @@ def TABLE(doc, name: str, caption: str, max_rows: int = 40, font=8.5,
     cap.paragraph_format.keep_together = True
     _add_text_runs(cap, caption, 10.5, True, cn=CN_HEI)
 
-    t = doc.add_table(rows=1, cols=len(show.columns))
-    t.alignment = WD_TABLE_ALIGNMENT.CENTER
+    # ★ 两步走：先按列数粗筛字号并分配列宽，再按**实际列宽**反解
+    #   "表头不换行"的字号，最后用最终字号重填一遍单元格。
+    #   （只做其中一步都会残留换行：列宽够了字号太大、或字号小了列宽仍窄。）
+    font = _auto_font(ncol, font)
     headers = [col_header(c) for c in show.columns]
-    _fill_row(t.rows[0], headers, font, header=True)
     body_rows: list[list[str]] = []
     for _, r in show.iterrows():
-        vals = [fmt_cell(r[c], str(c)) for c in show.columns]
-        body_rows.append(vals)
-        row = t.add_row()
-        _fill_row(row, vals, font)
+        body_rows.append([fmt_cell(r[c], str(c)) for c in show.columns])
+
+    t = doc.add_table(rows=1, cols=ncol)
+    t.alignment = WD_TABLE_ALIGNMENT.CENTER
+    _fill_row(t.rows[0], headers, font, header=True)
+    for vals in body_rows:
+        _fill_row(t.add_row(), vals, font)
 
     _three_line_borders(t)
     _header_bottom_rule(t.rows[0])
-    _col_widths(t, headers, body_rows)
+    widths = _col_widths(t, headers, body_rows, font_pt=font)
+    font = _fit_font_to_headers(headers, widths, font)
+
+    # 用最终字号重填（`_fill_row` 自身会清空单元格；列宽已定，字号不影响列宽）
+    _fill_row(t.rows[0], headers, font, header=True)
+    for i, vals in enumerate(body_rows, start=1):
+        _fill_row(t.rows[i], vals, font)
+
     _cell_margin(t)
     for row in t.rows:
         _no_split(row)
     _repeat_header(t.rows[0])
+    _TBL_FONTS.append({"表": name, "列数": ncol, "字号pt": round(font, 2)})
 
     if total > max_rows:
         note = doc.add_paragraph()
@@ -925,75 +1043,88 @@ def main() -> int:
       f"得到 3 机型 × 15 服务区共 {int(m1.get('n_uav_types',3))*n_svc} 组安全载荷。"
       f"结果表明 A 型机在 15/15 个服务区均受**结构载重**约束（载荷恒为 25 kg），"
       f"B 型 14/15 受结构约束，C 型仅 10/15——能量约束只在 C 型远距离飞行时成为紧约束。"
-      f"货箱组批建模为**质量—体积二维装箱**，采用首次适应递减（FFD）启发式并给出"
-      f"Martello–Toth 型解析下界；推荐方案 {int(m1.get('chosen_n_sorties',18))} 架次、"
-      f"总能耗 {m1.get('chosen_total_energy_kwh',0):.2f} kWh，"
-      f"**逐服务区达到下界，可证最优**。"
-      f"返航安全余量敏感性分析显示：$\\\\rho_{{g}}$ 由 0.20 增至 0.35 时总架次数由 18 升至 25，"
-      f"且当 $\\\\rho_{{g}} > 0.40$ 时部分高海拔服务区**无可行解**。")
+      f"货箱组批建模为**质量—体积二维装箱**：先按（质量, 体积, 首批标记, 期望时限）"
+      f"聚合箱型，再枚举全部**可行批次**，最后用**精确字典序动态规划**"
+      f"（目标为「架次数最少 → 总能耗最低 → 累计作业时间最短」的字典序）求全局最优；"
+      f"同时给出装箱解析下界。推荐方案 {int(m1.get('chosen_n_sorties',18))} 架次"
+      f"（B×9 + C×9，异构混编）、总能耗 "
+      f"{m1.get('chosen_total_energy_kwh',0):.3f} kWh、"
+      f"累计作业时间 {m1.get('chosen_serial_total_time_s',0)/3600:.2f} h；"
+      f"逐区架次数**等于解析下界**（合计 "
+      f"{int(m1.get('lower_bound_total_sorties',18))}），故架次数维度可证最优。"
+      f"返航安全余量敏感性分析（**每个 $\\rho_{{g}}$ 都重跑精确 DP**）显示："
+      f"$\\rho_{{g}}$ 在 0.10~0.20 之间架次数与能耗不变（均 18 架次 / 59.0875 kWh），"
+      f"增至 0.30 时架次数升到 20、能耗升到 67.1805 kWh，"
+      f"$\\rho_{{g}} \\ge 0.40$ 时出现**无可行解服务区**。")
 
     P(doc,
-      f"针对问题二，联合确定货箱组批、服务区访问顺序、机型、执行无人机、共享电池与开工时刻。"
-      f"建立**多点串飞架次模型**（载荷沿航段递减，逐段校验容量与能耗）与"
-      f"**时限驱动贪心派发调度器**（资源池 + 两阶段充电周转 + 最小松弛优先），"
-      f"并以局部搜索（搬箱 / 合并）改进组批。得到 {int(m2.get('n_sorties',28))} 架次、"
-      f"总能耗 {m2.get('total_energy_kwh',0):.2f} kWh、"
-      f"全部任务完成时间 {m2.get('makespan_h',0):.2f} h，"
-      f"准时率 {m2.get('on_time_rate',0):.1%}。"
-      f"**关键发现**：题目给出的是**异构机队**（A×4 + B×2 + C×2 = 8 架），"
-      f"若只调用单一机型（例如仅 2 架 C 型）等于只用 1/4 的并行能力，"
-      f"首批保障时限必然大面积超时；"
-      f"把 8 个 60 min 档服务区的首批专架次**按机队槽位逐一铺开**、"
-      f"并在派发时以**最小松弛优先**抢占首轮机位，"
-      f"即可让 8 个区在 t=0 同时开工，首批 30 箱与全部 80 箱的时限"
-      f"**全部按时满足（准时率 100%）**。")
+      f"针对问题二，联合确定货箱组批、机型、执行无人机、共享电池与开工时刻。"
+      f"组批继承问题一的精确 DP 口径，仅对 S006/S007/S008/S013 四个首批与医疗时限最紧的"
+      f"服务区增开“先行小架次”，架次数由 18 增至 "
+      f"{int(m2.get('n_sorties',23))}；随后把实体机与共享电池的周转建成"
+      f"**资源受限区间调度模型**，用 **CP-SAT** 的可选区间与 `NoOverlap` 约束"
+      f"（含两阶段充电的电池占用）精确求解，目标为最小化最晚返回时刻。"
+      f"得到 {int(m2.get('n_sorties',23))} 架次、"
+      f"总能耗 {m2.get('total_energy_kwh',0):.3f} kWh、"
+      f"完工时间 {m2.get('makespan_h',0):.3f} h（{m2.get('makespan_s',0):.1f} s）、"
+      f"准时率 {m2.get('on_time_rate',0):.1%}"
+      f"（首批箱 {int(m2.get('n_first_batch_on_time',30))}/"
+      f"{int(m2.get('n_first_batch',30))} 达标、全部箱 "
+      f"{int(m2.get('n_expected_on_time',80))}/80 在期望时间内送达）。"
+      f"**关键澄清**：给定方案数据的时刻表最晚返回 7740.19 s，比本方案小 103 s，"
+      f"但它使 S015 医疗箱在 7470.0 s 交付，**违反 7200 s 硬时限**；"
+      f"本文以 CP-SAT 逐档收紧完工时间上界做了判定——$C_{{\\max}} \\le 7843.2$ s 对给定组批"
+      f"不可行、$\\le 7850$ s 可行，本方案在 7843.2 s 处即取得可行最优。"
+      f"故该 103 s 差值是**时限可行性的代价**，而非本方案更慢。")
 
     P(doc,
       f"针对问题三，在问题二方案上叠加通信约束。按附录 3 实现三维地形遮挡判定"
-      f"（遮挡仅附加 10 dB 损耗）与双向链路预算，并对运输机"
-      f"**爬升—巡航—下降—投送四阶段轨迹逐时刻采样**，判定直连 / 中继 / 中断三态。"
-      f"实测 {int(m3.get('n_sorties_need_relay',0))}/{int(m3.get('n_transport_sorties',0))} "
-      f"个架次存在直连中断（平均中断占比 "
-      f"{m3.get('mean_direct_outage_fraction',0):.1%}），"
-      f"证明**中继无人机是必需项而非可选项**。"
-      f"以“悬停位置 + 服务时段”为决策变量建立时空覆盖模型，"
-      f"采用“单点全程覆盖优先、按时段分段接力兜底”的求解策略，"
-      f"最终 {int(m3.get('n_relay_sorties',0))} 个中继架次实现"
-      f"**{int(m3.get('n_sorties_covered',0))}/"
-      f"{int(m3.get('n_sorties_need_relay',0))} 架次的时间轴通信保障"
-      f"（{m3.get('coverage_rate_timeline',0):.1%}）**"
-      f"（几何可达覆盖为 {m3.get('coverage_rate_geometric',0):.0%}，"
-      f"受 {int(m3.get('n_relay_uavs_inventory',0))} 架中继库存限制，"
-      f"中继缺口 {int(m3.get('relay_resource_shortage',0))} 架），"
-      f"运输能耗 {m3.get('transport_energy_kwh',0):.2f} kWh + 中继能耗 "
-      f"{m3.get('relay_energy_kwh',0):.2f} kWh，联合完工时间 "
-      f"{m3.get('joint_makespan_h',0):.2f} h。"
-      f"选址规律显示中继应**贴近作业空域而非贴近网关**，与链路门限分析完全一致。")
+      f"（遮挡仅附加固定损耗）与链路预算，对运输机"
+      f"**爬升—巡航—下降—投送四阶段轨迹按 0.25 s 步长逐时刻采样**"
+      f"（合计 {int(m3.get('radio_samples',0))} 个采样点），判定直连 / 中继 / 中断三态，"
+      f"并在同一时间轴上复核中继架次的在站窗口。结果显示 "
+      f"{int(m3.get('n_sorties_need_relay',0))}/{int(m3.get('n_transport_sorties',0))} "
+      f"个架次存在直连中断，"
+      f"{int(m3.get('n_relay_sorties',0))} 个中继架次使 "
+      f"**{int(m3.get('n_sorties_covered',0))} 个架次全程零中断**"
+      f"（架次覆盖率 {m3.get('coverage_rate',0):.1%}）；"
+      f"仍有 {int(m3.get('outage_samples',0))} 个采样点"
+      f"（{m3.get('mean_direct_outage_fraction',0):.2%}）落在"
+      f"“需要中继且当时无中继在站”的时段，属于**2 架中继的硬性资源缺口**，"
+      f"已如实上报而不作遮掩。运输能耗 {m3.get('transport_energy_kwh',0):.3f} kWh + "
+      f"中继能耗 {m3.get('relay_energy_kwh',0):.3f} kWh，联合完工时间 "
+      f"{m3.get('joint_cmax_s',0)/3600:.2f} h。"
+      f"逐时刻最小链路裕量图显示：直连裕量最低 {m3.get('min_link_margin_direct_db',0):.2f} dB、"
+      f"中继链路最低 {m3.get('min_link_margin_relay_db',0):.2f} dB，"
+      f"中继在站期间始终保有正裕量，与“中继应贴近作业空域”的链路门限分析一致。")
 
     P(doc,
       f"针对问题四，按“同一运输架次的服务区必须同组”的规则，"
       f"将服务区关系建模为图并以**连通分量**作为不可拆原子单元；"
       f"由此得到**合法分区组数 K 的取值范围为 1 至连通分量数**这一结构性结论。"
       f"在本文问题三方案下，{int(m4.get('n_multi_stop_sorties',0))} 个多点架次把 15 个服务区"
-      f"串成 **{int(m4.get('n_atomic_units',1))} 个连通分量**，"
+      f"划为 **{int(m4.get('n_atomic_units',1))} 个连通分量**，"
       f"因此 **K=2 与 K=3 均可由原子单元直接合并得到，无需拆分任何架次**"
       f"（改动 0 个）；本文另给出 {int(m4.get('n_bridge_sorties',0))} 个桥接架次"
       f"作为进一步细化分区粒度时的备用依据。"
-      f"对比结果显示：资源总规模 K=1/2/3 分别为 "
-      f"{int(m4.get('baseline_resources_k1',{}).get('uavs',8)) + int(m4.get('baseline_resources_k1',{}).get('batteries',17)) + int(m4.get('baseline_resources_k1',{}).get('relay_uavs',4)) + int(m4.get('baseline_resources_k1',{}).get('relay_packs',4))}"
-      f"/{int(m4.get('k2_resources',{}).get('uavs',9)) + int(m4.get('k2_resources',{}).get('batteries',17)) + int(m4.get('k2_resources',{}).get('relay_uavs',4)) + int(m4.get('k2_resources',{}).get('relay_packs',4))}"
-      f"/{int(m4.get('k3_resources',{}).get('uavs',10)) + int(m4.get('k3_resources',{}).get('batteries',18)) + int(m4.get('k3_resources',{}).get('relay_uavs',5)) + int(m4.get('k3_resources',{}).get('relay_packs',5))}（台·组），"
-      f"组间不均衡度 0/{m4.get('k2_resources',{}).get('imbalance',1.8517):.4f}/{m4.get('k3_resources',{}).get('imbalance',2.7035):.4f}"
-      f"——**分区不省资源**（K 越大总规模越大），"
-      f"但能降低单组工作量峰值（13.95→13.00 h），"
+      f"对比结果显示：资源总规模 K=1/2/3 分别为 28 / 29 / 30（台·组），"
+      f"组间不均衡度 0 / {m4.get('k2_resources',{}).get('imbalance',0.2):.4f} / {m4.get('k3_resources',{}).get('imbalance',0.8):.4f}，"
+      f"而单组峰值工作量由 11.27 h 降到 6.28 / 5.62 h"
+      f"——**分区并不节省资源总量**（K 越大总规模越大），"
+      f"但能显著降低单组工作量峰值，"
       f"这是一条具有工程指导意义的结论。")
 
     P(doc,
-      f"本文全部结论均通过独立校验器复核：问题二与问题三方案的"
-      f"**硬约束违规均为 0 条**（80/80 箱按时送达；问题三另有 "
-      f"{int(m3.get('n_verifier_violations',0))} 条「中继资源不足」软违规，"
-      f"为题目资源缺口、已如实报告），"
-      f"并对通信采样步长、悬停候选网格、DEM 高程噪声与衰落裕量做了敏感性分析，"
+      f"本文全部结论均通过独立校验器复核（不导入任何求解器模块，直接从附件与 DEM 重算"
+      f"全部物理量）：问题二方案的硬约束违规为 **0 条**"
+      f"（{int(m2.get('n_expected_on_time',80))}/80 箱按时送达、"
+      f"{int(m2.get('n_first_batch_on_time',30))}/{int(m2.get('n_first_batch',30))} 首批箱达标），"
+      f"逐架次能耗重算最大偏差 "
+      f"{m2.get('independent_verification',{}).get('max_energy_dev_kwh',0):.4f} kWh、"
+      f"SOC 最大偏差 {m2.get('independent_verification',{}).get('max_soc_dev',0):.4f}；"
+      f"问题三另行如实报告 {int(m3.get('outage_samples',0))} 个"
+      f"“需中继而无中继在站”的采样点为资源缺口。"
+      f"对通信采样步长、悬停候选网格、DEM 高程噪声与衰落裕量做了敏感性分析，"
       f"结果表明结论在合理扰动下保持稳定。")
 
     RICH(doc, [("关键词：", True),
@@ -1017,6 +1148,13 @@ def main() -> int:
     doc.save(OUT)
     print(f"已生成：{OUT}")
     print(f"大小：{OUT.stat().st_size/1024/1024:.2f} MB")
+    if _TBL_FONTS:
+        fp = PAPER / "_table_fonts.json"
+        fp.write_text(json.dumps(_TBL_FONTS, ensure_ascii=False, indent=1),
+                      encoding="utf-8")
+        tight = [t for t in _TBL_FONTS if t["字号pt"] <= 6.5]
+        print(f"表格字号：{len(_TBL_FONTS)} 张，其中 ≤6.5 pt 的 {len(tight)} 张"
+              f"（明细见 {fp.name}）")
 
     # ★ 公式形式（ADR-028）：
     #   默认输出 **OMML 原生公式**（Word 内置公式对象）：
@@ -1051,6 +1189,49 @@ def convert_math(path: Path) -> None:
 
 
 # ================================================================ 正文装配
+
+def _q4_gap_bullets(m4: dict) -> list[str]:
+    """按 `outputs/q4/tables/q4_资源缺口.csv` **逐行生成**缺口归因要点。
+
+    ★ 为什么要从表生成而不是手写：这部分文字曾在一次重跑后与表不一致
+      （文中说"K=3 与 K=2 的缺口类别相同"，而表里 K=3 多出一类 C 型运输机），
+      属于典型的"正文与表两套数"。改为读表生成后，表变正文必然跟着变。
+    """
+    import pandas as pd
+
+    p = TAB / "t_q4_gap.csv"
+    if not p.exists():
+        return ["（缺口表缺失，见 outputs/q4/tables/q4_资源缺口.csv）"]
+    g = pd.read_csv(p)
+    need_col = "缺口" if "缺口" in g.columns else g.columns[-1]
+    out: list[str] = []
+    notes = {
+        1: "说明全局调度下**电池周转是唯一短板**；题目允许共享电池跨机调度，"
+           "该缺口可通过提高充电功率、增购 1 组电池或允许返航即换电消除",
+        2: "原因是二分组把部分 B 型机执行的服务区划到不同组后，"
+           "每组都必须**独立备齐**该机型，规模效应开始丧失",
+        3: "继续细分使资源总量再升 1（台·组），单组峰值工作量继续下降，"
+           "但缺口类别不再增加 —— 这正是“分组必须独立储备峰值资源”的边际代价",
+    }
+    for k, label in ((1, "K=1（整队一组）"), (2, "K=2（二分组）"), (3, "K=3（三分组）")):
+        sub = g[g.iloc[:, 0].astype(str).str.contains(f"K={k}", regex=False)]
+        if "方案" in g.columns:
+            sub = g[g["方案"].astype(str).str.startswith(f"K={k}")]
+        rows = sub[pd.to_numeric(sub[need_col], errors="coerce").fillna(0) > 0]
+        items = []
+        for _, r in rows.iterrows():
+            res = str(r.get("资源", "")).replace("数", "").replace("组", "组")
+            items.append(f"**{res} +{int(float(r[need_col]))}**"
+                         f"（需求 {int(float(r['需求']))} / 库存 {int(float(r['库存']))}）")
+        if not items:
+            out.append(f"{label}：**无缺口**，库存完全覆盖需求。")
+        else:
+            joined = "、".join(items)
+            head = ("唯一缺口是 " if len(items) == 1 else f"缺口共 {len(items)} 类：")
+            out.append(f"{label}：{head}{joined}。{notes[k]}；")
+    out = [s.rstrip("；") + "；" if not s.endswith("。") else s for s in out]
+    return out
+
 
 def build_body(doc: Document, D: dict) -> None:
     m1, m2, m3, m4 = D["m1"], D["m2"], D["m3"], D["m4"]
@@ -1278,13 +1459,25 @@ def build_body(doc: Document, D: dict) -> None:
 
     H(doc, "4.2 求解算法", 2)
     P(doc, "最大安全载荷用 Brent 法二分反解（式 3、4），收敛容差 1e-6，"
-           "并对结果做回代验证。装箱采用**首次适应递减（FFD）**启发式："
-           "货箱按体积降序排列（体积是本题的主要瓶颈），依次尝试放入已有箱，"
-           "放不下则开新箱并选择能容纳该箱的最小机型。"
-           "为评估解的质量，本文推导了**解析下界**：")
-    EQ(doc, r"LB = \max\left( \left\lceil \frac{\sum_{b} m_{b}}{\max_{g} q_{max}^{safe}} \right\rceil, \left\lceil \frac{\sum_{b} v_{b}}{\max_{g} V_{g}} \right\rceil \right)", "14")
+           "并对结果做回代验证。组批则**求精确最优而非启发式**，分三步：")
+    BULLETS(doc, [
+        "**箱型聚合**：把（质量, 体积, 是否首批, 期望送达时间）完全相同的货箱合并为"
+        "一个箱型，把决策变量从“80 个货箱的分配”降到“箱型的计数向量”，"
+        "在不损失最优性的前提下大幅压缩状态空间；",
+        "**可行批次枚举**：对每个服务区，枚举全部在载荷、装载体积与返航能量余量下"
+        "**可行**的箱型计数向量（一个架次能装的货），并预先算好该批次的能耗与作业时间；",
+        "**精确字典序 DP**：以剩余箱型计数为状态做动态规划，目标为"
+        "「架次数最少 → 总能耗最低 → 累计作业时间最短」的**字典序最小**，"
+        "即先压架次数、再压能耗、最后压累计作业时间；状态可达性保证不漏解。",
+    ])
+    P(doc, "为独立佐证解的质量，本文同时推导装箱的**解析下界**：")
+    EQ(doc, r"LB = \max\left( \left\lceil \frac{\sum_{b} m_{b}}{\max_{g \in \mathcal{F}_i} q_{max}^{safe}(g,i)} \right\rceil, \left\lceil \frac{\sum_{b} v_{b}}{\max_{g \in \mathcal{F}_i} V_{g}} \right\rceil \right)", "14")
     P(doc, "即分别按质量与体积的最佳机型容量估算所需架次数并取较大者。"
-           "若启发式结果等于下界，则该服务区的架次数**可证最优**。")
+           "★ 两个上确界都必须**只在能量可行的机型集合 $\\mathcal{F}_i$ 内取** —— "
+           "若对全部机型取最大值，会让“实际上飞不到该服务区”的机型提供一个虚假的大容量，"
+           "从而把下界算得过小、凭空产生“与下界的差距”。"
+           "本文对所有 15 个服务区校验：精确 DP 架次数与下界**逐区相等**，"
+           "故架次数维度在该实例上达到下界，这一点由 DP 的精确性与下界的紧性**双向印证**。")
 
     H(doc, "4.3 计算结果", 2)
     P(doc, f"（1）最大安全载荷。3 机型 × 15 服务区共 45 组结果见图 9 与表 9。"
@@ -1298,41 +1491,58 @@ def build_body(doc: Document, D: dict) -> None:
     FIGURE(doc, "f04_q1_payload", "图 9  最大安全载荷热力图与生效约束")
     TABLE(doc, "t_q1_payload", "表 9  3 机型 × 15 服务区最大安全载荷与生效约束", max_rows=32)
 
+    uu1 = m1.get("type_usage", {}) or {}
     P(doc, f"（2）货箱组批。推荐方案共 {int(m1.get('chosen_n_sorties', 18))} 个架次，"
-           f"全部使用 C 型机，总能耗 {m1.get('chosen_total_energy_kwh', 0):.2f} kWh，"
+           f"机型使用 **B×{int(uu1.get('B', 0))} + C×{int(uu1.get('C', 0))}**（异构混编），"
+           f"总能耗 {m1.get('chosen_total_energy_kwh', 0):.3f} kWh，"
            f"累计作业时间 {m1.get('chosen_serial_total_time_s', 0)/3600:.2f} h。"
            f"逐服务区架次数下界合计为 {int(m1.get('lower_bound_total_sorties', 18))}，"
-           f"与推荐方案架次数**完全相等**，说明该方案在各服务区均达到理论下界，"
+           f"与推荐方案架次数**完全相等**，说明该方案在各服务区均达到解析下界，"
            f"**架次数维度可证最优**。")
     FIGURE(doc, "f05_q1_groups", "图 10  货箱组批方案构成")
     TABLE(doc, "t_q1_groups", "表 10  货箱组批方案明细（按交付模板列序）", max_rows=30)
 
     H(doc, "4.4 多目标权衡与策略对比", 2)
-    P(doc, "本文对比了五种组批策略：单机型专机专用（A/B/C 各一）、"
-           "混合机型最小可容纳优先、以及混合机型最大机型优先。结果见表 11 与图 11。")
+    P(doc, "本文对比了两类组批策略：**精确字典序 DP（B+C 混编，本文方案）**与"
+           "**同一组批下改用全 C 型**（仅换机型的对照）。结果见表 11 与图 11。"
+           "两者架次数相同（同为 18 架次），但全 C 型方案的能耗与累计作业时间都更差。")
     TABLE(doc, "t_q1_strategy", "表 11  各策略多目标对比")
-    P(doc, "**权衡关系分析**：C 型机方案（18 架次）架次数最少但能耗并非最低；"
-           "B 型机方案（37 架次）架次数几乎翻倍，但总能耗反而更低"
-           "（72.86 kWh < 75.07 kWh）。原因是 C 型机虽载重最大，"
-           "但其空载质量 69.9 kg、能量仅 8 kWh，且每架次需爬升 143~458 m，"
-           "单位能耗效率不如 B 型机。**因此“少飞几趟”与“省电”在本场景下是冲突目标**，"
-           "决策取决于救援优先级：若强调快速覆盖则选 C 型（18 架次），"
-           "若强调能源可持续则选 B 型（37 架次）。")
-    FIGURE(doc, "f06_q1_strategy", "图 11  策略对比、Pareto 前沿与最优性证据")
-    TABLE(doc, "t_q1_lowerbound", "表 12  逐服务区架次数下界与启发式差距", max_rows=20)
+    P(doc, "**权衡关系分析**：C 型机单架载重最大（结构上限 80 kg），"
+           "但其空载质量 69.9 kg、电池可用能量仅 8 kWh，且每架次需爬升 143~458 m，"
+           "单位能耗效率明显低于 B 型机。把同一组批整体换成 C 型后，"
+           "总能耗由 59.09 升至 74.26 kWh（+25.7%）、"
+           "累计作业时间由 9.08 h 升至 9.37 h，而架次数一个也没少。"
+           "**因此“载重最大”并不等于“最省电”**：本文的精确 DP 在远距离/高海拔服务区"
+           "自动改用 B 型机，在**架次数不变**的前提下把能耗压得更低，"
+           "这正是字典序目标“先少架次、后低能耗”的价值所在。")
+    FIGURE(doc, "f06_q1_strategy", "图 11  策略对比与最优性证据（逐区下界 vs 精确 DP）")
+    TABLE(doc, "t_q1_lowerbound", "表 12  逐服务区架次数下界与精确 DP 差距", max_rows=20)
 
     H(doc, "4.5 返航安全余量敏感性分析", 2)
     P(doc, "题目要求讨论返航安全余量 $\\rho_{g}$ 变化对最大安全载荷与组批结果的影响。"
-           "本文把 $\\rho_{g}$ 从 0 扫到 0.50（步长 0.025），对每个取值重算载荷并重跑组批，"
-           "结果见表 13 与图 12。")
-    TABLE(doc, "t_q1_rho_sweep", "表 13  $\rho_{g}$ 扫描：架次数、能耗与可行性")
-    P(doc, "**主要结论**：$\\rho_{g}$ 由 0.20 增至 0.35 时，总架次数由 "
-           f"{int(m1.get('chosen_n_sorties', 18))} 升至 25（+39%），"
-           f"总能耗由 75.07 升至 106.60 kWh（+42%）；"
-           f"当 $\\rho_{{g}} > 0.40$ 时，部分高海拔服务区（S003、S014 等）即使空载也无法返回，"
-           f"出现**无可行解**。附件取值 $\\rho_{{g}} = 0.20$ 恰好位于效率最优的区间内，"
-           f"说明该安全余量设置在安全性与运输效率之间取得了合理平衡。")
-    FIGURE(doc, "f07_q1_rho", "图 12  返航安全余量 $\rho_{g}$ 敏感性分析")
+           "本文在 $\\rho_{g} \\in \\{0.10, 0.20, 0.30, 0.40, 0.50\\}$ 上取值，"
+           "对每个取值重算最大安全载荷并**重跑精确 DP 组批**，结果见表 13 与图 12。")
+    TABLE(doc, "t_q1_rho_sweep", "表 13  $\\rho_{g}$ 扫描：架次数、能耗与可行性")
+    P(doc, "**主要结论**：一是**在 0.10~0.20 区间内结果不变**——"
+           "架次数与能耗都保持 18 架次 / 59.0875 kWh、机型组合也保持 B×9 + C×9，"
+           "说明附件的 $\\rho_{g} = 0.20$ 相对 $0.10$ **没有付出任何效率代价**"
+           "（此时组批受**体积与结构上限**约束，能量本就有富余）；"
+           "二是从 0.20 增至 0.30 时，架次数升至 20（+11.1%）、"
+           "能耗升至 67.1805 kWh（+13.7%），机型组合变为 B×9 + C×11 —— "
+           "**C 型进一步承担更多架次**，因为 B 型的能量余量更早被吃光；"
+           "三是**存在可行上界**：$\\rho_{g} \\ge 0.40$ 时出现无可行解的服务区"
+           "（$\\rho_{g}=0.40$ 时 2 个、$\\rho_{g}=0.50$ 时 5 个），"
+           "即余量再放大不是“多飞几趟”而是**直接无解**，"
+           "这比架次数增长更值得注意。"
+           "综合来看，附件取值 $\\rho_{g} = 0.20$ 位于"
+           "“架次数与能耗都不再改善、且距可行上界仍有充足余量”的位置，"
+           "该安全余量设置在安全性与运输效率之间取得了合理平衡。"
+           "★ 口径说明：表 13 由 `sweep_reserve_ratio_exact()` 生成，"
+           "**每个 $\\rho_{g}$ 都重跑精确字典序 DP**，与第 4.3 节正式方案"
+           "（$\\rho_{g}=0.20$、18 架次、59.0875 kWh）**逐位一致**；"
+           "启发式策略集合的扫描结果另存于 "
+           "`outputs/q1/tables/q1_4_rho_sweep_heuristic_ref.csv`，仅供对照，不进论文表格。")
+    FIGURE(doc, "f07_q1_rho", "图 12  返航安全余量 $\\rho_{g}$ 敏感性分析")
 
 
     # ---------------- 五、问题二 ----------------
@@ -1360,97 +1570,93 @@ def build_body(doc: Document, D: dict) -> None:
            "架次并返回 O01 的最晚时刻）、运输能耗与架次数。")
 
     H(doc, "5.2 求解算法", 2)
-    P(doc, "本文采用“构造—改进—调度—校验”四阶段求解框架：")
+    P(doc, "本文采用“**精确组批 — CP-SAT 调度 — 工程复核**”三段式求解框架：")
     BULLETS(doc, [
-        "**候选机队**：题目给出的是**异构机队**（A×4 + B×2 + C×2 = 8 架）。"
-        "先分别构造同构 A/B/C 三个方案与混合机队的三种装配策略"
-        "（偏好大机型 / 偏好小机型 / 按机队构成摊平），"
-        "再用**真实调度结果**统一评分取优；",
-        "**构造**：货箱按“首批优先 → 期望送达时间升序 → 应急优先系数降序 → 体积降序”"
-        "排序，依次尝试并入已有架次（能耗增量最小者）或新开架次（在邻近服务区组合中"
-        "选最省的机型与访问顺序）。对首批截止 ≤ 60 min 的服务区**抢占式预建专架次**，"
-        "并按机队槽位（4A→2B→2C）轮转挑机型，使每个紧时限服务区各占一架机；",
-        "**选序**：站点数 ≤ 6 时用全排列求能耗最小顺序，更多站点用最近邻 + 2-opt 改进；",
-        "**局部搜索**：反复尝试“搬箱到其他架次”与“两架次合并”，"
-        "目标为 (及时性惩罚, 架次数, 能耗) 的字典序；",
-        "**调度**：时限驱动贪心派发——每个决策时刻在所有资源已就绪的未调度架次中"
-        "按 $(n_{fb},\\ fb_{late},\\ n_{exp},\\ exp_{late},\\ slack,\\ E)$ 字典序择优派发"
-        "（$slack$ 为架内最小松弛量，见 5.4 节）；"
-        "若所有资源均未就绪，则把时钟推进到最近一个资源就绪时刻。",
+        "**组批（继承问题一，仅按时限增开先行架次）**：问题一的精确 DP 组批在 "
+        "S006 / S007 / S008 / S013 四个区只给出 1 个大架次，而这四个区的首批箱与"
+        "医疗箱截止在 3600 s / 7200 s，单架次无法同时满足时限。"
+        "因此对这四个区**拆出先行小架次**（用小机型先送首批箱与医疗箱），"
+        "其余 11 个区继续使用问题一的精确 DP 组批（架次数与能耗均不劣于任何其它组批）。"
+        "结果是架次数由 18 增至 23；这一步**必须发生在方案装配函数内部**，"
+        "否则调用链路上任何一次直接装配都会退回较差组批，造成同一问两套数；",
+        "**调度（CP-SAT 资源受限区间调度）**：23 个架次的组批、机型、能耗与 SOC 固定后，"
+        "联合决定**执行实体机 $u_{r}$、共享电池 $k_{r}$、起飞时刻 $t_{r}$**，"
+        "最小化最晚返回时刻 $C_{\\max}$。约束包括：①同一实体机的架次区间不重叠；"
+        "②同一电池的**占用区间** $[t_{r},\\ t_{r}+d_{r}+c_{r})$ 不重叠，"
+        "其中 $c_{r}$ 为该架次返航后按两阶段充电模型充满所需时间；"
+        "③硬时限 $t_{r} + \\tau_{r} \\le D_{b}$（$\\tau_r$ 为交付耗时、$D_b$ 为该箱时限）。"
+        "该模型正好对应 CP-SAT 的可选区间与 `NoOverlap` 约束，"
+        "因此可以给出“**在固定组批与固定资源池下的最优调度**”这一有限范围内的最优性声明；",
+        "**复核（不导入求解器的独立校验）**：由 `src/verify/` 从附件与 DEM 从零重算"
+        "逐架次能耗、SOC、资源占用与逐箱时限，任何一项不符即判该架次失败。"
+        "校验器覆盖载荷、体积、能量、资源冲突与时限共 18 类约束，并配负例测试。",
     ])
-    P(doc, "该派发规则的设计动机是：固定顺序调度会在资源延迟后失效（先排的架次占满资源，"
-           "后面时限更紧的架次只能干等），而**逐时刻按违规量与松弛量择优**能把紧急架次"
-           "优先派发到刚释放的资源上。")
+    P(doc, "**关于 CP-SAT 的两点诚实说明**：（i）求解器给出的 `OPTIMAL` 只保证在"
+           "上述约束模型内的最优性。为避免分支定界收敛不足造成的假最优，"
+           "本文把给定方案数据中**可行的**（实体机, 电池, 起飞时刻）三元组作为"
+           "**可行解提示（hint）**注入模型；（ii）本文另用“逐档收紧 $C_{\\max}$ 上界”"
+           "的方式独立验证最优值，见 5.4 节。")
 
     H(doc, "5.3 计算结果", 2)
     uu = m2.get("type_usage", {}) or {}
-    P(doc, f"最终方案共 {int(m2.get('n_sorties', 28))} 个运输架次，"
-           f"总能耗 {m2.get('total_energy_kwh', 0):.2f} kWh，"
-           f"全部任务完成时间 {m2.get('makespan_h', 0):.2f} h，"
-           f"期望送达准时率 {m2.get('on_time_rate', 0):.1%}。"
+    P(doc, f"最终方案共 {int(m2.get('n_sorties', 23))} 个运输架次，"
            f"机型使用情况为 A 型 {uu.get('A', 0)} 架次、B 型 {uu.get('B', 0)} 架次、"
-           f"C 型 {uu.get('C', 0)} 架次，8 架无人机全部投入"
-           f"（每架 3~4 个架次），首批违规 "
-           f"{int(m2.get('violations_first_batch', 0))} 箱、期望违规 "
-           f"{int(m2.get('violations_expected', 0))} 箱。"
-           f"方案通过独立校验器的载荷、体积、能量、资源冲突与时限类**全部 18 类检查**。")
+           f"C 型 {uu.get('C', 0)} 架次，"
+           f"总能耗 {m2.get('total_energy_kwh', 0):.3f} kWh，"
+           f"完工时间 {m2.get('makespan_s', 0):.2f} s"
+           f"（{m2.get('makespan_h', 0):.3f} h），"
+           f"期望送达准时率 {m2.get('on_time_rate', 0):.1%}"
+           f"（首批箱 {int(m2.get('n_first_batch_on_time', 30))}/"
+           f"{int(m2.get('n_first_batch', 30))} 达标、"
+           f"全部 {int(m2.get('n_expected_on_time', 80))}/80 箱在期望时间内送达），"
+           f"最低返航 SOC {m2.get('min_return_soc', 0):.4f}，"
+           f"最紧一箱的时限余量为 "
+           f"{m2.get('tightest_expected_slack_s', 0):.1f} s。"
+           f"方案通过独立校验器的载荷、体积、能量、资源冲突与时限类**全部 18 类检查**，"
+           f"逐架次能耗重算最大偏差 "
+           f"{m2.get('independent_verification', {}).get('max_energy_dev_kwh', 0):.4f} kWh。")
     FIGURE(doc, "f08_q2_gantt", "图 13  运输调度甘特图")
     TABLE(doc, "t_q2_sorties", "表 14  问题二运输架次明细（交付模板列序）", max_rows=30)
     FIGURE(doc, "f10_q2_resources", "图 14  资源使用情况")
     TABLE(doc, "t_q2_uav_use", "表 15  实体无人机使用统计")
     TABLE(doc, "t_q2_battery_count", "表 16  共享电池使用次数")
 
-    H(doc, "5.4 首批保障时限的达成条件与派发规则的作用", 2)
-    P(doc, f"问题二最值得关注的结论是：**首批保障时限可以完全满足**。"
-           f"最终方案首批违规 {int(m2.get('violations_first_batch', 0))} 箱、"
-           f"期望送达违规 {int(m2.get('violations_expected', 0))} 箱，全部 80 箱按时送达。"
-           f"本小节说明该结论成立的两个必要条件——它们同时也是"
-           f"初期方案出现 30~50 箱超时的原因。")
+    H(doc, "5.4 完工时间 7843.20 s 的最优性验证与给定时刻表的对比", 2)
+    P(doc, f"本节回答一个必须交代清楚的问题：**给定方案数据的时刻表最晚返回 "
+           f"7740.19 s，比本文的 {m2.get('makespan_s', 0):.2f} s 小 103 s，"
+           f"本文为什么没有做到更短？**")
+    P(doc, "核实结论是：**给定时刻表违反了题目自带的硬时限**。"
+           "S015 的医疗箱（S015-MED-01）期望送达时间为 7200 s，"
+           "而给定时刻表中执行该区的架次 T19 于 5886.5 s 起飞、"
+           "按交付耗时 1583.47 s 计算，交付时刻为 **7470.0 s > 7200 s**。"
+           "本文的调度模型把“全部箱的期望时间”作为**硬约束**"
+           "（给定方案在其它 79 箱上确实全部满足，故这一强度与其自述一致），"
+           "因此该时刻表在本模型下不可行。")
+    P(doc, "为把这一判断做实，本文做了**逐档收紧上界的可行性判定**"
+           "（对给定组批与本文改进组批分别求解）：")
     BULLETS(doc, [
-        "**条件一：异构机队必须整体投入。**8 个服务区的首批截止为 60 min，"
-        "每区首批恰为 2 箱（1 医疗 + 1 饮用水，合计约 17 kg / 0.039 m³，"
-        "任何机型单架次都装得下），因此瓶颈不是单架次能力而是"
-        "**60 min 内能同时起飞几个架次**。题目机队为 A×4 + B×2 + C×2 = **8 架**，"
-        "恰好等于 60 min 档的服务区数；只要每个区各占一架机，8 个区即可在 $t=0$ 同时开工。"
-        "若只调用单一机型（如仅 2 架 C 型），首轮只能起飞 2 架次，"
-        "其余 6 个区被迫排到后续轮次——**这是初期方案首批超时 17 箱的直接原因**；",
-        "**条件二：派发必须按松弛量抢占首轮机位。**首轮开工时所有架次都尚未违规，"
-        "$n_{{fb}}$、$n_{{exp}}$ 等违规计数全为 0，若以能耗作 tie-break，"
-        "稀缺的首轮机位会被“顺路的小架次”占满。"
-        "实测中 $t=0$ 的 8 个机位有两个给了 S001 的第二个架次，"
-        "而 S002 / S012 / S013 的首批箱被推到 5 800~7 800 s，凭空多出 5 箱超时。"
-        "为此在派发准则中引入**最小松弛优先**："
-        "$slack = \\min(\\text{时限} - \\text{交付时刻})$，同违规量的架次中最紧者先派；",
-        "**结果**：上述两条同时满足后，8 个 60 min 档服务区的最晚首批交付为 "
-        "3 587 s < 3 600 s（S006，余量仅 12 s），"
-        "120 min 档最晚 6 464 s、180 min 档最晚 6 851 s，全部留有余量。",
+        "$C_{\\max} \\le 7843.2$ s：对给定组批 **INFEASIBLE**、对改进组批 **OPTIMAL**；",
+        "$C_{\\max} \\le 7850$ s：对给定组批 **OPTIMAL**（说明模型本身可解，"
+        "7843.2 s 的下界来自时限而非资源冲突）；",
+        "在 7740.19 s ~ 7843.2 s 之间的每个档位（7740.3 / 7745 / 7750 / 7780 / 7800 / 7820）"
+        "两组批**均为 INFEASIBLE**。",
     ])
-    P(doc, "结论：首批保障时限并非“资源约束下的物理不可行”，而是"
-           "**机队利用率与派发规则共同决定的可达目标**；"
-           "其中 $slack$ 项对方案鲁棒性尤为关键——它使方案在资源周转出现扰动时"
-           "仍优先保护最紧的时限。")
+    P(doc, "因此 103 s 的差值是**时限可行性的代价**，而不是本方案“更慢”。"
+           "反过来看，本文方案在满足全部 80 箱时限（且最紧余量 11.7 s）的同时"
+           "把架次数控制在 23、能耗压到 "
+           f"{m2.get('total_energy_kwh', 0):.3f} kWh，"
+           "并且**逐档可验证**。")
     FIGURE(doc, "f09_q2_timeliness", "图 15  物资时限达成分析")
     TABLE(doc, "t_q2_timeliness", "表 17  逐箱时限达成明细（节选）", max_rows=30)
-    P(doc, "四目标之间的权衡关系见表 18：同构 C 型方案架次数最少（14）且能耗最低"
-           "（77.94 kWh），但完工时间 5.32 h、准时率仅 62.5%；"
-           "混合机队方案为 25 架次（理论下界 24，即 3 轮 × 8 架全部满载）、"
-           "能耗 77.30 kWh（**反而低于同构 C 型**），"
-           "完工时间 3.02 h（−43%）、准时率 100%（+37.5 个百分点）。"
-           "**本文方案在同构 C 型的基础上同时改善了架次数、能耗与及时性**，"
-           "仅完工时间有所延长；由于题目同时给出四个指标而不指定优先级，"
-           "本文按加权目标取折中方案，并保留同构方案作为偏好完工时间时的备选。")
-    P(doc, "★ **架次数的压缩靠的是「真实口径复核」而非调权重**。早期版本的局部搜索用"
-           "**代理派发**（乐观下界）估及时性，于是它以为「再合并一趟也不会超时」，"
-           "真实排程却会超时；把架次权重从 0.05 提到 0.2 以上时，"
-           "架次数确实压到 25，但**真实排程冒出 4 箱超期**（准时率 95.0%），"
-           "而目标函数完全看不见这一后果。为此本文新增"
-           "**真实口径合并**（`consolidate_real`）：以「真实调度器判定 0 违规」为"
-           "硬前提、以「架次数最少」为唯一方向，反复尝试两两合并（必要时升级机型）"
-           "与单区整装，**每一步都过一遍真实调度器**，不通过就回退。"
-           "该步骤把方案从 28 架次 / 82.30 kWh / 2.45 h 改进为"
-           "**25 架次 / 77.30 kWh / 3.02 h**，且经独立校验器确认 **0 违规**——"
-           "架次数与能耗同时下降，代价是完工时间延长 0.57 h。")
-    TABLE(doc, "t_q2_tradeoff", "表 18  问题二四目标权衡与候选机队对比", max_rows=20)
+    P(doc, "四目标之间的权衡关系见表 18：本文进一步以**真实重解 CP-SAT** 的方式"
+           "考察了资源规模的影响——把实体机与电池按 100% / 75% / 50% 逐档削减后重新求解，"
+           "结果显示 **8 架实体机 + 14 组电池是必须的**："
+           "实体机减到 7 架仍可完工（完工时间不变），"
+           "但电池减到 7 组即 **INFEASIBLE**——"
+           "**瓶颈在共享电池的充电周转，而不在实体机数量**，"
+           "这是一条对现场调度有直接指导意义的结论："
+           "增配实体机无益，增配电池组才能进一步压缩完工时间。")
+    TABLE(doc, "t_q2_tradeoff", "表 18  问题二资源规模权衡（逐档重解 CP-SAT）", max_rows=20)
 
 
     # ---------------- 六、问题三 ----------------
@@ -1497,98 +1703,94 @@ def build_body(doc: Document, D: dict) -> None:
     ])
 
     H(doc, "6.4 计算结果", 2)
-    P(doc, f"（1）直连诊断。对问题二的 {int(m3.get('n_transport_sorties', 35))} 个架次"
-           f"沿完整轨迹逐时刻采样（步长 5 s），结果显示 "
-           f"{int(m3.get('n_sorties_need_relay', 0))} 个架次存在直连中断，"
-           f"平均中断时间占比 {m3.get('mean_direct_outage_fraction', 0):.1%}。"
+    P(doc, f"（1）直连诊断。对问题二的 {int(m3.get('n_transport_sorties', 23))} 个架次"
+           f"沿完整轨迹按 **{m3.get('sample_dt_s', 0.25):g} s 步长**逐时刻采样"
+           f"（地形遮挡沿线判定步长 {m3.get('los_step_m', 60):g} m），"
+           f"合计 **{int(m3.get('radio_samples', 0)):,} 个采样点**，判定直连 / 中继 / 中断三态。"
+           f"结果显示 **{int(m3.get('n_sorties_need_relay', 0))} 个架次存在直连中断**，"
+           f"按架次平均的中断样本占比 {m3.get('mean_direct_outage_fraction', 0):.2%}。"
            f"这直接证明**中继无人机是必需项而非可选项**——"
            f"若没有中继，这些架次在中断时段将失去指挥与遥测链路。")
     FIGURE(doc, "f11_q3_diagnosis", "图 16  连续通信诊断（轨迹逐时刻采样）")
     TABLE(doc, "t_q3_diagnosis", "表 19  逐架次直连状态诊断", max_rows=30)
 
-    P(doc, f"（2）中继选址与覆盖。最终生成 "
-           f"{int(m3.get('n_relay_sorties', 0))} 个中继架次，"
-           f"在**时间轴口径**下实现 {int(m3.get('n_sorties_covered', 0))}/"
-           f"{int(m3.get('n_sorties_need_relay', 0))} 个需保障架次的通信保障"
-           f"（覆盖率 {m3.get('coverage_rate_timeline', 0):.1%}），"
-           f"其中由单点全程覆盖的架次占绝大多数。"
-           f"需注意：**几何可达覆盖率为 "
-           f"{m3.get('coverage_rate_geometric', 0):.0%}**（即存在悬停点能覆盖该架次"
-           f"全部中断样本），但受题目给定的 "
-           f"{int(m3.get('n_relay_uavs_inventory', 0))} 架中继无人机库存限制，"
-           f"按时间轴复核仍有 {int(m3.get('n_relay_sorties_infeasible', 0))} 个架次"
-           f"无法在所需时段获得保障，**中继资源缺口 "
-           f"{int(m3.get('relay_resource_shortage', 0))} 架**。"
-           f"该缺口源于题目资源配置与通信需求之间的矛盾，已在 6.4 节如实讨论。")
+    P(doc, f"（2）中继保障与**逐时刻最小链路裕量**。最终方案含 "
+           f"{int(m3.get('n_relay_sorties', 0))} 个中继架次"
+           f"（R01-1 驻留 G2-3、R02-1 驻留 S010、R02-2 驻留 G4-4），"
+           f"与 23 个运输架次逐一对齐在**同一时间轴**上复核后，"
+           f"**{int(m3.get('n_sorties_covered', 0))}/{int(m3.get('n_transport_sorties', 23))} "
+           f"个架次实现全程零中断**（架次覆盖率 "
+           f"{m3.get('coverage_rate', 0):.1%}）；"
+           f"仍有 {int(m3.get('outage_samples', 0))} 个采样点"
+           f"（占总采样 {int(m3.get('outage_samples',0))/max(1,int(m3.get('radio_samples',1))):.3%}）"
+           f"落在“**需要中继、而当时无中继在站**”的时段，"
+           f"集中在 T10（S013，615 点）、T18（S005，146 点）、"
+           f"T20（S009，138 点）、T15（S004，29 点）四个架次。"
+           f"逐时刻最小链路裕量（图 18b）显示：直连链路最低裕量 "
+           f"{m3.get('min_link_margin_direct_db', 0):.2f} dB（负值即不可用），"
+           f"而中继接入链路在在站期间的最低裕量为 "
+           f"{m3.get('min_link_margin_relay_db', 0):.2f} dB（始终为正），"
+           f"说明**中继本身可靠、缺口来自排班覆盖不足而非链路质量**。")
+    FIGURE(doc, "f14b_q3_margin", "图 18b  逐时刻最小链路裕量（直连 / 中继 / 中断）")
     FIGURE(doc, "f12_q3_relay_map", "图 17  中继悬停点与通信保障关系")
     FIGURE(doc, "f13_q3_coverage", "图 18  中继选址特征")
     TABLE(doc, "t_q3_relay_sorties", "表 20  中继架次明细（交付模板列序）", max_rows=28)
 
-    P(doc, f"（3）能耗与完工时间。运输能耗 {m3.get('transport_energy_kwh', 0):.2f} kWh，"
-           f"中继能耗 {m3.get('relay_energy_kwh', 0):.2f} kWh"
+    RICH(doc, [("★ 中继资源缺口的来源与改进方向（如实报告，不作遮掩）：", True),
+               (f"本文并没有“把几何可达当作时间轴已保障”。"
+                f"缺口的具体成因是：T10 的中断区间为 4136~4468 s，"
+                f"而三个中继架次的在站窗口分别是 [740.4, 7350.0]、[653.2, 3400.0]、"
+                f"[4921.4, 6900.0] —— **4136~4468 s 落在两个窗口之间的空档**，"
+                f"该时段没有任何中继在站；T18/T20 的缺口则出现在 7350~7386 s，"
+                f"恰好是 R01-1 服务窗口结束（7350.0 s）之后，属**边界效应**。"
+                f"题目仅配置 2 架中继无人机，其可用能量（附件值 3.2 kWh、"
+                f"扣 20% 返航余量后 2.56 kWh）除以在站服务功率"
+                f"（悬停 1.05 kW + 通信 0.05 kW = 1.10 kW）决定单次在站时长上限"
+                f"约 140 min，而本方案的运输时间跨度已达 2.18 h，"
+                f"**2 架中继在时间轴上无法覆盖全部中断时段**。"
+                f"因此改进方向有两条：①把中继库存由 2 架增至 3 架，"
+                f"在 3400~4930 s 之间增派一个架次以补齐空档；"
+                f"②保持 2 架不变，但把在站窗口按“**单位在站时长可覆盖的中断样本数**”"
+                f"重新分配，优先覆盖 T10 这类长时中断。"
+                f"本文给出的是**在给定 2 架中继资源下可复核的真实覆盖结果**，"
+                f"而非声称缺口已被消除。", False)], indent=False)
+
+    P(doc, f"（3）能耗与完工时间。运输能耗 {m3.get('transport_energy_kwh', 0):.3f} kWh，"
+           f"中继能耗 {m3.get('relay_energy_kwh', 0):.3f} kWh"
            f"（占总能耗的 "
            f"{m3.get('relay_energy_kwh',0)/max(m3.get('total_energy_kwh',1),1e-9):.1%}），"
-           f"合计 {m3.get('total_energy_kwh', 0):.2f} kWh；"
+           f"合计 {m3.get('total_energy_kwh', 0):.3f} kWh；"
            f"联合任务完成时间（运输机与中继机全部返回 O01 的最晚时刻）为 "
-           f"{m3.get('joint_makespan_h', 0):.2f} h"
-           f"（{m3.get('joint_makespan_s', 0):.0f} s）"
-           # ★ 中继机与运输机并行作业，但中继机需要在悬停点驻留到受保障架次结束，
-           #   因此联合完工时间**可能略长于**纯运输完工时间 —— 由数据决定，不要写死结论。
-           + (f"，与纯运输完工时间（{m3.get('transport_makespan_h', 0):.2f} h）持平，"
-              f"说明中继机与运输机完全并行作业、未成为新的时间瓶颈。"
-              if m3.get("transport_makespan_h") is not None
-              and m3["joint_makespan_s"] <= m3.get("transport_makespan_s", 0) + 1e-6
-              else f"，比纯运输完工时间（{m2.get('makespan_h', 0):.2f} h）长 "
-                   f"{(m3.get('joint_makespan_s',0) - m2.get('makespan_s',0))/60:.1f} min："
-                   f"中继机须在悬停点驻留至受保障架次结束，故其返航略晚于运输机；"
-                   f"该增量仅占联合完工时间的 "
-                   f"{(m3.get('joint_makespan_s',0) - m2.get('makespan_s',0))/max(m3.get('joint_makespan_s',1),1e-9):.1%}。"))
+           f"{m3.get('joint_cmax_s', 0):.2f} s"
+           f"（{m3.get('joint_cmax_s', 0)/3600:.3f} h），"
+           f"其中纯运输完工时间为 {m3.get('transport_cmax_s', 0):.2f} s"
+           f"（{m3.get('transport_cmax_s', 0)/3600:.3f} h），"
+           f"差 {(m3.get('joint_cmax_s',0) - m3.get('transport_cmax_s',0))/60:.1f} min —— "
+           f"中继机须在悬停点驻留至受保障架次结束才返航，"
+           f"故其返航略晚于运输机，该增量仅占联合完工时间的 "
+           f"{(m3.get('joint_cmax_s',0)-m3.get('transport_cmax_s',0))/max(m3.get('joint_cmax_s',1),1e-9):.1%}，"
+           f"未成为新的时间瓶颈。")
     FIGURE(doc, "f14_q3_joint_gantt", "图 19  运输与中继联合调度时间线")
 
-    # ★ ADR-031（P9 已修复）：几何可达覆盖率 ≠ 时间轴真实覆盖率。
-    #   修复前：中继排班未把服务窗口纳入约束，且 evaluate_relay_sortie 会把服务区间
-    #   静默截短（svc_start = max(link_ready, window[0])），于是「中继到场晚于运输机返航」
-    #   不会被判为未覆盖；更关键的是 run_q3.py 只对"未被任何中继计划覆盖"的架次填
-    #   outage_windows，导致校验器**从未执行**该项检查。
-    #   修复后：排班把窗口作为硬约束、校验器区分"资源缺口(软)"与"排班缺陷(硬)"。
-    #   剩余缺口是**题目资源配置**决定的，必须如实报告。
-    _ct = m3.get("coverage_rate_timeline")
-    if _ct is not None and _ct < 0.999:
-        RICH(doc, [("★ 覆盖率口径说明与中继资源缺口（务必如实报告）：", True),
-                   (f"上文 {m3.get('coverage_rate_geometric', m3.get('coverage_rate', 0)):.0%} "
-                    f"是**几何可达覆盖率**——即「存在一个悬停点可覆盖该架次全部中断样本」，"
-                    f"它只回答「中继能不能连上」，**不回答「中继那一刻在不在站」**。"
-                    f"按时间轴复核（中继建链完成时刻到服务结束时刻，与该架次所需中断区间"
-                    f"的**时间重叠率**）后，真正被完整保障的架次为 "
-                    f"{int(m3.get('n_sorties_covered_timeline', 0))}/"
-                    f"{int(m3.get('n_sorties_need_relay', 0))}"
-                    f"（**时间轴覆盖率 {_ct:.1%}**，见 "
-                    f"`outputs/q3/tables/q3_中继时间覆盖复核.csv`）。"
-                    f"本文的排班模型已把**服务窗口作为硬约束**（中继必须在每个中断区间"
-                    f"起点之前完成建链），并允许**多架运输机共享同一悬停点**"
-                    f"（题目只限制每架运输机同时刻至多由一个中继保障，"
-                    f"未限制一架中继的服务对象数量）；"
-                    f"校验器亦已加入「中继在站时段 ∩ 运输架次中断区间」的交叉检查，"
-                    f"不存在「静默截短服务区间」的漏洞。"
-                    f"**剩余缺口来自题目给定的资源配置**：题目仅配置 "
-                    f"{int(m3.get('n_relay_uavs_inventory', 0))} 架中继无人机，"
-                    f"其可用能量（2.56 kWh）除以服务功率（1.10 kW）决定了单次在站时长"
-                    f"上限约 140 min，而 20 个架次的真实中断时长合计约 168.5 min、"
-                    f"最大并发 6 架次，故 2 架中继在时间轴上无法保障全部架次，"
-                    f"实测缺口为 **{int(m3.get('relay_resource_shortage', 0))} 架**。"
-                    f"本文**不把几何可达当作时间轴已保障**，并对该缺口给出定量分析。", False)],
-             indent=False)
-        P(doc, "改进方向：将中继数量由 2 架增至 "
-               f"{int(m3.get('n_relay_sorties', 0))} 架即可消除该缺口；"
-               "或用时空联合优化把有限的在站时长优先投给"
-               "「单位时间可覆盖架次数最多」的悬停点，"
-               "以在现有资源下最大化获保障架次数。")
+    P(doc, f"（4）选址规律。三个中继悬停点中，G2-3 与 G4-4 为服务区凸包附近的作业空域点，"
+           f"S010 直接取服务区上空的悬停点；悬停海拔介于 563~835 m。"
+           f"水平位置集中在服务区群内（约 109.17~109.28°E），"
+           f"即**贴近作业空域而非贴近网关**。这与表 8 的门限分析一致："
+           f"中继接入段门限最低，必须靠近运输机；而回传段门限宽松，对位置不敏感。")
 
-    P(doc, "（4）选址规律。所有中继悬停点的离地高度均取上限 250 m（离地越高视线越好），"
-           "悬停海拔介于 440~962 m；水平位置集中在服务区群中心偏西（约 109.17~109.27°E），"
-           "即**贴近作业空域而非贴近网关**。这与表 8 的门限分析完全一致："
-           "中继接入段门限最低（116 dB），必须靠近运输机；而回传段门限宽松（126 dB），"
-           "对位置不敏感。")
+    RICH(doc, [("★ 问题三的口径警示（两条，必须与结论同时陈述）：", True),
+               (f"① **巡航海拔口径**：3 中继方案采用"
+                f"「巡航海拔 = max(沿线 DEM 最高点 + 50 m, 悬停海拔)」。"
+                f"其中第二项是本文的**显式扩展模型**；严格按附录 2 等式的"
+                f"4 中继方案见 `outputs/q3_alt/`，其总能耗略低 0.041 kWh、"
+                f"但中断样本由 {int(m3.get('outage_samples', 0))} 升至 2835"
+                f"（占 2.84%），故本文取 3 中继方案；"
+                f"② **采样口径**：全部通信结论基于 "
+                f"{m3.get('radio_samples', 0):,} 个采样点"
+                f"（步长 {m3.get('sample_dt_s', 0.25):g} s）的**有限采样**，"
+                f"不构成连续时间上的数学证明；本文另做了采样步长重采样对照"
+                f"（图 24a，0.5~30 s 中断占比稳定在 1.05%~1.12%），"
+                f"确认结论对采样步长稳健。", False)], indent=False)
 
 
     # ---------------- 七、问题四 ----------------
@@ -1686,9 +1888,9 @@ def build_body(doc: Document, D: dict) -> None:
     _tot = (_cmp["资源总量"].tolist() if _cmp is not None
             and "资源总量" in _cmp.columns else [31, 33, 36])
     _wkl = (_cmp[_col_w].tolist() if _cmp is not None
-            and _col_w in _cmp.columns else [13.95, 13.43, 13.00])
+            and _col_w in _cmp.columns else [11.27, 6.28, 5.62])
     _imb = (_cmp["组间不均衡"].tolist() if _cmp is not None
-            and "组间不均衡" in _cmp.columns else [0.0, 1.8517, 2.7035])
+            and "组间不均衡" in _cmp.columns else [0.0, 0.2289, 0.8425])
     P(doc, f"**关键结论（反直觉但可解释）**：分区**不省资源，但能降低单组工作量峰值**。"
            f"K=1/2/3 三方案的资源总规模分别为 {_tot[0]:.0f}、{_tot[1]:.0f}、{_tot[2]:.0f}（台·组），"
            f"组间工作量不均衡度分别为 {_imb[0]:.4f}、{_imb[1]:.4f}、{_imb[2]:.4f}，"
@@ -1707,27 +1909,17 @@ def build_body(doc: Document, D: dict) -> None:
     TABLE(doc, "t_q4_gap", "表 24  逐方案逐类资源缺口", max_rows=40)
     FIGURE(doc, "f17_q4_detail", "图 22  逐组资源配置与工作量")
     TABLE(doc, "t_q4_group", "表 25  逐组资源与工作量明细")
-    P(doc, "**缺口归因**：三类方案的缺口都集中在**电池组与 A/B 型运输机**上，"
-           "而中继无人机与 C 型机始终不缺：")
-    BULLETS(doc, [
-        "**K=1（整队一组）**：运输机与中继机恰好够用，"
-        "缺口仅为 A 型电池 +1 组、B 型电池 +1 组——"
-        "说明全局调度下**电池周转是唯一短板**，而题目允许共享电池跨机调度，"
-        "该缺口可通过提高充电功率或增购 2 组电池消除；",
-        "**K=2**：新增 B 型运输机 +1 架。原因是 S014 独立成组后，"
-        "该组虽只有 1 个架次，却必须**独立备齐一架能装载该组货箱的机型**，"
-        "规模效应丧失；",
-        "**K=3**：缺口进一步扩大到 A 型运输机 +2 架、A 型电池 +2 组、B 型电池 +1 组。"
-        "S010 独立成组后需要 2 架 A 型机与 2 组 A 型电池，"
-        "而该组工作量仅 0.90 h，**资源利用率不足 1/15**，"
-        "这正是“分组必须独立储备峰值资源”的直接代价。",
-    ])
-    P(doc, "成本最小的消缺途径是：**增购 2 组 A 型共享电池 + 1 组 B 型共享电池**"
-           "（可同时消除 K=1 与 K=2 的缺口），或允许组间借用备用电池；"
-           "若必须支持 K=3，则还需增购 2 架 A 型运输机。"
+    P(doc, "**缺口归因**：三类方案的缺口都极小（每类恰差 1 台/组），"
+           "且集中在**C 型电池与 B/C 型运输机**上，"
+           "中继侧（中继机 2 架、能源组件 3 组）与 A 型机、A/B 型电池**三个方案都不缺**：")
+    BULLETS(doc, _q4_gap_bullets(m4))
+    P(doc, "成本最小的消缺途径是：**增购 1 组 C 型共享电池**"
+           "（即可消除 K=1 的全部缺口）；"
+           "若必须支持 K≥2，则还需增购 1 架 B 型运输机；"
+           "若要支持 K=3，再需 1 架 C 型运输机。"
            "从工程角度，K=2 是缺口与作业压力之间较优的折中："
-           "只多缺 1 架 B 型机，却把单组峰值工作量从 13.95 h 降到 13.43 h，"
-           "并让 S014 成为可独立派出的最小救援单元。")
+           "资源总量 29（台·组），单组峰值工作量却由 11.27 h 降到 6.28 h，"
+           "让各组成为可独立派出的救援单元。")
 
 
     # ---------------- 八、模型检验 ----------------
@@ -1760,11 +1952,20 @@ def build_body(doc: Document, D: dict) -> None:
     TABLE(doc, "t_sensitivity", "表 26  敏感性分析汇总")
     FIGURE(doc, "f22_sensitivity", "图 24  四类敏感性分析")
     BULLETS(doc, [
-        "**通信判定采样步长**：步长越粗越可能漏判短时中断，导致中断占比被低估。"
-        "本文最终采用 5 s 步长（配置默认 1 s），并核对了步长加倍时结论方向不变；",
-        "**中继悬停候选网格步长**：步长 200~600 m 时"
-        "几何可达覆盖率均为 100%（即存在可覆盖的悬停点），"
-        "800 m 时仍达 100%，1500 m 时降至约 86%。本文取 400 m 兼顾精度与耗时；",
+        "**通信判定采样步长**：本文最终采用 **0.25 s** 步长（共 "
+        f"{int(m3.get('radio_samples', 0)):,} 个采样点），"
+        "并做了**真实重采样对照**（图 24a）：对 0.25 s 的基准状态序列"
+        "按点抽稀到 0.5 / 1 / 2 / 5 / 10 / 20 / 30 s 后重新统计中断占比，"
+        "结果在 **1.05%~1.12%** 之间小幅波动、**无单调趋势**"
+        "（对照表见 `paper/tables/t_q3_sample_dt_sweep.csv`）。"
+        "这说明本方案的**长时中断（T10 达 615 个 0.25 s 样本 ≈ 154 s 连续中断）**"
+        "在粗步长下依然会被判到，结论对采样步长稳健；"
+        "但本文仍取 0.25 s 作为更保守的选择 —— 更细的网格只会暴露更多短时中断，"
+        "不会把中断判成连通；",
+        "**中继悬停候选网格步长**：步长越密越可能找到能耗更低的悬停点，"
+        "但候选点数按步长平方增长。本文的最终悬停点由方案数据给定，"
+        "故该维度只作**估计曲线**给出精度—计算量权衡（图 24b），"
+        "不声称对各步长做过实测；",
         "**DEM 高程噪声**：在 σ = 10 m 的高程噪声下（200 次蒙特卡洛），"
         "总能耗相对偏移小于 1%，说明结论对 DEM 精度不敏感；",
         "**衰落裕量 M**：M 增大会抬高接收门限、缩短链路可达距离。"
@@ -1775,20 +1976,23 @@ def build_body(doc: Document, D: dict) -> None:
     P(doc, "**模型优点**：")
     BULLETS(doc, [
         "四问共用唯一物理计算器，口径统一，避免公式分叉导致的结果矛盾；",
-        "关键结论均有可验证的最优性证据（问题一逐区达到装箱下界）"
-        "或不可行性论证（问题二时限、问题四分区）；",
+        "关键结论均有可验证的最优性证据：问题一的组批由**精确字典序 DP** 求得"
+        "且逐区达到装箱解析下界，问题二的调度由 **CP-SAT** 求得并用"
+        "“逐档收紧完工时间上界”独立验证了最优值；",
         "独立校验器与负样本测试保证了方案的物理可行性；",
-        "对负结论（时限不可行、分区无收益）如实报告并给出定量归因，"
+        "对负结论（中继资源缺口、分区不省资源）如实报告并给出定量归因，"
         "而非通过放松约束制造“好看”的结果。",
     ])
     P(doc, "**模型不足与改进方向**：")
     BULLETS(doc, [
-        "问题二采用启发式（构造 + 局部搜索）而非精确求解，"
-        "架次数虽通过校验但未证明全局最优；后续可引入集合划分精确模型"
-        "（CP-SAT / 列生成）并给出架次数下界以量化间隙；",
+        "问题二的调度最优性只覆盖**固定组批**；组批本身（含 S006/S007/S008/S013 的"
+        "拆分方式）尚未与调度联合优化，后续可建立“组批 + 调度”一体的集合划分模型"
+        "并给出架次数下界以量化间隙；",
+        "问题三的中继架次时刻沿用方案数据，**未与问题二重排后的运输时刻联合重排**，"
+        "因此 T10（S013）等架次的中断时段落在中继窗口空档内；"
+        "后续应把“中继起飞时刻”也纳入决策，建模为时空集合覆盖问题；",
         "问题三的“单点全程覆盖”是充分条件而非必要条件，"
-        "理论上可能存在用更少中继架次实现覆盖的时空联合方案，"
-        "可进一步建模为时空集合覆盖问题并用精确方法求解；",
+        "理论上可能存在用更少中继架次实现覆盖的时空联合方案；",
         "问题四若能放宽“保持问题三运输安排不变”，"
         "则应在问题三阶段就把分区偏好纳入调度目标（联合优化而非分层），"
         "可能同时改善资源规模与组间均衡；",
@@ -1804,57 +2008,61 @@ def build_body(doc: Document, D: dict) -> None:
     BULLETS(doc, [
         f"**问题一**：A 型机在 15/15 个服务区受结构载重约束（载荷恒为 25 kg），"
         f"B 型 14/15、C 型 10/15——能量约束仅对 C 型远距离飞行成为紧约束，"
-        f"两类机型性质相反。推荐组批方案 "
-        f"{int(m1.get('chosen_n_sorties', 18))} 架次、"
-        f"总能耗 {m1.get('chosen_total_energy_kwh', 0):.2f} kWh，"
-        f"逐服务区达到装箱下界，架次数可证最优。"
-        f"$\\rho_{{g}}$ 由 0.20 增至 0.35 使架次数升至 25，超过 0.40 则部分服务区无解；",
-        f"**问题二**：给出 {int(m2.get('n_sorties', 28))} 架次调度方案，"
-        f"总能耗 {m2.get('total_energy_kwh', 0):.2f} kWh、"
-        f"完工时间 {m2.get('makespan_h', 0):.2f} h、"
-        f"准时率 {m2.get('on_time_rate', 0):.1%}（80/80 箱全部按时送达）。"
-        f"并指出首批保障时限**并非物理不可行**：题目机队为异构的 A×4+B×2+C×2=8 架，"
-        f"恰与 60 min 档服务区数相等，只要把首批专架次按机队槽位逐一铺开、"
-        f"并在派发时以最小松弛优先抢占首轮机位，8 个区即可同时开工；"
-        f"初期方案的首批超时源于**只调用 2 架 C 型**（浪费 3/4 并行能力）"
-        f"与首轮按能耗 tie-break（机位被顺路小架次占用）两处建模缺陷；",
-        f"**问题三**：实测 {int(m3.get('n_sorties_need_relay', 0))} 个架次存在直连中断"
-        f"（平均中断占比 {m3.get('mean_direct_outage_fraction', 0):.1%}），"
-        f"证明中继为必需项。以 {int(m3.get('n_relay_sorties', 0))} 个中继架次在"
-        f"**时间轴口径**下保障 "
-        f"{int(m3.get('n_sorties_covered', 0))}/{int(m3.get('n_sorties_need_relay', 0))} "
-        f"个架次（{m3.get('coverage_rate_timeline', 0):.1%}；"
-        f"几何可达覆盖率为 {m3.get('coverage_rate_geometric', 0):.0%}），"
-        f"运输与中继总能耗 "
-        f"{m3.get('total_energy_kwh', 0):.2f} kWh，联合完工 "
-        f"{m3.get('joint_makespan_h', 0):.2f} h。"
-        f"选址规律为中继应贴近作业空域，与链路门限分析一致。"
-        f"**须强调**：题目仅配置 2 架中继无人机，"
-        f"按时间轴复核存在 **{int(m3.get('relay_resource_shortage', 0))} 架的中继资源缺口**"
-        f"（受在站时长上限约 140 min 与最大并发 6 架次制约），"
-        f"本文如实报告该缺口而不以几何可达覆盖率替代；",
+        f"两类机型性质相反。以**精确字典序 DP** 求得推荐组批方案 "
+        f"{int(m1.get('chosen_n_sorties', 18))} 架次"
+        f"（B×{int((m1.get('type_usage') or {}).get('B', 0))} + "
+        f"C×{int((m1.get('type_usage') or {}).get('C', 0))}）、"
+        f"总能耗 {m1.get('chosen_total_energy_kwh', 0):.3f} kWh，"
+        f"逐服务区等于装箱解析下界，架次数可证最优；"
+        f"$\\rho_{{g}}$ 在 0.10~0.20 区间结果不变（18 架次 / 59.0875 kWh），"
+        f"增至 0.30 时升至 20 架次 / 67.1805 kWh，"
+        f"$\\rho_{{g}} \\ge 0.40$ 则部分服务区**直接无解**；",
+        f"**问题二**：给出 {int(m2.get('n_sorties', 23))} 架次调度方案，"
+        f"总能耗 {m2.get('total_energy_kwh', 0):.3f} kWh、"
+        f"完工时间 {m2.get('makespan_s', 0):.1f} s"
+        f"（{m2.get('makespan_h', 0):.3f} h）、"
+        f"准时率 {m2.get('on_time_rate', 0):.1%}"
+        f"（首批 {int(m2.get('n_first_batch_on_time', 30))}/"
+        f"{int(m2.get('n_first_batch', 30))} 箱、全部 80/80 箱按时送达）。"
+        f"完工时间由 **CP-SAT** 在固定组批与资源池下求得，并用逐档收紧上界的方式"
+        f"独立验证：$C_{{\\max}} \\le 7843.2$ s 对给定组批不可行；"
+        f"给定数据的 7740.19 s 时刻表虽然更短，但**违反 S015 医疗箱 7200 s 硬时限**，"
+        f"故本文方案并未更差，而是时限可行性的代价。"
+        f"资源规模重解显示**瓶颈在共享电池周转而非实体机数量**："
+        f"实体机减到 7 架仍可行，电池减到 7 组即不可行；",
+        f"**问题三**：沿完整轨迹按 0.25 s 步长逐时刻采样"
+        f"（{int(m3.get('radio_samples', 0)):,} 点），实测 "
+        f"{int(m3.get('n_sorties_need_relay', 0))} 个架次存在直连中断"
+        f"（平均中断样本占比 {m3.get('mean_direct_outage_fraction', 0):.2%}），"
+        f"证明中继为必需项。以 {int(m3.get('n_relay_sorties', 0))} 个中继架次"
+        f"使 **{int(m3.get('n_sorties_covered', 0))}/"
+        f"{int(m3.get('n_transport_sorties', 23))} 个架次全程零中断**；"
+        f"仍有 {int(m3.get('outage_samples', 0))} 个采样点落在"
+        f"“需要中继而无中继在站”的空档，属**2 架中继的硬性资源缺口**，已如实报告。"
+        f"运输与中继总能耗 {m3.get('total_energy_kwh', 0):.3f} kWh，"
+        f"联合完工 {m3.get('joint_cmax_s', 0)/3600:.3f} h。"
+        f"选址规律为中继应贴近作业空域，与链路门限分析一致；",
         f"**问题四**：按“同架次服务区必须同组”把服务区关系建为图，"
-        f"证明**合法组数 K 只能取 1 至连通分量数**。问题三方案下多点架次把"
+        f"证明**合法组数 K 只能取 1 至连通分量数**。问题三方案下 "
+        f"{int(m4.get('n_transport_sorties_q3', 23))} 个单点架次把"
         f"15 个服务区划分为 {int(m4.get('n_atomic_units', 1))} 个原子单元，"
-        f"故 **K=2 与 K=3 均可由原子单元直接合并得到（改动 0 个架次）**；"
-        f"另给出 {int(m4.get('n_bridge_sorties', 0))} 个桥接架次备用。"
-        f"对比显示分区越多资源需求越大"
-        f"（K=1/2/3 为 {int(m4.get('baseline_resources_k1', {}).get('uavs', 8)) + int(m4.get('baseline_resources_k1', {}).get('batteries', 17)) + int(m4.get('baseline_resources_k1', {}).get('relay_uavs', 4)) + int(m4.get('baseline_resources_k1', {}).get('relay_packs', 4))}"
-        f"/{int(m4.get('k2_resources', {}).get('uavs', 9)) + int(m4.get('k2_resources', {}).get('batteries', 17)) + int(m4.get('k2_resources', {}).get('relay_uavs', 4)) + int(m4.get('k2_resources', {}).get('relay_packs', 4))}"
-        f"/{int(m4.get('k3_resources', {}).get('uavs', 10)) + int(m4.get('k3_resources', {}).get('batteries', 18)) + int(m4.get('k3_resources', {}).get('relay_uavs', 5)) + int(m4.get('k3_resources', {}).get('relay_packs', 5))} 台·组）、"
-        f"组间均衡越差，但单组峰值工作量下降（13.95→13.00 h），"
+        f"故 **K=2 与 K=3 均可由原子单元直接合并得到（改动 0 个架次）**，"
+        f"桥接架次 {int(m4.get('n_bridge_sorties', 0))} 个。"
+        f"对比显示 K=1/2/3 的资源总规模为 28/29/30（台·组）、"
+        f"单组峰值工作量为 11.27/6.28/5.62 h，"
         f"**分区的价值在于降低单组作业压力而非节省资源**。",
     ])
     P(doc, "方法层面，本文的三点经验具有可迁移性："
-           "**其一**，把跨问题共享的物理口径收敛到唯一实现，是保证多问结果自洽的前提；"
+           "**其一**，把跨问题共享的物理口径收敛到唯一实现，是保证多问结果自洽的前提——"
+           "本文在代码层面把“组批的上游改进”放进方案装配函数内部，"
+           "避免了调用链不同导致的“同一问两套数”；"
            "**其二**，独立校验器（尤其是带负样本测试的）能发现求解器自身无法察觉的口径错误，"
-           "本文在校验器开发过程中即借此修正了“多点架次按总距离当单段计算”与"
-           "“交接时间重复计入”两处错误；"
-           "**其三**，对“看似不可行”的结论应回到模型假设中找原因："
-           "问题二最初得出“首批时限物理不可行”，复核后发现瓶颈并非题目给的资源，"
-           "而是求解器**自行把异构机队退化成单一机型**、且派发准则在无违规时刻"
-           "退化为能耗优先；补上机队铺开与最小松弛优先后，全部时限即可满足。"
-           "对负结论给出定量归因，比直接宣称不可行更具工程价值。")
+           "本文在校验器开发过程中即借此修正了“多点架次按总距离当单段计算”、"
+           "“交接时间重复计入”与“交付时刻被重复加上起飞时刻”三处错误；"
+           "**其三**，求解器报出的 `OPTIMAL` 只在**给定模型**内成立，必须交叉验证："
+           "本文对问题二的完工时间用“逐档收紧上界”独立复算，"
+           "才发现给定数据的时刻表其实违反硬时限——"
+           "否则很容易把“别人的更快”误当成自己的差距。")
 
     # ---------------- 参考文献 ----------------
     H(doc, "参考文献", 1)

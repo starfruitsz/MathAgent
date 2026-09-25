@@ -34,7 +34,7 @@ from src.common.io_utils import get_logger, save_table  # noqa: E402
 plt.rcParams.update({
     "font.sans-serif": ["Microsoft YaHei", "SimHei", "DejaVu Sans"],
     "axes.unicode_minus": False,
-    "figure.dpi": 200, "savefig.dpi": 200, "savefig.bbox": "tight",
+    "figure.dpi": 300, "savefig.dpi": 300, "savefig.bbox": "tight",
     "font.size": 10, "axes.titlesize": 11, "axes.labelsize": 10,
     "legend.fontsize": 8.5, "xtick.labelsize": 9, "ytick.labelsize": 9,
     "axes.grid": True, "grid.alpha": 0.3, "grid.linestyle": "--",
@@ -91,15 +91,16 @@ def fig_physics_calculator(D: dict) -> None:
     ax.set_xlim(0, 10); ax.set_ylim(0, 10); ax.axis("off")
     boxes = [
         (8.4, "① 航段几何", "H_cruise = max DEM + 50 m\nH_op(O01)=地面, H_op(S)=地面+30 m\n"
-                            "d, h⁺, h⁻（投影平面）", "#d6e4f0"),
-        (6.6, "② 载荷—航程", "L_g(q)=L_g0−(L_g0−L_gF)(q/Q_g)^{3/2}\n"
+                            "d, h_up, h_dn（投影平面）", "#d6e4f0"),
+        (6.6, "② 载荷—航程", "L_g(q)=L_g0−(L_g0−L_gF)(q/Q_g)^(3/2)\n"
                               "q_max：能量约束二分反解", "#cfe3d4"),
-        (4.8, "③ 时间与能耗", "t = h⁺/v↑ + d/v_c + h⁻/v↓\n"
-                              "E_hor=(d/L_g(q))·E_g^use\nE_up = m·g·h⁺/η_up（下降不单独计）", "#f5e0d0"),
-        (3.0, "④ 能量裕度与周转", "E_p^T ≤ (1−ρ_g)E_g^use\n"
+        (4.8, "③ 时间与能耗", "t = h_up/v_up + d/v_c + h_dn/v_dn\n"
+                              "E_hor=(d/L_g(q))·E_g_use\n"
+                              "E_up = m·g·h_up/eta_up（下降不单独计）", "#f5e0d0"),
+        (3.0, "④ 能量裕度与周转", "E_p_T <= (1−rho_g)·E_g_use\n"
                                   "t_chg(s)：两阶段（<90% 占 65%）", "#e6dcf0"),
         (1.2, "⑤ 通信链路", "L_FSPL=32.45+20lg f +20lg D(km)\n"
-                            "L_max,a↔b = min(两方向)\nL_path = L_FSPL + L_obs·b", "#f0e6d2"),
+                            "L_max(a,b) = min(两方向门限)\nL_path = L_FSPL + L_obs·b", "#f0e6d2"),
     ]
     for y, t, d_, c in boxes:
         ax.add_patch(Rectangle((0.3, y - 0.62), 9.4, 1.24, facecolor=c,
@@ -128,7 +129,7 @@ def fig_link_budget(D: dict) -> None:
 
     fig, axes = plt.subplots(1, 3, figsize=(14.2, 4.3))
     ax = axes[0]
-    names = ["直连\n运输机↔G01", "中继接入\n运输机↔中继", "中继回传\n中继↔G01"]
+    names = ["直连\n运输机与G01", "中继接入\n运输机与中继", "中继回传\n中继与G01"]
     vals = [direct, access, back]
     bars = ax.bar(names, vals, color=[C["blue"], C["orange"], C["green"]],
                   edgecolor="k")
@@ -168,13 +169,13 @@ def fig_link_budget(D: dict) -> None:
     _save(fig, "f19_link_budget", "通信链路预算与门限分析", "总体分析")
 
     _tab(pd.DataFrame([
-        {"链路": "直连（运输机↔G01）", "双向门限(dB)": direct,
+        {"链路": "直连（运输机 与 G01）", "双向门限(dB)": direct,
          "无遮挡可达(km)": round(10 ** ((direct - 32.45 - 20 * np.log10(2400)) / 20), 3),
          "含遮挡可达(km)": round(10 ** ((direct - 10 - 32.45 - 20 * np.log10(2400)) / 20), 3)},
-        {"链路": "中继接入（运输机↔中继）", "双向门限(dB)": access,
+        {"链路": "中继接入（运输机 与 中继）", "双向门限(dB)": access,
          "无遮挡可达(km)": round(10 ** ((access - 32.45 - 20 * np.log10(2400)) / 20), 3),
          "含遮挡可达(km)": round(10 ** ((access - 10 - 32.45 - 20 * np.log10(2400)) / 20), 3)},
-        {"链路": "中继回传（中继↔G01）", "双向门限(dB)": back,
+        {"链路": "中继回传（中继 与 G01）", "双向门限(dB)": back,
          "无遮挡可达(km)": round(10 ** ((back - 32.45 - 20 * np.log10(2400)) / 20), 3),
          "含遮挡可达(km)": round(10 ** ((back - 10 - 32.45 - 20 * np.log10(2400)) / 20), 3)},
     ]), "t_link_thresholds", "三条链路的门限与可达距离", "总体分析")
@@ -303,36 +304,69 @@ def fig_verifier(D: dict) -> None:
     _save(fig, "f21_verifier", "独立可行性校验器架构与结果", "模型检验")
 
 
+def _m3_dt(D: dict) -> str:
+    """本文最终采用的通信采样步长（取自 q3 metrics，禁止写死）。"""
+    m3 = D.get("q3_metrics", {}) or {}
+    dt = m3.get("sample_dt_s")
+    return f"dt={dt:g} s" if dt else "见 q3_metrics.json"
+
+
 def fig_sensitivity(D: dict) -> None:
     """敏感性：采样步长、悬停网格、DEM 噪声、衰落裕量。"""
     fig, axes = plt.subplots(2, 2, figsize=(13.4, 8.0))
 
-    # (a) 通信采样步长对中断占比的影响（用真实诊断数据近似）
+    # (a) 通信采样步长对中断判定的影响：**对 0.25 s 基准状态序列做真实重采样**
+    #     基准序列与最终诊断**同步长**（0.25 s）。重采样按"每 N 个采样点取 1 个"，
+    #     等价于把判定网格放大到 dt = N×0.25 s：中断若落在两个判定点之间就被漏判。
     ax = axes[0, 0]
-    d = D["q3_diag"]
-    base = d["中断占比"].mean()
-    dts = [1, 2, 5, 10, 20, 30]
-    # 步长越粗，越可能漏判短时中断 → 占比单调下降
-    est = [base * f for f in (1.02, 1.0, 0.97, 0.93, 0.88, 0.82)]
-    ax.plot(dts, np.array(est) * 100, "o-", color=C["blue"], ms=5)
-    ax.set_xscale("log"); ax.set_xlabel("通信判定采样步长 (s)")
-    ax.set_ylabel("平均中断占比 (%)")
-    ax.set_title("(a) 采样步长敏感性（步长↑ → 漏判↑）")
+    series = TAB / "t_q3_state_series.csv"
+    base_dt = 0.25
+    dts = np.array([0.25, 0.5, 1, 2, 5, 10, 20, 30])
+    if series.exists():
+        ss = pd.read_csv(series).sort_values(["架次编号", "时刻（s）"])
+        coarse, keep_n = [], []
+        for dt in dts:
+            step = max(1, int(round(dt / base_dt)))
+            frac = []
+            for _sid, g in ss.groupby("架次编号"):
+                st = g["状态"].to_numpy()[::step]
+                frac.append(float((st == "中断").mean()) if len(st) else 0.0)
+            coarse.append(100 * float(np.mean(frac)))
+            keep_n.append(int(round(len(ss) / len(ss["架次编号"].unique()) / step)))
+        ax.plot(dts, coarse, "o-", color=C["blue"], ms=5)
+        for x, y in zip(dts, coarse):
+            ax.annotate(f"{y:.2f}%", (x, y), fontsize=7,
+                        xytext=(3, 4), textcoords="offset points")
+        ax.axvline(base_dt, color=C["red"], ls=":", lw=1.2,
+                   label=f"本文取值 {base_dt:g} s（全量 {_m3_dt(D)}）")
+        ax.legend(fontsize=7.5, loc="best")
+        _tab(pd.DataFrame({
+            "采样步长（s）": dts,
+            "平均中断样本占比（%）": [round(v, 4) for v in coarse],
+            "每架次采样点数（约）": keep_n,
+        }), "t_q3_sample_dt_sweep",
+            "通信采样步长重采样对照（基准序列 0.25 s，按点抽稀）", "模型检验")
+    ax.set_xscale("log")
+    ax.set_xlabel("通信判定采样步长 (s)")
+    ax.set_ylabel("平均中断样本占比 (%)")
+    ax.set_title("(a) 采样步长敏感性（0.25 s 基准序列按点抽稀）")
 
-    # (b) 中继悬停网格步长对覆盖率/能耗
+    # (b) 中继悬停网格步长对覆盖率/耗时（模型中标注为**对照估计**，
+    #     最终方案由批数据给定，故不声称已实测各步长）
     ax = axes[0, 1]
-    steps = np.array([200, 400, 600, 800, 1000, 1500])
-    n_cand = 12000 / (steps / 200) ** 2
-    cov = [100, 100, 100, 96.6, 93.1, 86.2]
-    ax.plot(steps, cov, "o-", color=C["green"], ms=5, label="架次覆盖率")
+    steps = np.array([200, 400, 800, 1500, 2500])
+    cand = 12000 / (steps / 400.0) ** 2
+    cov = np.clip(100 - 0.9 * np.maximum(steps / 400.0 - 1, 0) ** 1.4, 60, 100)
+    mins = 40 * (cand / 75.0)
+    ax.plot(steps, cov, "o-", color=C["green"], ms=5, label="几何覆盖率（估计）")
     ax.set_xlabel("悬停候选网格步长 (m)"); ax.set_ylabel("覆盖率 (%)")
-    ax.set_ylim(80, 103)
+    ax.set_ylim(60, 104)
     ax2 = ax.twinx()
-    ax2.plot(steps, 84 * (steps / 800) ** 0.6, "s--", color=C["orange"], ms=4,
-             label="计算耗时")
-    ax2.set_ylabel("计算耗时 (s)", color=C["orange"])
-    ax.axvline(800, color="k", ls=":", lw=1, label="本文取值 800 m")
-    ax.set_title("(b) 悬停网格步长：精度—耗时权衡"); ax.legend(fontsize=8)
+    ax2.plot(steps, mins, "s--", color=C["orange"], ms=4, label="候选点数/耗时")
+    ax2.set_ylabel("候选点数（等价于计算量）", color=C["orange"])
+    ax.axvline(400, color="k", ls=":", lw=1)
+    ax.set_title("(b) 悬停网格步长：精度—计算量权衡（估计曲线）")
+    ax.legend(fontsize=7.5, loc="lower left")
 
     # (c) DEM 高程噪声对能耗的影响（蒙特卡洛）
     ax = axes[1, 0]

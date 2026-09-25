@@ -29,7 +29,13 @@ import pandas as pd
 
 from src.common import solution_data as SD
 from src.common.config import REPO_ROOT, outputs_dir
-from src.q2_transport_schedule.solution import Plan, build_q23
+from src.q2_transport_schedule.solution import (
+    BATTERIES,
+    MACHINES,
+    T_FULL,
+    Plan,
+    build_q23,
+)
 
 PAPER = REPO_ROOT / "paper"
 BY_Q = PAPER / "by_question"
@@ -66,6 +72,13 @@ def _box_meta() -> dict[str, dict]:
 # ---------------------------------------------------------------- Q1 表
 
 def emit_q1(q1_sorties=None) -> dict[str, pd.DataFrame]:
+    """导出问题一的全部表（最大安全载荷 / 组批 / 下界 / 策略 / ρ 扫描）。
+
+    ★ `q1_sorties` 必须传**本仓精确字典序 DP 的架次**（`solve_solution.solve_q1`
+      的输出）。若留空则退回 `solution_data` 的给定数据，此时表 10/11 的能耗会与
+      `outputs/q1/metrics.json` 的精确 DP 值不一致 —— 这是踩过的坑：
+      表里 59.1199 kWh、metrics 里 59.0875 kWh，同一问两套数。
+    """
     from src.physics.leg_cache import load_cached
     from src.q1_payload_grouping.grouping import area_capacities
     from src.q1_payload_grouping.run_q1 import load_inputs
@@ -96,8 +109,8 @@ def emit_q1(q1_sorties=None) -> dict[str, pd.DataFrame]:
     payload = pd.DataFrame(rows)
     _save(payload, out / "q1_1_max_safe_payload.csv")
 
-    # (2) 组批方案（问题一精确 DP）
-    sorties = q1_sorties if q1_sorties is not None else list(SD.q1().sorties)
+    # (2) 组批方案（问题一精确字典序 DP）
+    sorties = list(q1_sorties) if q1_sorties is not None else list(SD.q1().sorties)
     g = pd.DataFrame([{
         "架次编号": f"Q1-{i:02d}", "服务区编号": s.sites[0], "机型编号": s.g,
         "货箱编号列表": "|".join(s.boxes), "货箱数": len(s.boxes),
@@ -146,16 +159,27 @@ def emit_q1(q1_sorties=None) -> dict[str, pd.DataFrame]:
     _save(cmp_df, out / "q1_3_pareto_frontier.csv")
 
     # (4) ρ_g 敏感性
+    # ★ 必须走**精确 DP** 的同口径扫描（`sweep_reserve_ratio_exact`）：
+    #   启发式版本在 ρ=0.20 处给 75.07 kWh，而正式方案给 59.0875 kWh，
+    #   若混用会让"同一问两套数"。启发式结果仅作对照另存一列文件。
     from src.q1_payload_grouping.sensitivity import (
-        payload_curve, sweep_reserve_ratio,
+        critical_reserve_ratios,
+        payload_curve,
+        sweep_reserve_ratio,
+        sweep_reserve_ratio_exact,
     )
 
     rho_grid = [round(0.10 + 0.10 * i, 2) for i in range(5)]
-    sweep = sweep_reserve_ratio(boxes_by_area, uav_types, leg, rho_grid)
+    sweep = sweep_reserve_ratio_exact(boxes_by_area, uav_types, leg, rho_grid)
     _save(sweep, out / "q1_4_rho_sweep.csv")
+    _save(sweep_reserve_ratio(boxes_by_area, uav_types, leg, rho_grid),
+          out / "q1_4_rho_sweep_heuristic_ref.csv")
     curve = payload_curve(service_ids, uav_types, leg, rho_grid)
     _save(curve, out / "q1_4_payload_vs_rho.csv")
-    return {"payload": payload, "groups": g, "lb": lbdf}
+    crit = critical_reserve_ratios(service_ids, uav_types, leg,
+                                   [round(0.05 * i, 2) for i in range(11)])
+    _save(crit, out / "q1_4_critical_rho.csv")
+    return {"payload": payload, "groups": g, "lb": lbdf, "rho": sweep}
 
 
 def _q1_baseline_allC(sorties, uav_types, leg, caps) -> dict:
@@ -185,7 +209,8 @@ def _usage_str(sorties) -> str:
 
 # ---------------------------------------------------------------- Q2/Q3 表
 
-def emit_q23(plan: Plan, relay_dir: str = "q3") -> dict[str, pd.DataFrame]:
+def emit_q23(plan: Plan, relay_dir: str = "q3",
+             q2_metrics: dict | None = None) -> dict[str, pd.DataFrame]:
     """导出问题二/三的运输、资源、时限与中继表。
 
     `plan` 由 `solution.build_q23()` 装配；运输表同时写入 `outputs/q2/tables`
@@ -276,14 +301,8 @@ def emit_q23(plan: Plan, relay_dir: str = "q3") -> dict[str, pd.DataFrame]:
     bu = pd.DataFrame(bat_rows)
     _save(bu, q2t / "q2_资源使用_电池.csv")
 
-    # 机队对比（本方案 vs 对照）
-    fleet = pd.DataFrame([
-        {"候选机队": "本轮 B+C 混编（主方案）", "架次数": plan.n_transport,
-         "总能耗（kWh）": round(plan.transport_energy_kwh, 4),
-         "完工时间（h）": round(plan.transport_cmax_s / 3600, 3),
-         "期望送达准时率": 1.0, "首批违规（箱）": 0, "期望违规（箱）": 0,
-         "综合得分": ""},
-    ])
+    # 机队对比（资源规模—完工时间的真实权衡：逐档削减机队/电池重解 CP-SAT）
+    fleet = _fleet_tradeoff(plan, q2_metrics)
     _save(fleet, q2t / "q2_机队对比.csv")
 
     # ---------------- Q3 中继表 ----------------
@@ -307,32 +326,141 @@ def emit_q23(plan: Plan, relay_dir: str = "q3") -> dict[str, pd.DataFrame]:
     } for r in {x.point: x for x in plan.relays}.values()])
     _save(sit, q3t / "q3_中继选址.csv")
 
-    # 通信保障表
-    cov = []
+    # 通信保障表（中继架次 → 运输架次的**时间重叠**关系）
+    cov_rows = []
     for r in plan.relays:
-        cov.append({
-            "运输架次编号": "（多架共享）", "通信阶段": "中继保障",
-            "开始时刻（s）": round(r.link_ready_s, 1),
-            "结束时刻（s）": round(r.service_end_s, 1),
-            "保障方式": "中继", "中继架次编号": r.relay_sortie_id,
-        })
-    _save(pd.DataFrame(cov), q3t / "q3_通信保障.csv")
+        for s in plan.transport:
+            lo = max(s.start_s, r.link_ready_s)
+            hi = min(s.return_s, r.service_end_s)
+            if hi <= lo:
+                continue
+            cov_rows.append({
+                "运输架次编号": s.sortie_id, "通信阶段": "中继保障",
+                "开始时刻（s）": round(lo, 1), "结束时刻（s）": round(hi, 1),
+                "重叠时长（s）": round(hi - lo, 1),
+                "保障方式": "中继", "中继架次编号": r.relay_sortie_id,
+            })
+    _save(pd.DataFrame(cov_rows), q3t / "q3_通信保障.csv")
 
-    # 直连诊断（取自权威数据的抽样统计）
-    q3 = SD.q3(3 if len(plan.relays) == 3 else 4)
-    diag = pd.DataFrame([{
-        "架次编号": "合计", "机型": "—", "服务区": "—",
-        "采样点数": q3.radio_samples, "直连点数": q3.direct_samples,
-        "中继点数": q3.relayed_samples,
-        "中断点数": q3.radio_failures,
-        "直连可达比例": round((q3.direct_samples or 0) / (q3.radio_samples or 1), 4),
-        "中断占比": round((q3.radio_failures or 0) / (q3.radio_samples or 1), 6),
-        "需中继": "是",
-    }])
-    _save(diag, q3t / "q3_直连状态诊断.csv")
+    # 直连诊断（由 `q3_comms_relay.timeline` 沿完整轨迹逐时刻采样后落盘，
+    # 本模块只在缺失时写一条说明行，避免与诊断模块抢同一文件）
+    diag_path = q3t / "q3_直连状态诊断.csv"
+    if not diag_path.exists():
+        _save(pd.DataFrame([{"架次编号": "（未运行时间线诊断）"}]), diag_path)
 
     return {"trans": trans, "delivery": ddf, "timeliness": tdf,
-            "uav_use": uu, "bat_use": bu, "relays": rel, "fleet": fleet}
+            "uav_use": uu, "bat_use": bu, "relays": rel, "fleet": fleet,
+            "coverage": pd.DataFrame(cov_rows)}
+
+
+def coverage_table(plan: Plan) -> pd.DataFrame:
+    """中继架次 → 保障的运输架次清单（按时间重叠）。"""
+    rows = []
+    for r in plan.relays:
+        hit = [s.sortie_id for s in plan.transport
+               if min(s.return_s, r.service_end_s) > max(s.start_s, r.link_ready_s)]
+        rows.append({
+            "中继架次编号": r.relay_sortie_id, "中继无人机编号": r.relay_uav_id,
+            "悬停点": r.point, "在站起（s）": round(r.link_ready_s, 1),
+            "在站止（s）": round(r.service_end_s, 1),
+            "保障运输架次数": len(hit), "保障运输架次": "|".join(hit),
+        })
+    return pd.DataFrame(rows)
+
+
+def coverage_detail(plan: Plan) -> pd.DataFrame:
+    """（中继架次 × 运输架次）逐对重叠明细。"""
+    rows = []
+    for r in plan.relays:
+        for s in plan.transport:
+            lo = max(s.start_s, r.link_ready_s)
+            hi = min(s.return_s, r.service_end_s)
+            if hi <= lo:
+                continue
+            rows.append({
+                "中继架次编号": r.relay_sortie_id,
+                "运输架次编号": s.sortie_id,
+                "重叠起（s）": round(lo, 1), "重叠止（s）": round(hi, 1),
+                "重叠时长（s）": round(hi - lo, 1),
+            })
+    return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------- Q2 机队权衡
+
+def _fleet_tradeoff(plan: Plan, q2_metrics: dict | None) -> pd.DataFrame:
+    """真实重解 CP-SAT：逐档削减实体机/电池，记录完工时间与可行性。
+
+    ★ 只做**资源规模**这一维的权衡（组批与时限约束不变），
+      每档都重新调用 `dispatch()` 求最优 —— 不是插值、不是估计。
+    """
+    from src.physics.battery import charging_time
+    from src.q0_data import build_processed as BP
+    from src.q1_payload_grouping.run_q1 import load_inputs
+    from src.q2_transport_schedule.dispatcher import (
+        DispatchTask,
+        dispatch,
+        known_feasible_hint,
+    )
+    from src.physics.leg_cache import load_cached
+
+    _, uav_types, _, _ = load_inputs()
+    leg = load_cached()
+    meta = {str(r["box_id"]): r for _, r in BP.load_boxes().iterrows()}
+
+    tasks = []
+    for s in plan.transport:
+        hard: list[float] = []
+        for b in s.box_ids:
+            r = meta.get(b)
+            if r is None:
+                continue
+            hard.append(float(r["expected_time_s"]))
+            fb = r["first_batch_deadline_s"]
+            if fb == fb:
+                hard.append(float(fb))
+        tasks.append(DispatchTask(
+            task_id=s.sortie_id, type_code=s.type_code,
+            duration_s=s.duration_s, soc_end=s.soc_end,
+            charge_s=charging_time(s.soc_end, T_FULL[s.type_code]),
+            delivery_elapsed_s=s.delivery_elapsed_s,
+            hard_deadlines_s=tuple(hard), soft_deadlines_s=(),
+        ))
+
+    base_n = {c: len(v) for c, v in MACHINES.items()}
+    base_b = {c: len(v) for c, v in BATTERIES.items()}
+    hints = known_feasible_hint(MACHINES, BATTERIES)
+    name = "B+C 混编（主方案）"
+
+    rows: list[dict] = []
+    scales = ((1.00, 1.00, "100% 库存"),
+              (0.75, 1.00, "实体机 75%"),
+              (1.00, 0.50, "电池 50%"),
+              (0.50, 0.50, "实体机 50% + 电池 50%"),
+              (0.50, 0.25, "实体机 50% + 电池 25%"))
+    for sm, sb, label in scales:
+        mach = {c: v[:max(1, int(round(len(v) * sm)))]
+                for c, v in MACHINES.items()}
+        bat = {c: v[:max(1, int(round(len(v) * sb)))]
+               for c, v in BATTERIES.items()}
+        res = dispatch(tasks, mach, bat, time_limit_s=60.0, hints=hints)
+        n_m = sum(len(v) for v in mach.values())
+        n_b = sum(len(v) for v in bat.values())
+        rows.append({
+            "候选机队": f"{name}·{label}",
+            "实体机数": n_m, "电池组数": n_b,
+            "架次数": plan.n_transport,
+            "完工时间（h）": round(res.makespan_s / 3600, 3) if res.ok else None,
+            "相对库存比例": f"{n_m}/{sum(base_n.values())} 机 · "
+                            f"{n_b}/{sum(base_b.values())} 电池",
+            "可行": "是" if res.ok else "否",
+            "求解状态": res.status,
+            "说明": ("与主方案同解" if (n_m == sum(base_n.values())
+                                      and n_b == sum(base_b.values()))
+                     else ("可行，完工时间上升" if res.ok else "不可行（资源不足）")),
+        })
+    return pd.DataFrame(rows)
+
 
 
 # ---------------------------------------------------------------- 落盘工具

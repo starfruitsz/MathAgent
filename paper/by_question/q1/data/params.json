@@ -1,7 +1,7 @@
 {
   "question": "q1",
-  "git_commit": "c9c857210c268d68232a8b0efb0affd28ae54265",
-  "timestamp": "2026-09-25T18:30:14.828735+08:00",
+  "git_commit": "24387b8786fef64d0d533a97a2c979ccd0a2cc61",
+  "timestamp": "2026-09-26T02:06:06.643729+08:00",
   "seed": 42,
   "data_sources": [
     "调度中心与服务区.xlsx",
@@ -10,11 +10,6 @@
     "30米DEM.tif"
   ],
   "params": {
-    "chosen": {
-      "n_sorties": 18.0,
-      "total_energy_kwh": 75.070591,
-      "serial_total_time_s": 33729.471,
-      "parallel_makespan_s": 4578.528
-    }
+    "objective": "min_lex(#sorties, energy, serial_time)"
   }
 }

@@ -7,7 +7,7 @@
 输出（outputs/q1/）：
     metrics.json / params.json / run_log.json
     tables/*.csv    载荷表、容量表、组批结果、策略对比、Pareto、敏感性
-    figures/*.png   策略对比、载荷曲线、ρ_g 敏感性
+    tables/*.csv   最大安全载荷、组批方案、下界、ρ_g 扫描
 """
 
 from __future__ import annotations
@@ -17,11 +17,8 @@ import sys
 import time
 from pathlib import Path
 
-import matplotlib
 import pandas as pd
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
 
 from src.common.config import DATA_PROCESSED, DEFAULT_RESERVE_RATIO, outputs_dir
 from src.common.io_utils import get_logger, save_json, save_metrics, save_table
@@ -42,10 +39,6 @@ from src.q1_payload_grouping.sensitivity import (
 )
 from src.q0_data import build_processed as BP
 
-plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "DejaVu Sans"]
-plt.rcParams["axes.unicode_minus"] = False
-plt.rcParams["figure.dpi"] = 130
-plt.rcParams["savefig.bbox"] = "tight"
 
 
 def to_uav_type(r: pd.Series) -> UAVType:
@@ -128,7 +121,6 @@ def main(argv: list[str] | None = None) -> int:
     log = get_logger("q1")
     out = outputs_dir("q1")
     (out / "tables").mkdir(exist_ok=True)
-    (out / "figures").mkdir(exist_ok=True)
 
     t0 = time.perf_counter()
     log.info("载入输入 ...")
@@ -251,105 +243,15 @@ def main(argv: list[str] | None = None) -> int:
     save_table(crit_df, out / "tables" / "q1_4_critical_rho.csv")
 
     # ---------------- 图 ----------------
-    fig, ax = plt.subplots(1, 2, figsize=(12, 4.4))
-    ax[0].bar(cmp_df["策略"], cmp_df["往返架次数"], color="#3b7dd8")
-    ax[0].set_title("各策略往返架次数")
-    ax[0].set_ylabel("架次数")
-    ax[0].tick_params(axis="x", rotation=20)
-    ax[1].scatter(cmp_df["总运输能耗（kWh）"], cmp_df["累计作业时间（s）"],
-                  s=70, c="#d85a3b")
-    for _, rr in cmp_df.iterrows():
-        ax[1].annotate(rr["策略"], (rr["总运输能耗（kWh）"], rr["累计作业时间（s）"]),
-                       fontsize=7, xytext=(4, 3), textcoords="offset points")
-    ax[1].set_xlabel("总运输能耗 (kWh)")
-    ax[1].set_ylabel("累计作业时间 (s)")
-    ax[1].set_title("能耗—时间权衡")
-    fig.savefig(out / "figures" / "q1_strategy_comparison.png")
-    plt.close(fig)
-
-    fig, ax = plt.subplots(figsize=(9, 4.6))
-    for code in sorted(uav_types):
-        sub = curve_df[curve_df["type_code"] == code]
-        med = sub.groupby("rho")["max_payload_kg"].median()
-        ax.plot(med.index, med.values, marker="o", ms=3, label=f"{code} 型（中位数）")
-    ax.axvline(DEFAULT_RESERVE_RATIO, color="k", ls="--", lw=1,
-               label=f"附件取值 ρ={DEFAULT_RESERVE_RATIO:.2f}")
-    ax.set_xlabel(r"返航安全余量 $\rho_g$")
-    ax.set_ylabel("最大安全载荷 (kg)")
-    ax.set_title(r"最大安全载荷随 $\rho_g$ 的变化（15 个服务区中位数）")
-    ax.legend()
-    ax.grid(alpha=0.3)
-    fig.savefig(out / "figures" / "q1_payload_vs_rho.png")
-    plt.close(fig)
-
-    fig, ax = plt.subplots(figsize=(9, 4.8))
-    feas = sweep_df[sweep_df["feasible"]]
-    infeas = sweep_df[~sweep_df["feasible"]]
-    ax.plot(feas["rho"], feas["n_sorties"], marker="o", ms=4, color="#3b7dd8",
-            label="可行（架次数最少方案）")
-    if len(infeas):
-        ax.axvspan(infeas["rho"].min(), sweep_df["rho"].max(),
-                   color="#d85a3b", alpha=0.12, label="不可行（存在无解服务区）")
-    ax.axvline(DEFAULT_RESERVE_RATIO, color="k", ls="--", lw=1,
-               label=f"附件取值 ρ={DEFAULT_RESERVE_RATIO:.2f}")
-    ax.set_xlabel(r"返航安全余量 $\rho_g$")
-    ax.set_ylabel("总架次数")
-    ax.set_title(r"组批结果随 $\rho_g$ 的变化（每点取 Pareto 最优策略）")
-    ax.grid(alpha=0.3)
-    ax2 = ax.twinx()
-    ax2.plot(feas["rho"], feas["total_energy_kwh"], marker="s", ms=4,
-             color="#2e8b57", ls="--", label="总运输能耗")
-    ax2.set_ylabel("总运输能耗 (kWh)", color="#2e8b57")
-    h1, l1 = ax.get_legend_handles_labels()
-    h2, l2 = ax2.get_legend_handles_labels()
-    ax.legend(h1 + h2, l1 + l2, fontsize=8, loc="upper left")
-    fig.savefig(out / "figures" / "q1_rho_sensitivity.png")
-    plt.close(fig)
-
-    # ---------------- 落盘 ----------------
-    runtime = time.perf_counter() - t0
-    metrics = {
-        "n_service_areas": len(service_ids),
-        "n_boxes": int(len(bdf)),
-        "n_uav_types": len(uav_types),
-        "chosen_strategy": chosen.strategy,
-        "chosen_n_sorties": chosen.n_sorties,
-        "chosen_total_energy_kwh": round(chosen.total_energy_kwh, 6),
-        "chosen_serial_total_time_s": round(chosen.serial_total_time_s, 3),
-        "lower_bound_total_sorties": int(lb_df["架次数下界"].sum()),
-        "n_pareto": len(front),
-        "n_strategies": len(solutions),
-        "rho_sweep_points": len(rho_grid),
-        "runtime_sec": round(runtime, 2),
-    }
-    save_metrics("q1", metrics, params={"chosen": chosen.metrics()},
-                 extra={"data_sources": ["调度中心与服务区.xlsx", "物资需求与配送时限.xlsx",
-                                         "运输无人机数据.xlsx", "30米DEM.tif"]})
-    save_json(
-        {
-            "strategies": {n: s.metrics() for n, s in solutions.items()},
-            "chosen_sorties": solution_records(chosen),
-            "lower_bounds_total": int(lb_df["架次数下界"].sum()),
-        },
-        out / "run_log.json",
-    )
-
-    log.info("完成，用时 %.1f s；输出目录 %s", runtime, out)
-    print()
-    print("=" * 78)
-    print("问题一求解结果")
-    print("=" * 78)
-    print(cmp_df.to_string(index=False))
-    print()
-    print(f"架次数下界合计 = {int(lb_df['架次数下界'].sum())}，"
-          f"选定方案 {chosen.n_sorties} 架次（策略 {chosen.strategy}）")
-    print()
-    print("ρ_g 敏感性（部分）：")
-    print(sweep_df.iloc[:: max(1, len(sweep_df) // 8)].to_string(index=False))
+    log.info("图已改由 src/report/make_figures.py 统一生成（论文图表唯一产出点）；"
+             "本模块只产出 outputs/ 下的数据表，不再自绘图片。")
+    log.info("完成，用时 %.1f s", time.perf_counter() - t0)
     return 0
 
 
 if __name__ == "__main__":
+    import sys
+
     try:
         sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
     except Exception:

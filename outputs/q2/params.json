@@ -1,7 +1,7 @@
 {
   "question": "q2",
-  "git_commit": "c9c857210c268d68232a8b0efb0affd28ae54265",
-  "timestamp": "2026-09-25T18:30:18.687442+08:00",
+  "git_commit": "24387b8786fef64d0d533a97a2c979ccd0a2cc61",
+  "timestamp": "2026-09-26T02:08:32.288178+08:00",
   "seed": 42,
   "data_sources": [
     "物资需求与配送时限.xlsx",
@@ -10,6 +10,6 @@
     "30米DEM.tif"
   ],
   "params": {
-    "reserve_ratio": 0.2
+    "relays_for_q3": 4
   }
 }

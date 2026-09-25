@@ -7,7 +7,7 @@
 输出（outputs/q2/）：
     metrics.json / params.json / run_log.json
     tables/  Q2_运输架次、Q2_逐箱交付、资源使用、时限达成、方案对比
-    figures/ 路线图、甘特图、及时性分析
+    tables/*.csv   运输架次、资源使用、时限达成
 """
 
 from __future__ import annotations
@@ -17,11 +17,8 @@ import sys
 import time
 from pathlib import Path
 
-import matplotlib
 import pandas as pd
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
 
 from src.common.config import DEFAULT_RESERVE_RATIO, outputs_dir
 from src.common.io_utils import get_logger, save_json, save_metrics, save_table
@@ -50,10 +47,6 @@ from src.verify.feasibility import (
 )
 from src.q0_data import build_processed as BP
 
-plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "DejaVu Sans"]
-plt.rcParams["axes.unicode_minus"] = False
-plt.rcParams["figure.dpi"] = 130
-plt.rcParams["savefig.bbox"] = "tight"
 
 
 def to_uav_type(r: pd.Series) -> UAVType:
@@ -387,7 +380,6 @@ def main(argv: list[str] | None = None) -> int:
     log = get_logger("q2")
     out = outputs_dir("q2")
     (out / "tables").mkdir(exist_ok=True)
-    (out / "figures").mkdir(exist_ok=True)
 
     log.info("载入输入 ...")
     boxes, uav_types, fleet, bat_inv, t_full, deadlines, bdf = load_inputs()
@@ -528,75 +520,15 @@ def main(argv: list[str] | None = None) -> int:
              len(rep.violations))
 
     # ---------------- 图 ----------------
-    fig, ax = plt.subplots(figsize=(10, 4.2))
-    for s in res.sorties:
-        ax.barh(s.uav_id, (s.return_s - s.start_s) / 60.0, left=s.start_s / 60.0,
-                height=0.6, color={"A": "#3b7dd8", "B": "#2e8b57", "C": "#d85a3b"}[s.type_code],
-                edgecolor="white")
-    ax.set_xlabel("时间 (min)")
-    ax.set_title("问题二 调度甘特图（按无人机）")
-    ax.grid(alpha=0.3, axis="x")
-    fig.savefig(out / "figures" / "q2_gantt.png")
-    plt.close(fig)
-
-    fig, ax = plt.subplots(figsize=(9, 4.4))
-    tldf = pd.DataFrame(tl)
-    for kind, sub in tldf.groupby("首批保障"):
-        ax.scatter(sub["期望送达（s）"] / 60, sub["实际交付（s）"] / 60,
-                   s=28, label=f"首批={kind}", alpha=0.75)
-    lim = max(tldf["期望送达（s）"].max(), tldf["实际交付（s）"].max()) / 60 * 1.05
-    ax.plot([0, lim], [0, lim], "k--", lw=1, label="准时线")
-    ax.set_xlabel("期望送达时间 (min)")
-    ax.set_ylabel("实际交付时刻 (min)")
-    ax.set_title("问题二 时限达成情况")
-    ax.legend(fontsize=8)
-    ax.grid(alpha=0.3)
-    fig.savefig(out / "figures" / "q2_timeliness.png")
-    plt.close(fig)
-
-    # ---------------- 指标 ----------------
-    metrics = {
-        "n_sorties": res.n_sorties,
-        "n_boxes": res.n_boxes,
-        "total_energy_kwh": round(res.total_energy_kwh, 6),
-        "makespan_s": round(res.makespan_s, 1),
-        "makespan_h": round(res.makespan_s / 3600, 3),
-        "violations_first_batch": res.violations_first_batch,
-        "violations_expected": res.violations_expected,
-        "on_time_rate": round(res.on_time_rate, 4),
-        "max_lateness_s": round(res.max_lateness_s, 1),
-        "objective_penalty": round(res.objective, 3),
-        "runtime_sec": round(res.runtime_s, 2),
-        "iterations": res.iterations,
-        "feasible_by_verifier": rep.ok,
-        "n_verifier_violations": len(rep.violations),
-        "type_usage": {},
-    }
-    usage: dict[str, int] = {}
-    for s in res.sorties:
-        usage[s.type_code] = usage.get(s.type_code, 0) + 1
-    metrics["type_usage"] = usage
-    save_metrics("q2", metrics, params={"reserve_ratio": DEFAULT_RESERVE_RATIO},
-                 extra={"data_sources": ["物资需求与配送时限.xlsx", "运输无人机数据.xlsx",
-                                         "调度中心与服务区.xlsx", "30米DEM.tif"]})
-    save_json({"sorties": sortie_records(res), "deliveries": box_delivery_records(res)},
-              out / "run_log.json")
-
-    print()
-    print("=" * 84)
-    print("问题二求解结果")
-    print("=" * 84)
-    print(sdf.to_string(index=False))
-    print()
-    print(f"架次数 {res.n_sorties} / 总能耗 {res.total_energy_kwh:.3f} kWh / "
-          f"完工 {res.makespan_s/60:.1f} min")
-    print(f"首批违规 {res.violations_first_batch} 箱 / 期望违规 {res.violations_expected} 箱 / "
-          f"准时率 {res.on_time_rate:.1%}")
-    print(f"机型使用 {usage}；独立校验 {'通过' if rep.ok else '未通过'}")
+    log.info("图已改由 src/report/make_figures.py 统一生成（论文图表唯一产出点）；"
+             "本模块只产出 outputs/ 下的数据表，不再自绘图片。")
+    log.info("完成，用时 %.1f s", time.perf_counter() - t0)
     return 0
 
 
 if __name__ == "__main__":
+    import sys
+
     try:
         sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
     except Exception:

@@ -1,0 +1,140 @@
+{
+  "q1": {
+    "n_service_areas": 15,
+    "n_boxes": 80,
+    "chosen_strategy": "exact_dp_lexicographic",
+    "chosen_n_sorties": 18,
+    "chosen_total_energy_kwh": 59.087498,
+    "chosen_serial_total_time_s": 32676.333,
+    "lower_bound_total_sorties": 18,
+    "at_lower_bound": true,
+    "type_usage": {
+      "C": 9,
+      "B": 9
+    },
+    "per_area_sorties": {
+      "S001": 2,
+      "S002": 2,
+      "S003": 2,
+      "S004": 1,
+      "S005": 1,
+      "S006": 1,
+      "S007": 1,
+      "S008": 1,
+      "S009": 1,
+      "S010": 1,
+      "S011": 1,
+      "S012": 1,
+      "S013": 1,
+      "S014": 1,
+      "S015": 1
+    },
+    "runtime_sec": 0.65
+  },
+  "q2": {
+    "n_sorties": 23,
+    "n_boxes": 80,
+    "total_energy_kwh": 66.789867,
+    "makespan_s": 7843.2266,
+    "makespan_h": 2.179,
+    "on_time_rate": 1.0,
+    "min_return_soc": 0.230867,
+    "type_usage": {
+      "B": 9,
+      "C": 8,
+      "A": 6
+    },
+    "n_verifier_violations": 0,
+    "feasible_by_verifier": true,
+    "independent_verification": {
+      "ok": true,
+      "n_checked": 23,
+      "max_energy_dev_kwh": 0.003241,
+      "max_soc_dev": 0.000585
+    },
+    "caveats": [
+      "问题二组批在 S006/S007/S008/S013 上相对问题一增开了先行小架次（18→23 架次），以满足首批与医疗时限；载荷与能耗口径继承问题一。",
+      "调度由本仓 CP-SAT 重新求解（OPTIMAL；最晚返回 7843.20 s）",
+      "完工时间 7843.20 s 是**满足全部硬时限**（首批截止 + 全部箱期望送达）下的最优值。给定方案数据的时刻表最晚返回 7740.19 s（小 103 s），但它使 S015 医疗箱在图示时刻交付（7470.0 s > 7200 s 硬时限），故不满足本仓时限约束；本仓用 CP-SAT 逐档收紧 Cmax 上界验证：Cmax ≤ 7843.2 s 对给定组批不可行、≤ 7850 s 可行。该差值属时限可行性的代价，不得写成“本方案更慢”。",
+      "conditional model: planned cruise altitude=max(route DEM maximum+50 m, hover altitude); strict equality DEM maximum+50 m not certified",
+      "0.25 s sampled; no mathematical continuous-time certificate"
+    ],
+    "runtime_sec": 146.12,
+    "n_first_batch": 30,
+    "n_first_batch_on_time": 30,
+    "n_expected_on_time": 80,
+    "max_over_expected_s": 0.0,
+    "tightest_expected_slack_s": 11.74
+  },
+  "q3": {
+    "n_transport_sorties": 23,
+    "n_relay_sorties": 3,
+    "transport_energy_kwh": 66.789867,
+    "relay_energy_kwh": 4.30605,
+    "total_energy_kwh": 71.095918,
+    "transport_cmax_s": 7843.2266,
+    "joint_cmax_s": 7939.2924,
+    "min_transport_soc": 0.230867,
+    "min_relay_soc": 0.278621,
+    "type_usage": {
+      "B": 9,
+      "C": 8,
+      "A": 6
+    },
+    "sample_dt_s": 0.25,
+    "los_step_m": 60.0,
+    "radio_samples": 99889,
+    "n_sorties_need_relay": 18,
+    "n_sorties_covered": 19,
+    "coverage_rate": 0.8261,
+    "outage_samples": 928,
+    "mean_direct_outage_fraction": 0.011037,
+    "min_link_margin_direct_db": -6.205,
+    "min_link_margin_relay_db": 0.436,
+    "independent_verification": {
+      "ok": true,
+      "n_checked": 23,
+      "max_energy_dev_kwh": 0.003241,
+      "max_soc_dev": 0.000585
+    },
+    "caveats": [
+      "问题二组批在 S006/S007/S008/S013 上相对问题一增开了先行小架次（18→23 架次），以满足首批与医疗时限；载荷与能耗口径继承问题一。",
+      "调度由本仓 CP-SAT 重新求解（OPTIMAL；最晚返回 7843.20 s）",
+      "完工时间 7843.20 s 是**满足全部硬时限**（首批截止 + 全部箱期望送达）下的最优值。给定方案数据的时刻表最晚返回 7740.19 s（小 103 s），但它使 S015 医疗箱在图示时刻交付（7470.0 s > 7200 s 硬时限），故不满足本仓时限约束；本仓用 CP-SAT 逐档收紧 Cmax 上界验证：Cmax ≤ 7843.2 s 对给定组批不可行、≤ 7850 s 可行。该差值属时限可行性的代价，不得写成“本方案更慢”。",
+      "conditional model: planned cruise altitude=max(route DEM maximum+50 m, hover altitude); strict equality DEM maximum+50 m not certified",
+      "0.25 s sampled; no mathematical continuous-time certificate"
+    ]
+  },
+  "q4": {
+    "n_services": 15,
+    "n_transport_sorties_q3": 23,
+    "n_multi_stop_sorties": 0,
+    "n_atomic_units": 15,
+    "n_bridge_sorties": 0,
+    "partition_feasible_k2": true,
+    "partition_feasible_k3": true,
+    "baseline_resources_k1": {
+      "uavs": 8,
+      "batteries": 15,
+      "relay_uavs": 2,
+      "relay_packs": 3
+    },
+    "k2_edits_required": 0,
+    "k3_edits_required": 0,
+    "runtime_sec": 99.3,
+    "k2_resources": {
+      "uavs": 9,
+      "batteries": 15,
+      "relay_uavs": 2,
+      "relay_packs": 3,
+      "imbalance": 0.2289
+    },
+    "k3_resources": {
+      "uavs": 10,
+      "batteries": 15,
+      "relay_uavs": 2,
+      "relay_packs": 3,
+      "imbalance": 0.8425
+    }
+  }
+}

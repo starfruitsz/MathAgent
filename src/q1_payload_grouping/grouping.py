@@ -513,6 +513,14 @@ def sortie_lower_bound(boxes: Sequence[Box], uav_types: dict[str, UAVType],
 
     质量下界 = ceil(Σm / max_g q_max)  （用最好的机型）
     体积下界 = ceil(Σv / max_g V_g)
+
+    ★ 关键口径：两个下界都必须**只在能量可行的机型上**取最大值。
+      早先版本直接对全部机型取 max，会出现"能量上根本飞不到的机型"提供
+      超大容量上限的假象 —— 实测 S006/S007/S008/S013 会因此各只算到 1 架次，
+      而精确二维装箱 DP 给出各 2 架次，凭空造出 4 个"与下界的差距"。
+      二维装载下界本身（max(质量界, 体积界)）对二维可行性是**不完备**的：
+      质量恰好装满与体积恰好装满可能无法同时满足。若逐区都恰好相等，
+      说明在该实例上该下界是紧的；不相等的区必须如实报告为"未证最优"。
     """
     total_m = sum(b.mass_kg for b in boxes)
     total_v = sum(b.volume_m3 for b in boxes)

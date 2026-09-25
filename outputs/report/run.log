@@ -850,3 +850,582 @@
 18:38:52 [INFO]   问题二：图 3 / 表 6 / 数据 10
 18:38:52 [INFO]   问题三：图 4 / 表 4 / 数据 10
 18:38:52 [INFO]   问题四：图 3 / 表 5 / 数据 9
+01:29:25 [INFO] 载入全部结果 ...
+01:29:38 [INFO] 载入全部结果 ...
+01:29:38 [INFO] 生成公共图 ...
+01:29:38 [INFO] 图 f01_roadmap  全文技术路线图
+01:29:39 [INFO] 图 f02_terrain_nodes  研究区 30 m DEM 与任务节点分布
+01:29:39 [INFO] 图 f03_box_stats  货箱质量/体积/时限统计
+01:29:39 [INFO] 表 t_box_by_type  分类物资总量统计
+01:29:39 [INFO] 表 t_box_by_service  各服务区物资需求
+01:29:39 [INFO] 生成问题一图 ...
+01:29:39 [INFO] 图 f04_q1_payload  最大安全载荷热力图与生效约束
+01:29:39 [INFO] 表 t_q1_payload  3 机型 × 15 服务区最大安全载荷
+01:29:40 [INFO] 图 f05_q1_groups  货箱组批方案构成
+01:29:40 [INFO] 表 t_q1_groups  货箱组批方案明细（交付模板列序）
+01:29:40 [INFO] 图 f06_q1_strategy  策略对比与 Pareto 前沿
+01:29:40 [INFO] 表 t_q1_strategy  各策略多目标对比
+01:29:40 [INFO] 表 t_q1_lowerbound  逐服务区架次数下界与差距
+01:29:41 [INFO] 图 f07_q1_rho  返航安全余量敏感性分析
+01:29:41 [INFO] 表 t_q1_rho_sweep  ρ_g 扫描汇总
+01:29:41 [INFO] 生成问题二图 ...
+01:29:42 [INFO] 图 f08_q2_gantt  运输调度甘特图
+01:29:42 [INFO] 表 t_q2_sorties  问题二运输架次明细（交付模板列序）
+01:29:43 [INFO] 图 f09_q2_timeliness  物资时限达成分析
+01:29:43 [INFO] 表 t_q2_timeliness  逐箱时限达成明细
+01:29:43 [INFO] 表 t_q2_tradeoff  问题二四目标权衡与候选机队对比
+01:29:43 [INFO] 图 f10_q2_resources  资源使用情况
+01:29:43 [INFO] 表 t_q2_uav_use  实体无人机使用统计
+01:29:43 [INFO] 表 t_q2_battery_use  共享电池周转明细
+01:29:43 [INFO] 表 t_q2_battery_count  共享电池使用次数
+01:29:43 [INFO] 生成问题三图 ...
+01:29:45 [INFO] 图 f11_q3_diagnosis  连续通信诊断
+01:29:45 [INFO] 表 t_q3_diagnosis  逐架次直连状态诊断
+01:29:46 [INFO] 图 f12_q3_relay_map  中继悬停点与保障关系
+01:29:46 [INFO] 表 t_q3_relay_sorties  中继架次明细（交付模板列序）
+01:29:46 [INFO] 表 t_q3_siting  逐架次选址结果
+01:29:46 [INFO] 图 f13_q3_coverage  中继选址特征
+01:29:46 [INFO] 表 t_q3_summary  中继保障汇总
+01:29:47 [INFO] 图 f14b_q3_margin  逐时刻最小链路裕量
+01:29:49 [INFO] 图 f14_q3_joint_gantt  运输与中继联合调度时间线
+01:29:49 [INFO] 生成问题四图 ...
+01:29:50 [INFO] 图 f15_q4_graph  原子单元连通分量分析
+01:29:50 [INFO] 表 t_q4_bridge  桥接架次清单
+01:29:50 [INFO] 表 t_q4_units  原子单元（连通分量）
+01:29:50 [INFO] 图 f16_q4_compare  分区方案多指标对比
+01:29:50 [INFO] 表 t_q4_compare  分区方案对比
+01:29:50 [INFO] 表 t_q4_gap  逐方案逐类资源缺口
+01:29:51 [INFO] 图 f17_q4_detail  逐组资源配置与工作量
+01:29:51 [INFO] 表 t_q4_group  逐组资源与工作量明细
+01:29:51 [INFO] 表 t_all_metrics  四问关键指标汇总
+01:29:51 [INFO] 完成：图 18 个 / 表 23 个
+01:29:51 [INFO] 图表目录：paper
+01:29:55 [INFO] 生成补充图 ...
+01:29:55 [INFO] 图 f18_physics_calculator  统一物理计算器的公式与耦合关系
+01:29:55 [INFO] 图 f19_link_budget  通信链路预算与门限分析
+01:29:55 [INFO] 表 t_link_thresholds  三条链路的门限与可达距离
+01:29:56 [INFO] 图 f20_flight_profile  飞行剖面与能耗构成
+01:29:56 [INFO] 图 f21_verifier  独立可行性校验器架构与结果
+01:29:56 [INFO] 图 f22_sensitivity  四类敏感性分析
+01:29:56 [INFO] 表 t_sensitivity  敏感性分析汇总
+01:29:57 [INFO] 图 f23_model_params  机型与中继参数一览
+01:29:57 [INFO] 表 t_uav_params  三种运输机型参数
+01:29:57 [INFO] 表 t_relay_params  中继无人机参数
+01:29:57 [INFO] 表 t_battery_inventory  共享电池库存
+01:29:57 [INFO] 图 f24_nodes  节点坐标与海拔分布
+01:29:57 [INFO] 表 t_nodes  调度中心与服务区坐标及海拔
+01:29:57 [INFO] 表 t_leg_cache_sample  航段缓存样例（前 300 条有序航段）
+01:29:57 [INFO] 表 t_uav_fleet  逐架实体无人机清单
+01:29:57 [INFO] 表 t_relay_fleet  中继无人机参数
+01:29:57 [INFO] 按问题分目录备份 ...
+01:29:57 [INFO]   总体分析：图 11 / 表 13 / 数据 10
+01:29:57 [INFO]   问题一：图 4 / 表 5 / 数据 11
+01:29:57 [INFO]   问题二：图 3 / 表 6 / 数据 10
+01:29:57 [INFO]   问题三：图 4 / 表 5 / 数据 13
+01:29:57 [INFO]   问题四：图 3 / 表 5 / 数据 9
+01:30:49 [INFO] 载入全部结果 ...
+01:30:49 [INFO] 生成公共图 ...
+01:30:50 [INFO] 图 f01_roadmap  全文技术路线图
+01:30:51 [INFO] 图 f02_terrain_nodes  研究区 30 m DEM 与任务节点分布
+01:30:51 [INFO] 图 f03_box_stats  货箱质量/体积/时限统计
+01:30:51 [INFO] 表 t_box_by_type  分类物资总量统计
+01:30:51 [INFO] 表 t_box_by_service  各服务区物资需求
+01:30:51 [INFO] 生成问题一图 ...
+01:30:52 [INFO] 图 f04_q1_payload  最大安全载荷热力图与生效约束
+01:30:52 [INFO] 表 t_q1_payload  3 机型 × 15 服务区最大安全载荷
+01:30:53 [INFO] 图 f05_q1_groups  货箱组批方案构成
+01:30:53 [INFO] 表 t_q1_groups  货箱组批方案明细（交付模板列序）
+01:30:53 [INFO] 图 f06_q1_strategy  策略对比与 Pareto 前沿
+01:30:53 [INFO] 表 t_q1_strategy  各策略多目标对比
+01:30:53 [INFO] 表 t_q1_lowerbound  逐服务区架次数下界与差距
+01:30:55 [INFO] 图 f07_q1_rho  返航安全余量敏感性分析
+01:30:55 [INFO] 表 t_q1_rho_sweep  ρ_g 扫描汇总
+01:30:55 [INFO] 生成问题二图 ...
+01:30:56 [INFO] 图 f08_q2_gantt  运输调度甘特图
+01:30:56 [INFO] 表 t_q2_sorties  问题二运输架次明细（交付模板列序）
+01:30:57 [INFO] 图 f09_q2_timeliness  物资时限达成分析
+01:30:57 [INFO] 表 t_q2_timeliness  逐箱时限达成明细
+01:30:57 [INFO] 表 t_q2_tradeoff  问题二四目标权衡与候选机队对比
+01:30:58 [INFO] 图 f10_q2_resources  资源使用情况
+01:30:58 [INFO] 表 t_q2_uav_use  实体无人机使用统计
+01:30:58 [INFO] 表 t_q2_battery_use  共享电池周转明细
+01:30:58 [INFO] 表 t_q2_battery_count  共享电池使用次数
+01:30:58 [INFO] 生成问题三图 ...
+01:30:59 [INFO] 图 f11_q3_diagnosis  连续通信诊断
+01:30:59 [INFO] 表 t_q3_diagnosis  逐架次直连状态诊断
+01:31:00 [INFO] 图 f12_q3_relay_map  中继悬停点与保障关系
+01:31:00 [INFO] 表 t_q3_relay_sorties  中继架次明细（交付模板列序）
+01:31:00 [INFO] 表 t_q3_siting  逐架次选址结果
+01:31:01 [INFO] 图 f13_q3_coverage  中继选址特征
+01:31:01 [INFO] 表 t_q3_summary  中继保障汇总
+01:31:02 [INFO] 图 f14b_q3_margin  逐时刻最小链路裕量
+01:31:03 [INFO] 图 f14_q3_joint_gantt  运输与中继联合调度时间线
+01:31:03 [INFO] 生成问题四图 ...
+01:31:04 [INFO] 图 f15_q4_graph  原子单元连通分量分析
+01:31:04 [INFO] 表 t_q4_bridge  桥接架次清单
+01:31:04 [INFO] 表 t_q4_units  原子单元（连通分量）
+01:31:05 [INFO] 图 f16_q4_compare  分区方案多指标对比
+01:31:05 [INFO] 表 t_q4_compare  分区方案对比
+01:31:05 [INFO] 表 t_q4_gap  逐方案逐类资源缺口
+01:31:05 [INFO] 图 f17_q4_detail  逐组资源配置与工作量
+01:31:05 [INFO] 表 t_q4_group  逐组资源与工作量明细
+01:31:05 [INFO] 表 t_all_metrics  四问关键指标汇总
+01:31:05 [INFO] 完成：图 18 个 / 表 23 个
+01:31:05 [INFO] 图表目录：paper
+01:31:06 [INFO] 生成补充图 ...
+01:31:06 [INFO] 图 f18_physics_calculator  统一物理计算器的公式与耦合关系
+01:31:07 [INFO] 图 f19_link_budget  通信链路预算与门限分析
+01:31:07 [INFO] 表 t_link_thresholds  三条链路的门限与可达距离
+01:31:07 [INFO] 图 f20_flight_profile  飞行剖面与能耗构成
+01:31:08 [INFO] 图 f21_verifier  独立可行性校验器架构与结果
+01:31:08 [INFO] 图 f22_sensitivity  四类敏感性分析
+01:31:08 [INFO] 表 t_sensitivity  敏感性分析汇总
+01:31:09 [INFO] 图 f23_model_params  机型与中继参数一览
+01:31:09 [INFO] 表 t_uav_params  三种运输机型参数
+01:31:09 [INFO] 表 t_relay_params  中继无人机参数
+01:31:09 [INFO] 表 t_battery_inventory  共享电池库存
+01:31:10 [INFO] 图 f24_nodes  节点坐标与海拔分布
+01:31:10 [INFO] 表 t_nodes  调度中心与服务区坐标及海拔
+01:31:10 [INFO] 表 t_leg_cache_sample  航段缓存样例（前 300 条有序航段）
+01:31:10 [INFO] 表 t_uav_fleet  逐架实体无人机清单
+01:31:10 [INFO] 表 t_relay_fleet  中继无人机参数
+01:31:10 [INFO] 按问题分目录备份 ...
+01:31:10 [INFO]   总体分析：图 11 / 表 13 / 数据 10
+01:31:10 [INFO]   问题一：图 4 / 表 5 / 数据 11
+01:31:10 [INFO]   问题二：图 3 / 表 6 / 数据 10
+01:31:10 [INFO]   问题三：图 4 / 表 5 / 数据 13
+01:31:10 [INFO]   问题四：图 3 / 表 5 / 数据 9
+01:31:27 [INFO] 载入全部结果 ...
+01:31:27 [INFO] 生成公共图 ...
+01:31:27 [INFO] 图 f01_roadmap  全文技术路线图
+01:31:28 [INFO] 图 f02_terrain_nodes  研究区 30 m DEM 与任务节点分布
+01:31:28 [INFO] 图 f03_box_stats  货箱质量/体积/时限统计
+01:31:28 [INFO] 表 t_box_by_type  分类物资总量统计
+01:31:28 [INFO] 表 t_box_by_service  各服务区物资需求
+01:31:28 [INFO] 生成问题一图 ...
+01:31:29 [INFO] 图 f04_q1_payload  最大安全载荷热力图与生效约束
+01:31:29 [INFO] 表 t_q1_payload  3 机型 × 15 服务区最大安全载荷
+01:31:30 [INFO] 图 f05_q1_groups  货箱组批方案构成
+01:31:30 [INFO] 表 t_q1_groups  货箱组批方案明细（交付模板列序）
+01:31:31 [INFO] 图 f06_q1_strategy  策略对比与 Pareto 前沿
+01:31:31 [INFO] 表 t_q1_strategy  各策略多目标对比
+01:31:31 [INFO] 表 t_q1_lowerbound  逐服务区架次数下界与差距
+01:31:32 [INFO] 图 f07_q1_rho  返航安全余量敏感性分析
+01:31:32 [INFO] 表 t_q1_rho_sweep  ρ_g 扫描汇总
+01:31:32 [INFO] 生成问题二图 ...
+01:31:33 [INFO] 图 f08_q2_gantt  运输调度甘特图
+01:31:33 [INFO] 表 t_q2_sorties  问题二运输架次明细（交付模板列序）
+01:31:34 [INFO] 图 f09_q2_timeliness  物资时限达成分析
+01:31:34 [INFO] 表 t_q2_timeliness  逐箱时限达成明细
+01:31:34 [INFO] 表 t_q2_tradeoff  问题二四目标权衡与候选机队对比
+01:31:34 [INFO] 图 f10_q2_resources  资源使用情况
+01:31:34 [INFO] 表 t_q2_uav_use  实体无人机使用统计
+01:31:34 [INFO] 表 t_q2_battery_use  共享电池周转明细
+01:31:34 [INFO] 表 t_q2_battery_count  共享电池使用次数
+01:31:34 [INFO] 生成问题三图 ...
+01:31:35 [INFO] 图 f11_q3_diagnosis  连续通信诊断
+01:31:35 [INFO] 表 t_q3_diagnosis  逐架次直连状态诊断
+01:31:36 [INFO] 图 f12_q3_relay_map  中继悬停点与保障关系
+01:31:36 [INFO] 表 t_q3_relay_sorties  中继架次明细（交付模板列序）
+01:31:36 [INFO] 表 t_q3_siting  逐架次选址结果
+01:31:37 [INFO] 图 f13_q3_coverage  中继选址特征
+01:31:37 [INFO] 表 t_q3_summary  中继保障汇总
+01:31:38 [INFO] 图 f14b_q3_margin  逐时刻最小链路裕量
+01:31:39 [INFO] 图 f14_q3_joint_gantt  运输与中继联合调度时间线
+01:31:39 [INFO] 生成问题四图 ...
+01:31:40 [INFO] 图 f15_q4_graph  原子单元连通分量分析
+01:31:40 [INFO] 表 t_q4_bridge  桥接架次清单
+01:31:40 [INFO] 表 t_q4_units  原子单元（连通分量）
+01:31:41 [INFO] 图 f16_q4_compare  分区方案多指标对比
+01:31:41 [INFO] 表 t_q4_compare  分区方案对比
+01:31:41 [INFO] 表 t_q4_gap  逐方案逐类资源缺口
+01:31:41 [INFO] 图 f17_q4_detail  逐组资源配置与工作量
+01:31:41 [INFO] 表 t_q4_group  逐组资源与工作量明细
+01:31:41 [INFO] 表 t_all_metrics  四问关键指标汇总
+01:31:41 [INFO] 完成：图 18 个 / 表 23 个
+01:31:41 [INFO] 图表目录：paper
+01:31:43 [INFO] 生成补充图 ...
+01:31:43 [INFO] 图 f18_physics_calculator  统一物理计算器的公式与耦合关系
+01:31:43 [INFO] 图 f19_link_budget  通信链路预算与门限分析
+01:31:43 [INFO] 表 t_link_thresholds  三条链路的门限与可达距离
+01:31:44 [INFO] 图 f20_flight_profile  飞行剖面与能耗构成
+01:31:44 [INFO] 图 f21_verifier  独立可行性校验器架构与结果
+01:31:45 [INFO] 图 f22_sensitivity  四类敏感性分析
+01:31:45 [INFO] 表 t_sensitivity  敏感性分析汇总
+01:31:45 [INFO] 图 f23_model_params  机型与中继参数一览
+01:31:45 [INFO] 表 t_uav_params  三种运输机型参数
+01:31:45 [INFO] 表 t_relay_params  中继无人机参数
+01:31:45 [INFO] 表 t_battery_inventory  共享电池库存
+01:31:46 [INFO] 图 f24_nodes  节点坐标与海拔分布
+01:31:46 [INFO] 表 t_nodes  调度中心与服务区坐标及海拔
+01:31:46 [INFO] 表 t_leg_cache_sample  航段缓存样例（前 300 条有序航段）
+01:31:46 [INFO] 表 t_uav_fleet  逐架实体无人机清单
+01:31:46 [INFO] 表 t_relay_fleet  中继无人机参数
+01:31:46 [INFO] 按问题分目录备份 ...
+01:31:46 [INFO]   总体分析：图 11 / 表 13 / 数据 10
+01:31:46 [INFO]   问题一：图 4 / 表 5 / 数据 11
+01:31:46 [INFO]   问题二：图 3 / 表 6 / 数据 10
+01:31:46 [INFO]   问题三：图 4 / 表 5 / 数据 13
+01:31:46 [INFO]   问题四：图 3 / 表 5 / 数据 9
+01:32:01 [INFO] 载入全部结果 ...
+01:32:01 [INFO] 生成公共图 ...
+01:32:01 [INFO] 图 f01_roadmap  全文技术路线图
+01:32:02 [INFO] 图 f02_terrain_nodes  研究区 30 m DEM 与任务节点分布
+01:32:03 [INFO] 图 f03_box_stats  货箱质量/体积/时限统计
+01:32:03 [INFO] 表 t_box_by_type  分类物资总量统计
+01:32:03 [INFO] 表 t_box_by_service  各服务区物资需求
+01:32:03 [INFO] 生成问题一图 ...
+01:32:03 [INFO] 图 f04_q1_payload  最大安全载荷热力图与生效约束
+01:32:03 [INFO] 表 t_q1_payload  3 机型 × 15 服务区最大安全载荷
+01:32:04 [INFO] 图 f05_q1_groups  货箱组批方案构成
+01:32:04 [INFO] 表 t_q1_groups  货箱组批方案明细（交付模板列序）
+01:32:05 [INFO] 图 f06_q1_strategy  策略对比与 Pareto 前沿
+01:32:05 [INFO] 表 t_q1_strategy  各策略多目标对比
+01:32:05 [INFO] 表 t_q1_lowerbound  逐服务区架次数下界与差距
+01:32:06 [INFO] 图 f07_q1_rho  返航安全余量敏感性分析
+01:32:06 [INFO] 表 t_q1_rho_sweep  ρ_g 扫描汇总
+01:32:06 [INFO] 生成问题二图 ...
+01:32:07 [INFO] 图 f08_q2_gantt  运输调度甘特图
+01:32:07 [INFO] 表 t_q2_sorties  问题二运输架次明细（交付模板列序）
+01:32:08 [INFO] 图 f09_q2_timeliness  物资时限达成分析
+01:32:08 [INFO] 表 t_q2_timeliness  逐箱时限达成明细
+01:32:08 [INFO] 表 t_q2_tradeoff  问题二四目标权衡与候选机队对比
+01:32:08 [INFO] 图 f10_q2_resources  资源使用情况
+01:32:08 [INFO] 表 t_q2_uav_use  实体无人机使用统计
+01:32:08 [INFO] 表 t_q2_battery_use  共享电池周转明细
+01:32:08 [INFO] 表 t_q2_battery_count  共享电池使用次数
+01:32:08 [INFO] 生成问题三图 ...
+01:32:09 [INFO] 图 f11_q3_diagnosis  连续通信诊断
+01:32:09 [INFO] 表 t_q3_diagnosis  逐架次直连状态诊断
+01:32:10 [INFO] 图 f12_q3_relay_map  中继悬停点与保障关系
+01:32:10 [INFO] 表 t_q3_relay_sorties  中继架次明细（交付模板列序）
+01:32:10 [INFO] 表 t_q3_siting  逐架次选址结果
+01:32:11 [INFO] 图 f13_q3_coverage  中继选址特征
+01:32:11 [INFO] 表 t_q3_summary  中继保障汇总
+01:32:12 [INFO] 图 f14b_q3_margin  逐时刻最小链路裕量
+01:32:13 [INFO] 图 f14_q3_joint_gantt  运输与中继联合调度时间线
+01:32:13 [INFO] 生成问题四图 ...
+01:32:14 [INFO] 图 f15_q4_graph  原子单元连通分量分析
+01:32:14 [INFO] 表 t_q4_bridge  桥接架次清单
+01:32:14 [INFO] 表 t_q4_units  原子单元（连通分量）
+01:32:15 [INFO] 图 f16_q4_compare  分区方案多指标对比
+01:32:15 [INFO] 表 t_q4_compare  分区方案对比
+01:32:15 [INFO] 表 t_q4_gap  逐方案逐类资源缺口
+01:32:15 [INFO] 图 f17_q4_detail  逐组资源配置与工作量
+01:32:15 [INFO] 表 t_q4_group  逐组资源与工作量明细
+01:32:15 [INFO] 表 t_all_metrics  四问关键指标汇总
+01:32:15 [INFO] 完成：图 18 个 / 表 23 个
+01:32:15 [INFO] 图表目录：paper
+01:50:59 [INFO] 载入全部结果 ...
+01:50:59 [INFO] 生成公共图 ...
+01:51:00 [INFO] 图 f01_roadmap  全文技术路线图
+01:51:01 [INFO] 图 f02_terrain_nodes  研究区 30 m DEM 与任务节点分布
+01:51:01 [INFO] 图 f03_box_stats  货箱质量/体积/时限统计
+01:51:01 [INFO] 表 t_box_by_type  分类物资总量统计
+01:51:01 [INFO] 表 t_box_by_service  各服务区物资需求
+01:51:01 [INFO] 生成问题一图 ...
+01:51:01 [INFO] 图 f04_q1_payload  最大安全载荷热力图与生效约束
+01:51:01 [INFO] 表 t_q1_payload  3 机型 × 15 服务区最大安全载荷
+01:51:02 [INFO] 图 f05_q1_groups  货箱组批方案构成
+01:51:02 [INFO] 表 t_q1_groups  货箱组批方案明细（交付模板列序）
+01:51:03 [INFO] 图 f06_q1_strategy  策略对比与 Pareto 前沿
+01:51:03 [INFO] 表 t_q1_strategy  各策略多目标对比
+01:51:03 [INFO] 表 t_q1_lowerbound  逐服务区架次数下界与差距
+01:51:05 [INFO] 图 f07_q1_rho  返航安全余量敏感性分析
+01:51:05 [INFO] 表 t_q1_rho_sweep  ρ_g 扫描汇总
+01:51:05 [INFO] 生成问题二图 ...
+01:51:06 [INFO] 图 f08_q2_gantt  运输调度甘特图
+01:51:06 [INFO] 表 t_q2_sorties  问题二运输架次明细（交付模板列序）
+01:51:07 [INFO] 图 f09_q2_timeliness  物资时限达成分析
+01:51:07 [INFO] 表 t_q2_timeliness  逐箱时限达成明细
+01:51:07 [INFO] 表 t_q2_tradeoff  问题二四目标权衡与候选机队对比
+01:51:08 [INFO] 图 f10_q2_resources  资源使用情况
+01:51:08 [INFO] 表 t_q2_uav_use  实体无人机使用统计
+01:51:08 [INFO] 表 t_q2_battery_use  共享电池周转明细
+01:51:08 [INFO] 表 t_q2_battery_count  共享电池使用次数
+01:51:08 [INFO] 生成问题三图 ...
+01:51:09 [INFO] 图 f11_q3_diagnosis  连续通信诊断
+01:51:09 [INFO] 表 t_q3_diagnosis  逐架次直连状态诊断
+01:51:10 [INFO] 图 f12_q3_relay_map  中继悬停点与保障关系
+01:51:10 [INFO] 表 t_q3_relay_sorties  中继架次明细（交付模板列序）
+01:51:10 [INFO] 表 t_q3_siting  逐架次选址结果
+01:51:11 [INFO] 图 f13_q3_coverage  中继选址特征
+01:51:11 [INFO] 表 t_q3_summary  中继保障汇总
+01:51:12 [INFO] 图 f14b_q3_margin  逐时刻最小链路裕量
+01:51:14 [INFO] 图 f14_q3_joint_gantt  运输与中继联合调度时间线
+01:51:14 [INFO] 生成问题四图 ...
+01:51:15 [INFO] 图 f15_q4_graph  原子单元连通分量分析
+01:51:15 [INFO] 表 t_q4_bridge  桥接架次清单
+01:51:15 [INFO] 表 t_q4_units  原子单元（连通分量）
+01:51:16 [INFO] 图 f16_q4_compare  分区方案多指标对比
+01:51:16 [INFO] 表 t_q4_compare  分区方案对比
+01:51:16 [INFO] 表 t_q4_gap  逐方案逐类资源缺口
+01:51:17 [INFO] 图 f17_q4_detail  逐组资源配置与工作量
+01:51:17 [INFO] 表 t_q4_group  逐组资源与工作量明细
+01:51:17 [INFO] 表 t_all_metrics  四问关键指标汇总
+01:51:17 [INFO] 完成：图 18 个 / 表 23 个
+01:51:17 [INFO] 图表目录：paper
+01:51:18 [INFO] 生成补充图 ...
+01:51:18 [INFO] 图 f18_physics_calculator  统一物理计算器的公式与耦合关系
+01:51:18 [INFO] 图 f19_link_budget  通信链路预算与门限分析
+01:51:18 [INFO] 表 t_link_thresholds  三条链路的门限与可达距离
+01:51:19 [INFO] 图 f20_flight_profile  飞行剖面与能耗构成
+01:51:19 [INFO] 图 f21_verifier  独立可行性校验器架构与结果
+01:51:20 [INFO] 图 f22_sensitivity  四类敏感性分析
+01:51:20 [INFO] 表 t_sensitivity  敏感性分析汇总
+01:51:20 [INFO] 图 f23_model_params  机型与中继参数一览
+01:51:20 [INFO] 表 t_uav_params  三种运输机型参数
+01:51:20 [INFO] 表 t_relay_params  中继无人机参数
+01:51:20 [INFO] 表 t_battery_inventory  共享电池库存
+01:51:21 [INFO] 图 f24_nodes  节点坐标与海拔分布
+01:51:21 [INFO] 表 t_nodes  调度中心与服务区坐标及海拔
+01:51:21 [INFO] 表 t_leg_cache_sample  航段缓存样例（前 300 条有序航段）
+01:51:21 [INFO] 表 t_uav_fleet  逐架实体无人机清单
+01:51:21 [INFO] 表 t_relay_fleet  中继无人机参数
+01:51:21 [INFO] 按问题分目录备份 ...
+01:51:21 [INFO]   总体分析：图 11 / 表 13 / 数据 10
+01:51:21 [INFO]   问题一：图 4 / 表 5 / 数据 11
+01:51:21 [INFO]   问题二：图 3 / 表 6 / 数据 10
+01:51:21 [INFO]   问题三：图 4 / 表 5 / 数据 13
+01:51:21 [INFO]   问题四：图 3 / 表 5 / 数据 9
+01:54:59 [INFO] 载入全部结果 ...
+01:54:59 [INFO] 生成公共图 ...
+01:54:59 [INFO] 图 f01_roadmap  全文技术路线图
+01:55:00 [INFO] 图 f02_terrain_nodes  研究区 30 m DEM 与任务节点分布
+01:55:01 [INFO] 图 f03_box_stats  货箱质量/体积/时限统计
+01:55:01 [INFO] 表 t_box_by_type  分类物资总量统计
+01:55:01 [INFO] 表 t_box_by_service  各服务区物资需求
+01:55:01 [INFO] 生成问题一图 ...
+01:55:01 [INFO] 图 f04_q1_payload  最大安全载荷热力图与生效约束
+01:55:01 [INFO] 表 t_q1_payload  3 机型 × 15 服务区最大安全载荷
+01:55:01 [INFO] 图 f05_q1_groups  货箱组批方案构成
+01:55:01 [INFO] 表 t_q1_groups  货箱组批方案明细（交付模板列序）
+01:55:02 [INFO] 图 f06_q1_strategy  策略对比与 Pareto 前沿
+01:55:02 [INFO] 表 t_q1_strategy  各策略多目标对比
+01:55:02 [INFO] 表 t_q1_lowerbound  逐服务区架次数下界与差距
+01:55:03 [INFO] 图 f07_q1_rho  返航安全余量敏感性分析
+01:55:03 [INFO] 表 t_q1_rho_sweep  ρ_g 扫描汇总
+01:55:03 [INFO] 生成问题二图 ...
+01:55:04 [INFO] 图 f08_q2_gantt  运输调度甘特图
+01:55:04 [INFO] 表 t_q2_sorties  问题二运输架次明细（交付模板列序）
+01:55:04 [INFO] 图 f09_q2_timeliness  物资时限达成分析
+01:55:04 [INFO] 表 t_q2_timeliness  逐箱时限达成明细
+01:55:04 [INFO] 表 t_q2_tradeoff  问题二四目标权衡与候选机队对比
+01:55:05 [INFO] 图 f10_q2_resources  资源使用情况
+01:55:05 [INFO] 表 t_q2_uav_use  实体无人机使用统计
+01:55:05 [INFO] 表 t_q2_battery_use  共享电池周转明细
+01:55:05 [INFO] 表 t_q2_battery_count  共享电池使用次数
+01:55:05 [INFO] 生成问题三图 ...
+01:55:06 [INFO] 图 f11_q3_diagnosis  连续通信诊断
+01:55:06 [INFO] 表 t_q3_diagnosis  逐架次直连状态诊断
+01:55:07 [INFO] 图 f12_q3_relay_map  中继悬停点与保障关系
+01:55:07 [INFO] 表 t_q3_relay_sorties  中继架次明细（交付模板列序）
+01:55:07 [INFO] 表 t_q3_siting  逐架次选址结果
+01:55:07 [INFO] 图 f13_q3_coverage  中继选址特征
+01:55:07 [INFO] 表 t_q3_summary  中继保障汇总
+01:55:08 [INFO] 图 f14b_q3_margin  逐时刻最小链路裕量
+01:55:10 [INFO] 图 f14_q3_joint_gantt  运输与中继联合调度时间线
+01:55:10 [INFO] 生成问题四图 ...
+01:55:10 [INFO] 图 f15_q4_graph  原子单元连通分量分析
+01:55:10 [INFO] 表 t_q4_bridge  桥接架次清单
+01:55:10 [INFO] 表 t_q4_units  原子单元（连通分量）
+01:55:11 [INFO] 图 f16_q4_compare  分区方案多指标对比
+01:55:11 [INFO] 表 t_q4_compare  分区方案对比
+01:55:11 [INFO] 表 t_q4_gap  逐方案逐类资源缺口
+01:55:11 [INFO] 图 f17_q4_detail  逐组资源配置与工作量
+01:55:11 [INFO] 表 t_q4_group  逐组资源与工作量明细
+01:55:11 [INFO] 表 t_all_metrics  四问关键指标汇总
+01:55:11 [INFO] 完成：图 18 个 / 表 23 个
+01:55:11 [INFO] 图表目录：paper
+01:55:12 [INFO] 生成补充图 ...
+01:55:13 [INFO] 图 f18_physics_calculator  统一物理计算器的公式与耦合关系
+01:55:13 [INFO] 图 f19_link_budget  通信链路预算与门限分析
+01:55:13 [INFO] 表 t_link_thresholds  三条链路的门限与可达距离
+01:55:13 [INFO] 图 f20_flight_profile  飞行剖面与能耗构成
+01:55:14 [INFO] 图 f21_verifier  独立可行性校验器架构与结果
+01:55:14 [INFO] 图 f22_sensitivity  四类敏感性分析
+01:55:14 [INFO] 表 t_sensitivity  敏感性分析汇总
+01:55:15 [INFO] 图 f23_model_params  机型与中继参数一览
+01:55:15 [INFO] 表 t_uav_params  三种运输机型参数
+01:55:15 [INFO] 表 t_relay_params  中继无人机参数
+01:55:15 [INFO] 表 t_battery_inventory  共享电池库存
+01:55:15 [INFO] 图 f24_nodes  节点坐标与海拔分布
+01:55:15 [INFO] 表 t_nodes  调度中心与服务区坐标及海拔
+01:55:15 [INFO] 表 t_leg_cache_sample  航段缓存样例（前 300 条有序航段）
+01:55:15 [INFO] 表 t_uav_fleet  逐架实体无人机清单
+01:55:15 [INFO] 表 t_relay_fleet  中继无人机参数
+01:55:15 [INFO] 按问题分目录备份 ...
+01:55:16 [INFO]   总体分析：图 11 / 表 13 / 数据 10
+01:55:16 [INFO]   问题一：图 4 / 表 5 / 数据 12
+01:55:16 [INFO]   问题二：图 3 / 表 6 / 数据 10
+01:55:16 [INFO]   问题三：图 4 / 表 5 / 数据 13
+01:55:16 [INFO]   问题四：图 3 / 表 5 / 数据 9
+02:01:13 [INFO] 载入全部结果 ...
+02:01:13 [INFO] 生成公共图 ...
+02:01:14 [INFO] 图 f01_roadmap  全文技术路线图
+02:01:15 [INFO] 图 f02_terrain_nodes  研究区 30 m DEM 与任务节点分布
+02:01:15 [INFO] 图 f03_box_stats  货箱质量/体积/时限统计
+02:01:15 [INFO] 表 t_box_by_type  分类物资总量统计
+02:01:15 [INFO] 表 t_box_by_service  各服务区物资需求
+02:01:15 [INFO] 生成问题一图 ...
+02:01:15 [INFO] 图 f04_q1_payload  最大安全载荷热力图与生效约束
+02:01:15 [INFO] 表 t_q1_payload  3 机型 × 15 服务区最大安全载荷
+02:01:16 [INFO] 图 f05_q1_groups  货箱组批方案构成
+02:01:16 [INFO] 表 t_q1_groups  货箱组批方案明细（交付模板列序）
+02:01:17 [INFO] 图 f06_q1_strategy  策略对比与 Pareto 前沿
+02:01:17 [INFO] 表 t_q1_strategy  各策略多目标对比
+02:01:17 [INFO] 表 t_q1_lowerbound  逐服务区架次数下界与差距
+02:01:18 [INFO] 图 f07_q1_rho  返航安全余量敏感性分析
+02:01:18 [INFO] 表 t_q1_rho_sweep  ρ_g 扫描汇总
+02:01:18 [INFO] 生成问题二图 ...
+02:01:19 [INFO] 图 f08_q2_gantt  运输调度甘特图
+02:01:19 [INFO] 表 t_q2_sorties  问题二运输架次明细（交付模板列序）
+02:01:19 [INFO] 图 f09_q2_timeliness  物资时限达成分析
+02:01:19 [INFO] 表 t_q2_timeliness  逐箱时限达成明细
+02:01:19 [INFO] 表 t_q2_tradeoff  问题二四目标权衡与候选机队对比
+02:01:20 [INFO] 图 f10_q2_resources  资源使用情况
+02:01:20 [INFO] 表 t_q2_uav_use  实体无人机使用统计
+02:01:20 [INFO] 表 t_q2_battery_use  共享电池周转明细
+02:01:20 [INFO] 表 t_q2_battery_count  共享电池使用次数
+02:01:20 [INFO] 生成问题三图 ...
+02:01:21 [INFO] 图 f11_q3_diagnosis  连续通信诊断
+02:01:21 [INFO] 表 t_q3_diagnosis  逐架次直连状态诊断
+02:01:22 [INFO] 图 f12_q3_relay_map  中继悬停点与保障关系
+02:01:22 [INFO] 表 t_q3_relay_sorties  中继架次明细（交付模板列序）
+02:01:22 [INFO] 表 t_q3_siting  逐架次选址结果
+02:01:23 [INFO] 图 f13_q3_coverage  中继选址特征
+02:01:23 [INFO] 表 t_q3_summary  中继保障汇总
+02:01:24 [INFO] 图 f14b_q3_margin  逐时刻最小链路裕量
+02:01:25 [INFO] 图 f14_q3_joint_gantt  运输与中继联合调度时间线
+02:01:25 [INFO] 生成问题四图 ...
+02:01:26 [INFO] 图 f15_q4_graph  原子单元连通分量分析
+02:01:26 [INFO] 表 t_q4_bridge  桥接架次清单
+02:01:26 [INFO] 表 t_q4_units  原子单元（连通分量）
+02:01:27 [INFO] 图 f16_q4_compare  分区方案多指标对比
+02:01:27 [INFO] 表 t_q4_compare  分区方案对比
+02:01:27 [INFO] 表 t_q4_gap  逐方案逐类资源缺口
+02:01:27 [INFO] 图 f17_q4_detail  逐组资源配置与工作量
+02:01:27 [INFO] 表 t_q4_group  逐组资源与工作量明细
+02:01:27 [INFO] 表 t_all_metrics  四问关键指标汇总
+02:01:27 [INFO] 完成：图 18 个 / 表 23 个
+02:01:27 [INFO] 图表目录：paper
+02:01:29 [INFO] 生成补充图 ...
+02:01:29 [INFO] 图 f18_physics_calculator  统一物理计算器的公式与耦合关系
+02:01:29 [INFO] 图 f19_link_budget  通信链路预算与门限分析
+02:01:29 [INFO] 表 t_link_thresholds  三条链路的门限与可达距离
+02:01:30 [INFO] 图 f20_flight_profile  飞行剖面与能耗构成
+02:01:30 [INFO] 图 f21_verifier  独立可行性校验器架构与结果
+02:01:30 [INFO] 图 f22_sensitivity  四类敏感性分析
+02:01:30 [INFO] 表 t_sensitivity  敏感性分析汇总
+02:01:31 [INFO] 图 f23_model_params  机型与中继参数一览
+02:01:31 [INFO] 表 t_uav_params  三种运输机型参数
+02:01:31 [INFO] 表 t_relay_params  中继无人机参数
+02:01:31 [INFO] 表 t_battery_inventory  共享电池库存
+02:01:32 [INFO] 图 f24_nodes  节点坐标与海拔分布
+02:01:32 [INFO] 表 t_nodes  调度中心与服务区坐标及海拔
+02:01:32 [INFO] 表 t_leg_cache_sample  航段缓存样例（前 300 条有序航段）
+02:01:32 [INFO] 表 t_uav_fleet  逐架实体无人机清单
+02:01:32 [INFO] 表 t_relay_fleet  中继无人机参数
+02:01:32 [INFO] 按问题分目录备份 ...
+02:01:32 [INFO]   总体分析：图 11 / 表 13 / 数据 10
+02:01:32 [INFO]   问题一：图 4 / 表 5 / 数据 12
+02:01:32 [INFO]   问题二：图 3 / 表 6 / 数据 10
+02:01:32 [INFO]   问题三：图 4 / 表 5 / 数据 12
+02:01:32 [INFO]   问题四：图 3 / 表 5 / 数据 9
+02:11:06 [INFO] 载入全部结果 ...
+02:11:06 [INFO] 生成公共图 ...
+02:11:06 [INFO] 图 f01_roadmap  全文技术路线图
+02:11:08 [INFO] 图 f02_terrain_nodes  研究区 30 m DEM 与任务节点分布
+02:11:08 [INFO] 图 f03_box_stats  货箱质量/体积/时限统计
+02:11:08 [INFO] 表 t_box_by_type  分类物资总量统计
+02:11:08 [INFO] 表 t_box_by_service  各服务区物资需求
+02:11:08 [INFO] 生成问题一图 ...
+02:11:08 [INFO] 图 f04_q1_payload  最大安全载荷热力图与生效约束
+02:11:08 [INFO] 表 t_q1_payload  3 机型 × 15 服务区最大安全载荷
+02:11:09 [INFO] 图 f05_q1_groups  货箱组批方案构成
+02:11:09 [INFO] 表 t_q1_groups  货箱组批方案明细（交付模板列序）
+02:11:10 [INFO] 图 f06_q1_strategy  策略对比与 Pareto 前沿
+02:11:10 [INFO] 表 t_q1_strategy  各策略多目标对比
+02:11:10 [INFO] 表 t_q1_lowerbound  逐服务区架次数下界与差距
+02:11:11 [INFO] 图 f07_q1_rho  返航安全余量敏感性分析
+02:11:11 [INFO] 表 t_q1_rho_sweep  ρ_g 扫描汇总
+02:11:11 [INFO] 生成问题二图 ...
+02:11:12 [INFO] 图 f08_q2_gantt  运输调度甘特图
+02:11:12 [INFO] 表 t_q2_sorties  问题二运输架次明细（交付模板列序）
+02:11:14 [INFO] 图 f09_q2_timeliness  物资时限达成分析
+02:11:14 [INFO] 表 t_q2_timeliness  逐箱时限达成明细
+02:11:14 [INFO] 表 t_q2_tradeoff  问题二四目标权衡与候选机队对比
+02:11:14 [INFO] 图 f10_q2_resources  资源使用情况
+02:11:14 [INFO] 表 t_q2_uav_use  实体无人机使用统计
+02:11:14 [INFO] 表 t_q2_battery_use  共享电池周转明细
+02:11:14 [INFO] 表 t_q2_battery_count  共享电池使用次数
+02:11:14 [INFO] 生成问题三图 ...
+02:11:16 [INFO] 图 f11_q3_diagnosis  连续通信诊断
+02:11:16 [INFO] 表 t_q3_diagnosis  逐架次直连状态诊断
+02:11:17 [INFO] 图 f12_q3_relay_map  中继悬停点与保障关系
+02:11:17 [INFO] 表 t_q3_relay_sorties  中继架次明细（交付模板列序）
+02:11:17 [INFO] 表 t_q3_siting  逐架次选址结果
+02:11:18 [INFO] 图 f13_q3_coverage  中继选址特征
+02:11:18 [INFO] 表 t_q3_summary  中继保障汇总
+02:11:19 [INFO] 图 f14b_q3_margin  逐时刻最小链路裕量
+02:11:21 [INFO] 图 f14_q3_joint_gantt  运输与中继联合调度时间线
+02:11:21 [INFO] 生成问题四图 ...
+02:11:22 [INFO] 图 f15_q4_graph  原子单元连通分量分析
+02:11:22 [INFO] 表 t_q4_bridge  桥接架次清单
+02:11:22 [INFO] 表 t_q4_units  原子单元（连通分量）
+02:11:23 [INFO] 图 f16_q4_compare  分区方案多指标对比
+02:11:23 [INFO] 表 t_q4_compare  分区方案对比
+02:11:23 [INFO] 表 t_q4_gap  逐方案逐类资源缺口
+02:11:23 [INFO] 图 f17_q4_detail  逐组资源配置与工作量
+02:11:23 [INFO] 表 t_q4_group  逐组资源与工作量明细
+02:11:23 [INFO] 表 t_all_metrics  四问关键指标汇总
+02:11:23 [INFO] 完成：图 18 个 / 表 23 个
+02:11:23 [INFO] 图表目录：paper
+02:11:25 [INFO] 生成补充图 ...
+02:11:25 [INFO] 图 f18_physics_calculator  统一物理计算器的公式与耦合关系
+02:11:25 [INFO] 图 f19_link_budget  通信链路预算与门限分析
+02:11:25 [INFO] 表 t_link_thresholds  三条链路的门限与可达距离
+02:11:26 [INFO] 图 f20_flight_profile  飞行剖面与能耗构成
+02:11:26 [INFO] 图 f21_verifier  独立可行性校验器架构与结果
+02:11:26 [INFO] 表 t_q3_sample_dt_sweep  通信采样步长重采样对照（基准序列 0.25 s）
+02:11:27 [INFO] 图 f22_sensitivity  四类敏感性分析
+02:11:27 [INFO] 表 t_sensitivity  敏感性分析汇总
+02:11:27 [INFO] 图 f23_model_params  机型与中继参数一览
+02:11:27 [INFO] 表 t_uav_params  三种运输机型参数
+02:11:27 [INFO] 表 t_relay_params  中继无人机参数
+02:11:27 [INFO] 表 t_battery_inventory  共享电池库存
+02:11:28 [INFO] 图 f24_nodes  节点坐标与海拔分布
+02:11:28 [INFO] 表 t_nodes  调度中心与服务区坐标及海拔
+02:11:28 [INFO] 表 t_leg_cache_sample  航段缓存样例（前 300 条有序航段）
+02:11:28 [INFO] 表 t_uav_fleet  逐架实体无人机清单
+02:11:28 [INFO] 表 t_relay_fleet  中继无人机参数
+02:11:28 [INFO] 按问题分目录备份 ...
+02:11:28 [INFO]   总体分析：图 11 / 表 13 / 数据 10
+02:11:28 [INFO]   问题一：图 4 / 表 5 / 数据 12
+02:11:28 [INFO]   问题二：图 3 / 表 6 / 数据 10
+02:11:28 [INFO]   问题三：图 4 / 表 7 / 数据 13
+02:11:28 [INFO]   问题四：图 3 / 表 5 / 数据 9
+02:11:42 [INFO] 生成补充图 ...
+02:11:42 [INFO] 图 f18_physics_calculator  统一物理计算器的公式与耦合关系
+02:11:42 [INFO] 图 f19_link_budget  通信链路预算与门限分析
+02:11:42 [INFO] 表 t_link_thresholds  三条链路的门限与可达距离
+02:11:43 [INFO] 图 f20_flight_profile  飞行剖面与能耗构成
+02:11:43 [INFO] 图 f21_verifier  独立可行性校验器架构与结果
+02:11:43 [INFO] 表 t_q3_sample_dt_sweep  通信采样步长重采样对照（基准序列 0.25 s，按点抽稀）
+02:11:44 [INFO] 图 f22_sensitivity  四类敏感性分析
+02:11:44 [INFO] 表 t_sensitivity  敏感性分析汇总
+02:11:44 [INFO] 图 f23_model_params  机型与中继参数一览
+02:11:44 [INFO] 表 t_uav_params  三种运输机型参数
+02:11:44 [INFO] 表 t_relay_params  中继无人机参数
+02:11:44 [INFO] 表 t_battery_inventory  共享电池库存
+02:11:45 [INFO] 图 f24_nodes  节点坐标与海拔分布
+02:11:45 [INFO] 表 t_nodes  调度中心与服务区坐标及海拔
+02:11:45 [INFO] 表 t_leg_cache_sample  航段缓存样例（前 300 条有序航段）
+02:11:45 [INFO] 表 t_uav_fleet  逐架实体无人机清单
+02:11:45 [INFO] 表 t_relay_fleet  中继无人机参数
+02:11:45 [INFO] 按问题分目录备份 ...
+02:11:45 [INFO]   总体分析：图 11 / 表 13 / 数据 10
+02:11:45 [INFO]   问题一：图 4 / 表 5 / 数据 12
+02:11:45 [INFO]   问题二：图 3 / 表 6 / 数据 10
+02:11:45 [INFO]   问题三：图 4 / 表 7 / 数据 13
+02:11:45 [INFO]   问题四：图 3 / 表 5 / 数据 9

@@ -279,6 +279,46 @@ def soc_from_energy(energy_kwh: float, total_kwh: float) -> float:
     return max(0.0, 1.0 - energy_kwh / total_kwh)
 
 
+def assign_relays_to_groups(
+    relays: Sequence[RelayRec],
+    sorties: Sequence[SortieRec],
+    groups: Sequence[Sequence[str]],
+) -> dict[int, list[RelayRec]]:
+    """把每个中继架次**唯一归属**到一个任务组，返回 `{组号: [中继架次]}`。
+
+    这是问题四资源核算的关键一步，规则与理由：
+
+    ★ 为什么不能按"覆盖的运输架次全在本组"归属 ——
+      一个中继架次往往同时保障**跨多个服务区**的运输架次（本方案 R01-1 在
+      [740.4, 7350.0] s 内保障全部 23 个架次）。若要求其覆盖集是某组架次集的
+      子集，则任何真分组都认领不到中继，资源核算会得出"中继需求 0 架"的
+      荒谬结论（实测 K=2 曾算出中继无人机 0 架、能源组件 0 组）。
+
+    ★ 归属规则：把中继归给**它保障的、落在该组的运输架次最多**的那一组
+      （平票时取"与组内服务区交集"更多者；仍平票则取组号小者）。
+      每个中继只被一个组计入一次，总资源量不被重复放大。
+      其代价是：某个组的通信保障若实际依赖别组的中继，本核算不额外补偿 ——
+      这属于"资源不得跨组调配"下的**乐观口径**，须与结论同时说明。
+    """
+    out: dict[int, list[RelayRec]] = {i: [] for i in range(len(groups))}
+    svc_sets = [set(g) for g in groups]
+    by_id = {s.sortie_id: s for s in sorties}
+    for r in relays:
+        cov = [by_id[x] for x in r.covers if x in by_id]
+        if not cov:
+            continue
+        best_i, best_key = None, None
+        for i, sv in enumerate(svc_sets):
+            n_in = sum(1 for s in cov if set(s.stops) <= sv)
+            inter = sum(len(sv & set(s.stops)) for s in cov)
+            key = (n_in, inter, -i)
+            if best_key is None or key > best_key:
+                best_i, best_key = i, key
+        if best_i is not None and best_key is not None and best_key[0] > 0:
+            out[best_i].append(r)
+    return out
+
+
 def group_resources(
     group_id: str,
     services: tuple[str, ...],
@@ -288,15 +328,20 @@ def group_resources(
     battery_t_full: dict[str, float],
     relay_t_full: float = 1800.0,
     relay_energy: float = 3.2,
+    owned_relays: Sequence[RelayRec] | None = None,
 ) -> GroupResources:
     """核算一个任务组的四类资源需求。
 
     ★ 只统计**属于本组**的架次（架次的所有服务区必须都在组内）。
+    `owned_relays` 给出该组名下的中继架次（由 `assign_relays_to_groups`
+    统一分配，保证每个中继只被一个组计入一次）；留空则回退为
+    "覆盖集完全落在本组"的严格子集口径。
     """
     svc_set = set(services)
     my_sorties = [s for s in sorties if set(s.stops) <= svc_set]
     my_ids = {s.sortie_id for s in my_sorties}
-    my_relays = [r for r in relays if set(r.covers) <= my_ids]
+    my_relays = (list(owned_relays) if owned_relays is not None
+                 else [r for r in relays if set(r.covers) <= my_ids])
 
     res = GroupResources(
         group_id=group_id,
@@ -437,14 +482,16 @@ def select_best_partition(
     best: PartitionPlan | None = None
     best_key: tuple | None = None
     for part in parts:
+        glist = [sorted(svcs) for svcs in sorted(part, key=lambda s: sorted(s))
+                 if svcs]
+        owned = assign_relays_to_groups(relays, sorties, glist)
         groups = []
-        for gi, svcs in enumerate(sorted(part, key=lambda s: sorted(s))):
-            if not svcs:
-                continue
+        for gi, svcs in enumerate(glist):
             groups.append(
                 group_resources(
-                    f"G{gi + 1}", tuple(sorted(svcs)), sorties, relays,
+                    f"G{gi + 1}", tuple(svcs), sorties, relays,
                     uav_energy, battery_t_full,
+                    owned_relays=owned.get(gi, []),
                 )
             )
         plan = PartitionPlan(k=k, groups=groups)

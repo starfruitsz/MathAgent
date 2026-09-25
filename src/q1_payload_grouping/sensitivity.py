@@ -132,6 +132,72 @@ def sweep_reserve_ratio(
     return pd.DataFrame(rows)
 
 
+def sweep_reserve_ratio_exact(
+    boxes_by_area: dict[str, list[Box]],
+    uav_types: dict[str, UAVType],
+    leg_cache: LegCache,
+    rhos: list[float],
+    center_id: str = "O01",
+) -> pd.DataFrame:
+    """扫描 ρ_g，每个取值都用**精确字典序 DP** 重跑组批（论文口径）。
+
+    ★ 为什么必须有这一个版本 ——
+      `sweep_reserve_ratio()` 走的是启发式策略集合 + Pareto 前沿，
+      与正式方案（`exact_pack` 精确 DP）**不是同一条求解路径**：
+      实测在 ρ_g = 0.20 处，启发式给 18 架次 / 75.070591 kWh，
+      而正式方案的精确 DP 给 18 架次 / 59.087498 kWh（低 21%）。
+      如果论文正文用精确 DP 的 59.09 kWh、敏感性表却用 75.07 kWh，
+      同一问就出现两套数（铁律 R4 的口径分叉）。
+      因此对外发布的扫描表一律取本函数的结果；启发式版本仅作为
+      "策略集合的对照"保留，不进入论文表格。
+
+    返回列与 `sweep_reserve_ratio()` 对齐（`strategy` 固定为 `exact_dp`），
+    并在 `n_infeasible_areas` 中给出该 ρ_g 下**无可行组批**的服务区数。
+    """
+    from src.q1_payload_grouping.exact_pack import plan_all_areas
+
+    service_ids = sorted(boxes_by_area)
+    rows: list[dict] = []
+    for rho in rhos:
+        adjusted = {c: replace(u, reserve_ratio=rho) for c, u in uav_types.items()}
+        caps = area_capacities(service_ids, adjusted, leg_cache, center_id)
+
+        # 该 ρ_g 下"无可行组批"的服务区（容量决定，与策略无关）
+        bad_areas = [sid for sid, bx in boxes_by_area.items()
+                     if not _area_has_any_fit(bx, caps, adjusted, sid)]
+        try:
+            plans = plan_all_areas(boxes_by_area, caps, adjusted, leg_cache,
+                                   ("A", "B", "C"))
+        except Exception:                                  # noqa: BLE001
+            plans = {}
+        if not plans:
+            rows.append({"rho": round(rho, 4), "n_sorties": 0,
+                         "total_energy_kwh": 0.0, "serial_total_time_s": 0.0,
+                         "feasible": False,
+                         "n_infeasible_areas": len(bad_areas),
+                         "strategy": "exact_dp", "types": "—"})
+            continue
+
+        n_s = sum(p.n_sorties for p in plans.values())
+        e_tot = sum(p.total_energy_kwh for p in plans.values())
+        t_tot = sum(p.serial_time_s for p in plans.values())
+        usage: dict[str, int] = {}
+        for p in plans.values():
+            for b in p.batches:
+                usage[b.type_code] = usage.get(b.type_code, 0) + 1
+        rows.append({
+            "rho": round(rho, 4), "n_sorties": n_s,
+            "total_energy_kwh": round(e_tot, 6),
+            "serial_total_time_s": round(t_tot, 3),
+            "feasible": not bad_areas,
+            "n_infeasible_areas": len(bad_areas),
+            "strategy": "exact_dp",
+            "types": "/".join(f"{k}:{v}" for k, v in sorted(usage.items())),
+            "infeasible_areas": "|".join(sorted(bad_areas)),
+        })
+    return pd.DataFrame(rows)
+
+
 def _area_has_any_fit(
     boxes: Sequence[Box],
     caps: dict[tuple[str, str], AreaCapacity],

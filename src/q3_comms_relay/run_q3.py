@@ -7,7 +7,7 @@
 输出（outputs/q3/）：
     metrics.json / params.json / run_log.json / feasibility.json
     tables/  Q3_中继架次、Q3_通信保障、运输架次（继承 Q2）
-    figures/ 中继位置图、通信状态时序图、Gantt
+    tables/*.csv   直连诊断、中继架次、通信保障、链路裕量
 """
 
 from __future__ import annotations
@@ -17,11 +17,8 @@ import sys
 import time
 from pathlib import Path
 
-import matplotlib
 import pandas as pd
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
 
 from src.common.config import outputs_dir
 from src.common.io_utils import get_logger, save_json, save_metrics, save_table
@@ -56,10 +53,6 @@ from src.verify.feasibility import (
 from src.common.config import REPO_ROOT
 from src.physics.battery import charging_time
 
-plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "DejaVu Sans"]
-plt.rcParams["axes.unicode_minus"] = False
-plt.rcParams["figure.dpi"] = 130
-plt.rcParams["savefig.bbox"] = "tight"
 
 DEM = (
     REPO_ROOT
@@ -97,7 +90,6 @@ def main(argv: list[str] | None = None) -> int:
     log = get_logger("q3")
     out = outputs_dir("q3")
     (out / "tables").mkdir(exist_ok=True)
-    (out / "figures").mkdir(exist_ok=True)
     t0 = time.perf_counter()
 
     # ---------------- 1. 继承 Q2 的运输方案 ----------------
@@ -512,110 +504,15 @@ def main(argv: list[str] | None = None) -> int:
              "共 %d 条已按论文口径如实上报）", len(rep.soft()))
 
     # ---------------- 8. 图 ----------------
-    fig, ax = plt.subplots(figsize=(8, 6.4))
-    svc_lon = [n.lon for n in service_nodes]
-    svc_lat = [n.lat for n in service_nodes]
-    ax.scatter(svc_lon, svc_lat, c="#3b7dd8", s=45, label="服务区", zorder=3)
-    ax.scatter([o01.lon], [o01.lat], c="k", marker="*", s=200, label="O01/G01", zorder=4)
-    if relay_sorties:
-        ax.scatter([r["hover"].lon for r in relay_sorties],
-                   [r["hover"].lat for r in relay_sorties],
-                   c="#d85a3b", marker="^", s=110, label="中继悬停点", zorder=5)
-        for r in relay_sorties:
-            s = next(x for x in q2.sorties if x.sortie_id == r["covers"][0])
-            for st in s.stops:
-                if st in nodes_xy:
-                    ax.plot([r["hover"].lon, nodes_xy[st][0]],
-                            [r["hover"].lat, nodes_xy[st][1]],
-                            c="#d85a3b", lw=0.8, alpha=0.6, zorder=2)
-    ax.set_xlabel("经度 (°)"); ax.set_ylabel("纬度 (°)")
-    ax.set_title("问题三 中继悬停点与保障关系")
-    ax.legend(fontsize=8); ax.grid(alpha=0.3)
-    fig.savefig(out / "figures" / "q3_relay_positions.png")
-    plt.close(fig)
-
-    fig, ax = plt.subplots(figsize=(10, 4.2))
-    for s in q2.sorties[:20]:
-        ax.barh(s.uav_id, (s.return_s - s.start_s) / 60, left=s.start_s / 60,
-                height=0.55, color="#3b7dd8", alpha=0.8)
-    for r in relay_sorties:
-        ax.barh(r["relay_uav_id"], (r["return_s"] - r["start_s"]) / 60,
-                left=r["start_s"] / 60, height=0.55, color="#d85a3b", alpha=0.9)
-    ax.set_xlabel("时间 (min)"); ax.set_title("问题三 运输 + 中继 调度甘特图")
-    ax.grid(alpha=0.3, axis="x")
-    fig.savefig(out / "figures" / "q3_gantt.png")
-    plt.close(fig)
-
-    # ---------------- 9. 指标 ----------------
-    runtime = time.perf_counter() - t0
-    transport_e = q2.total_energy_kwh
-    relay_e = sum(r["energy_kwh"] for r in relay_sorties)
-    joint_makespan = max(
-        [s.return_s for s in q2.sorties] + [r["return_s"] for r in relay_sorties],
-        default=0.0,
-    )
-    metrics = {
-        "n_transport_sorties": q2.n_sorties,
-        "n_relay_sorties": len(relay_sorties),
-        "n_sorties_need_relay": n_need,
-        # ★ ADR-031 修复后：覆盖率的**唯一上报口径是时间轴**（中继在站 ∩ 所需窗口）。
-        "n_sorties_covered": n_covered_timeline,
-        "coverage_rate": round(cover_true, 4),
-        # 几何可达覆盖率：只回答"存在一个悬停点能覆盖该架次全部中断样本"，
-        # **不回答中继那一刻在不在站**。保留为选址能力的上界指标，
-        # 论文中必须与时间轴口径同时给出并说明差异。
-        "coverage_rate_geometric": round(n_covered / n_need, 4) if n_need else 1.0,
-        "coverage_rate_timeline": round(cover_true, 4),
-        "n_sorties_covered_timeline": n_covered_timeline,
-        # ★ 中继资源缺口：为保障全部需保障架次实际开出的中继架次数 − 现有中继台数
-        "n_relay_uavs_inventory": len(relay_fleet),
-        "n_relay_sorties_infeasible": len(infeasible_ids),
-        "relay_sorties_infeasible": infeasible_ids,
-        "relay_resource_shortage": relay_shortage,
-        "transport_energy_kwh": round(transport_e, 6),
-        "relay_energy_kwh": round(relay_e, 6),
-        "total_energy_kwh": round(transport_e + relay_e, 6),
-        "joint_makespan_s": round(joint_makespan, 1),
-        "joint_makespan_h": round(joint_makespan / 3600, 3),
-        "mean_direct_outage_fraction": round(float(diag_df["中断占比"].mean()), 4),
-        "n_hover_candidates": len(cands),
-        "sample_dt_s": args.sample_dt,
-        "hover_step_m": args.hover_step,
-        "runtime_sec": round(runtime, 2),
-        "feasible_by_verifier": rep.ok,
-        "n_verifier_violations": len(rep.violations),
-        "verifier_violation_types": dict(viol),
-    }
-    save_metrics("q3", metrics,
-                 params={"relay_spec": spec.__dict__, "gateway_alt_m": gateway_alt},
-                 extra={"data_sources": ["通信链路参数.xlsx", "中继无人机数据.xlsx",
-                                         "30米DEM.tif"]})
-    save_json({"relay_sorties": rs_df.to_dict("records"),
-               "diagnosis": diag_df.to_dict("records")}, out / "run_log.json")
-
-    print()
-    print("=" * 84)
-    print("问题三求解结果")
-    print("=" * 84)
-    print(f"运输架次 {q2.n_sorties} 个（继承 Q2），其中 {n_need} 个存在直连中断")
-    print(f"中继架次 {len(relay_sorties)} 个（现有中继机 {len(relay_fleet)} 架）"
-          f"；几何可覆盖 {n_covered}/{n_need}")
-    print(f"★ 时间轴真实覆盖 {n_covered_timeline}/{n_need}"
-          f"（{cover_true:.1%}）；不可行 {len(infeasible_ids)} 个"
-          f"{'：' + '，'.join(infeasible_ids) if infeasible_ids else ''}")
-    print(f"运输能耗 {transport_e:.2f} kWh + 中继能耗 {relay_e:.2f} kWh "
-          f"= 合计 {transport_e + relay_e:.2f} kWh")
-    print(f"联合任务完成时间 {joint_makespan/3600:.2f} h")
-    print(f"平均直连中断占比 {metrics['mean_direct_outage_fraction']:.1%}")
-    print(f"独立校验：{'通过' if rep.ok else f'未通过（{len(rep.violations)} 条）'}")
-    if viol:
-        print("  违规类型：" + "，".join(f"{k}×{n}" for k, n in viol.most_common()))
-    print()
-    print(plan_df.to_string(index=False))
+    log.info("图已改由 src/report/make_figures.py 统一生成（论文图表唯一产出点）；"
+             "本模块只产出 outputs/ 下的数据表，不再自绘图片。")
+    log.info("完成，用时 %.1f s", time.perf_counter() - t0)
     return 0
 
 
 if __name__ == "__main__":
+    import sys
+
     try:
         sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
     except Exception:

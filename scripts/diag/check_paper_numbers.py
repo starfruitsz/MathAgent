@@ -2,6 +2,12 @@
 
 用法：
     python scripts/diag/check_paper_numbers.py
+
+判据分两类：
+  A. **当前口径**的数值必须出现（否则说明正文没跟上重跑）；
+  B. **历史口径**的数值必须不出现（否则说明有漏改的陈旧文本）。
+
+两个列表都由 `outputs/qN/metrics.json` 与固定历史值构成，不手写当前结果。
 """
 
 from __future__ import annotations
@@ -15,6 +21,14 @@ sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
 ROOT = Path(__file__).resolve().parents[2]
 PDF = ROOT / "paper" / "山区洪涝灾害下无人机运输与通信协同优化_论文.pdf"
 
+#: 历史版本出现过、现已作废的数值（出现即为漏改）
+STALE = [
+    "75.07", "77.30", "82.30", "72.86", "106.60", "79.65", "10968",
+    "3.02 h", "2.45 h", "77.94", "62.5%", "38.8%", "25 架次", "28 架次",
+    "35 架次", "20 个架次", "6 个中继", "30 个中继架次", "13.95", "13.43",
+    "13.00 h", "1.8517", "2.7035", "31.0%", "31.3%", "99.68",
+]
+
 
 def main() -> int:
     import fitz
@@ -27,52 +41,32 @@ def main() -> int:
          for q in ("q1", "q2", "q3", "q4")}
     m1, m2, m3, m4 = m["q1"], m["q2"], m["q3"], m["q4"]
 
-    print("=== 论文正文中的关键数字出现次数 ===")
-    # 新值（应出现）+ 历史值（不应再出现，出现即为漏改的陈旧文本）
-    probes = [
-        # —— 当前应为的口径
-        "28 架次", "28 个运输架次", "82.30", "2.45 h", "100.0%", "77.94",
-        "18 架次", "75.07",
-        # —— 历史值：Q2 只跑 2 架 C 型时的结论，现已推翻
-        "14 架次", "5.18 h", "55.0%", "物理不可行", "任何调度算法都无法消除",
-        "8~10 个架次", "9 个服务区要求 60 min",
-        # —— 更早的历史值
-        "22 架次", "35 架次", "35 个运输架次", "75.06", "83.01",
-        "4.04 h", "9.78 h", "9.90 h", "587 min", "62.5%", "38.8%",
-        "30 个中继架次", "29/29", "31.3%", "31.0%", "99.68",
-    ]
-    for p in probes:
-        print(f"  {p!r:<24} {text.count(p)} 次")
+    def _h(sec: float) -> float:
+        return float(sec) / 3600.0
 
-    print("\n=== 当前 metrics（论文应引用这些值）===")
-    print(f"  Q1: {m1['chosen_n_sorties']} 架次 / {m1['chosen_total_energy_kwh']:.2f} kWh "
-          f"/ 下界 {m1['lower_bound_total_sorties']}")
-    print(f"  Q2: {m2['n_sorties']} 架次 / {m2['total_energy_kwh']:.2f} kWh "
-          f"/ {m2['makespan_h']:.2f} h / 准时 {m2['on_time_rate']:.1%} "
-          f"/ 违规 {m2['n_verifier_violations']}")
+    print("=== 当前 metrics（论文应引用这些值）===")
+    print(f"  Q1: {m1['chosen_n_sorties']} 架次 / {m1['chosen_total_energy_kwh']:.3f} kWh "
+          f"/ 下界 {m1['lower_bound_total_sorties']} / 达到下界 {m1['at_lower_bound']}")
+    print(f"  Q2: {m2['n_sorties']} 架次 / {m2['total_energy_kwh']:.3f} kWh "
+          f"/ 完工 {m2['makespan_s']:.2f} s ({m2['makespan_h']:.3f} h) "
+          f"/ 准时 {m2['on_time_rate']:.1%} / 硬约束违规 {m2['n_verifier_violations']}")
     print(f"  Q3: 运输 {m3['n_transport_sorties']} / 中继 {m3['n_relay_sorties']} "
-          f"/ 覆盖 {m3['n_sorties_covered']}-{m3['n_sorties_need_relay']} "
-          f"/ 能耗 {m3['total_energy_kwh']:.2f} / 完工 {m3['joint_makespan_h']:.2f} h "
-          f"/ 中断占比 {m3['mean_direct_outage_fraction']:.1%}")
-    print(f"  Q4: 分量 {m4['n_atomic_units']} / 桥接 {m4['n_bridge_sorties']} "
+          f"/ 零中断架次 {m3['n_sorties_covered']}-{m3['n_transport_sorties']} "
+          f"/ 总能耗 {m3['total_energy_kwh']:.3f} kWh "
+          f"/ 联合完工 {m3['joint_cmax_s']:.2f} s ({_h(m3['joint_cmax_s']):.3f} h) "
+          f"/ 中断样本 {m3['outage_samples']}/{m3['radio_samples']}")
+    print(f"  Q4: 原子单元 {m4['n_atomic_units']} / 桥接 {m4['n_bridge_sorties']} "
           f"/ K2 可行 {m4['partition_feasible_k2']} / K3 可行 {m4['partition_feasible_k3']}")
 
-    # 一致性断言（★ 全部由 metrics 推导，不要硬编码历史数值）
-    print("\n=== 一致性检查 ===")
-    # 论文里的数字带千分位/四舍五入，这里按格式化后的字符串找
-    def appears(v: float, nd: int = 2) -> bool:
-        return f"{v:.{nd}f}" in text
+    print("\n=== 一致性断言（全部由 metrics 推导，不硬编码历史数值）===")
 
     def num_appears(v: float, nd: int = 2) -> bool:
-        """★ 只找**数字本身**，不要求紧跟单位。
-
-        表格里的数值与表头单位是**不同单元格**（例如表头写「联合完工（h）」、
-        单元格只写「3.05」），因此 `"3.05 h" in text` 会**假报缺失**。
-        这里改为匹配数字，并排除"更长数字的前缀"（如 3.05 不应命中 3.051）。
-        """
+        """只找**数字本身**：表格里数值与表头单位在不同单元格，
+        因此 `"3.05 h" in text` 会假报缺失。同时排除"更长数字的前缀"。"""
         s = f"{v:.{nd}f}"
-        for i in range(len(text)):
-            j = text.find(s, i)
+        start = 0
+        while True:
+            j = text.find(s, start)
             if j < 0:
                 return False
             before = text[j - 1] if j > 0 else ""
@@ -81,8 +75,7 @@ def main() -> int:
                 after.isdigit() or after == "."
             ):
                 return True
-            i = j + 1
-        return False
+            start = j + 1
 
     checks = [
         ("Q3 运输架次数 == Q2 架次数",
@@ -92,22 +85,44 @@ def main() -> int:
         ("Q3 总能耗 == 运输 + 中继",
          abs(m3["total_energy_kwh"]
              - m3["transport_energy_kwh"] - m3["relay_energy_kwh"]) < 1e-6),
+        ("Q3 中断样本 < 总采样", m3["outage_samples"] < m3["radio_samples"]),
+        (f"论文出现 Q1 架次数 {m1['chosen_n_sorties']}",
+         f"{m1['chosen_n_sorties']} 架次" in text),
+        (f"论文出现 Q1 能耗 {m1['chosen_total_energy_kwh']:.3f}",
+         num_appears(m1["chosen_total_energy_kwh"], 3)),
         (f"论文出现 Q2 架次数 {m2['n_sorties']}",
          f"{m2['n_sorties']} 架次" in text or f"{m2['n_sorties']} 个运输架次" in text),
-        (f"论文出现 Q2 能耗 {m2['total_energy_kwh']:.2f}", appears(m2["total_energy_kwh"])),
-        (f"论文出现 Q3 总能耗 {m3['total_energy_kwh']:.2f}", appears(m3["total_energy_kwh"])),
-        (f"论文出现 Q3 联合完工 {m3['joint_makespan_h']:.2f} h",
-         num_appears(m3["joint_makespan_h"])),
+        (f"论文出现 Q2 能耗 {m2['total_energy_kwh']:.3f}",
+         num_appears(m2["total_energy_kwh"], 3)),
+        (f"论文出现 Q2 完工 {m2['makespan_s']:.2f} s",
+         num_appears(m2["makespan_s"])),
+        (f"论文出现 Q3 总能耗 {m3['total_energy_kwh']:.3f}",
+         num_appears(m3["total_energy_kwh"], 3)),
+        (f"论文出现 Q3 联合完工 {m3['joint_cmax_s']:.2f} s",
+         num_appears(m3["joint_cmax_s"])),
         (f"论文出现 Q3 中继架次数 {m3['n_relay_sorties']}",
          num_appears(float(m3["n_relay_sorties"]), 0)),
+        (f"论文出现 Q3 采样点数 {m3['radio_samples']:,}",
+         f"{m3['radio_samples']:,}" in text or str(m3["radio_samples"]) in text),
         (f"论文出现 Q4 原子单元数 {m4['n_atomic_units']}",
          str(m4["n_atomic_units"]) in text),
     ]
+
+    print("\n=== 历史口径数值（应已全部清除）===")
+    for s in STALE:
+        n = text.count(s)
+        print(f"  {s!r:<16} {n} 次" + ("" if n == 0 else "   ← 仍有陈旧文本"))
+
     ok = True
     for name, good in checks:
         print(f"  {'✅' if good else '❌'} {name}")
-        ok &= good
-    print("\n" + ("✅ 论文数字与 metrics 一致" if ok else "❌ 存在不一致，需重新生成论文"))
+        ok &= bool(good)
+    stale_bad = [s for s in STALE if text.count(s) > 0]
+    if stale_bad:
+        print(f"\n❌ 论文仍含历史口径数值：{stale_bad}")
+        ok = False
+
+    print("\n" + ("✅ 论文数字与 metrics 一致" if ok else "❌ 存在不一致，请修正"))
     return 0 if ok else 1
 
 

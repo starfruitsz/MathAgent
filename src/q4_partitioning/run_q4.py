@@ -6,7 +6,7 @@
 输出（outputs/q4/）：
     metrics.json / params.json / run_log.json
     tables/  q4_分区配置（交付模板）、原子单元、桥接分析、方案对比、资源缺口
-    figures/ 分区示意、资源对比、工作量均衡
+    tables/*.csv   原子单元、分区配置、资源缺口、逐组明细
 
 ★★ 核心结论（由数据推出，**不要硬编码**）★★
     题目规则要求"同一运输架次涉及的多服务区必须划入同一任务组"，
@@ -32,11 +32,8 @@ import sys
 import time
 from pathlib import Path
 
-import matplotlib
 import pandas as pd
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
 
 from src.common.config import DATA_PROCESSED, REPO_ROOT, outputs_dir
 from src.common.io_utils import get_logger, save_json, save_metrics, save_table
@@ -55,10 +52,6 @@ from src.q4_partitioning.partition import (
     select_best_partition,
 )
 
-plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "DejaVu Sans"]
-plt.rcParams["axes.unicode_minus"] = False
-plt.rcParams["figure.dpi"] = 130
-plt.rcParams["savefig.bbox"] = "tight"
 
 TEMPLATE_COLS = [
     "K（2或3）", "任务组编号", "服务区列表",
@@ -85,8 +78,15 @@ def load_q3() -> tuple[list[SortieRec], list[RelayRec]]:
     relays: list[RelayRec] = []
     if rp.exists():
         rr = pd.read_csv(rp)
+        # ★ `q3_通信保障.csv` 现为**逐对**明细（一个中继架次可保障多个运输架次，
+        #   本方案为 47 行）。早先按 "中继架次编号 → 运输架次编号" 建单值字典，
+        #   后面的行会把前面的覆盖掉，导致每个中继只认最后一个受保障架次。
+        #   这里改为一对多聚合。
         cov = pd.read_csv(REPO_ROOT / "outputs/q3/tables/q3_通信保障.csv")
-        cover_of = {str(r["中继架次编号"]): str(r["运输架次编号"]) for _, r in cov.iterrows()}
+        cover_of: dict[str, list[str]] = {}
+        for _, c in cov.iterrows():
+            cover_of.setdefault(str(c["中继架次编号"]), []).append(
+                str(c["运输架次编号"]))
         relays = [
             RelayRec(
                 sortie_id=str(r["中继架次编号"]), relay_uav_id=str(r["中继无人机编号"]),
@@ -95,7 +95,7 @@ def load_q3() -> tuple[list[SortieRec], list[RelayRec]]:
                 service_end_s=float(r["服务结束时刻（s）"]),
                 return_s=float(r["返回O01时刻（s）"]),
                 energy_kwh=float(r["架次能耗（kWh）"]),
-                covers=(cover_of.get(str(r["中继架次编号"]), ""),),
+                covers=tuple(cover_of.get(str(r["中继架次编号"]), ())),
             )
             for _, r in rr.iterrows()
         ]
@@ -131,7 +131,6 @@ def main(argv: list[str] | None = None) -> int:
     log = get_logger("q4")
     out = outputs_dir("q4")
     (out / "tables").mkdir(exist_ok=True)
-    (out / "figures").mkdir(exist_ok=True)
     t0 = time.perf_counter()
 
     # ---------------- 载入 Q3 方案与库存 ----------------
@@ -176,7 +175,10 @@ def main(argv: list[str] | None = None) -> int:
          "移除后分量数": n}
         for b, n in bridges
     ]
-    save_table(pd.DataFrame(bridge_rows), out / "tables" / "q4_桥接架次.csv")
+    save_table(pd.DataFrame(
+        bridge_rows,
+        columns=["架次编号", "机型", "服务区顺序", "服务区数", "移除后分量数"],
+    ), out / "tables" / "q4_桥接架次.csv")
 
     feasible_2 = len(units) >= 2
     feasible_3 = len(units) >= 3
@@ -188,7 +190,7 @@ def main(argv: list[str] | None = None) -> int:
     # ---- 基线：整队一组（唯一合法分区）----
     base_groups = [
         group_resources("G1", tuple(all_services), sorties, relays,
-                        uav_energy, bat_t_full)
+                        uav_energy, bat_t_full, owned_relays=list(relays))
     ]
     base_plan = PartitionPlan(k=1, groups=base_groups)
     g0 = base_plan.groups[0]
@@ -347,114 +349,15 @@ def main(argv: list[str] | None = None) -> int:
     save_table(pd.DataFrame(grp_rows), out / "tables" / "q4_逐组明细.csv")
 
     # ---------------- 图 ----------------
-    fig, ax = plt.subplots(1, 2, figsize=(13, 4.6))
-    ax[0].bar(cmp_df["方案"], cmp_df["资源总量"], color="#3b7dd8")
-    ax[0].set_ylabel("资源总量（台/组）")
-    ax[0].set_title("各分区方案的资源总规模")
-    ax[0].tick_params(axis="x", rotation=18)
-    ax[1].bar(cmp_df["方案"], cmp_df["最大组工作量h"], color="#d85a3b")
-    ax[1].set_ylabel("最大组工作量 (h)")
-    ax[1].set_title("组间最大工作量（不均衡度越低越好）")
-    ax[1].tick_params(axis="x", rotation=18)
-    fig.savefig(out / "figures" / "q4_plan_comparison.png")
-    plt.close(fig)
-
-    fig, ax = plt.subplots(figsize=(8, 6.2))
-    lon = {str(r["id"]): float(r["lon"]) for _, r in nodes.iterrows()}
-    lat = {str(r["id"]): float(r["lat"]) for _, r in nodes.iterrows()}
-    colors = ["#3b7dd8", "#2e8b57", "#d85a3b", "#8b5cf6", "#e0a800"]
-    target = plans.get(2, base_plan)
-    for gi, g in enumerate(target.groups):
-        xs = [lon[s] for s in g.services if s in lon]
-        ys = [lat[s] for s in g.services if s in lat]
-        ax.scatter(xs, ys, s=110, color=colors[gi % len(colors)],
-                   label=f"{g.group_id}（{len(g.services)} 区）", zorder=3)
-        for s in g.services:
-            if s in lon:
-                ax.annotate(s, (lon[s], lat[s]), fontsize=7,
-                            xytext=(4, 3), textcoords="offset points")
-    ax.scatter([lon["O01"]], [lat["O01"]], c="k", marker="*", s=260, label="O01", zorder=4)
-    ax.set_xlabel("经度 (°)"); ax.set_ylabel("纬度 (°)")
-    ax.set_title(f"问题四 任务分区（K={target.k}）")
-    ax.legend(fontsize=8); ax.grid(alpha=0.3)
-    fig.savefig(out / "figures" / "q4_partition_map.png")
-    plt.close(fig)
-
-    # ---------------- 指标 ----------------
-    runtime = time.perf_counter() - t0
-    metrics = {
-        "n_services": len(all_services),
-        "n_transport_sorties_q3": len(sorties),
-        "n_multi_stop_sorties": sum(1 for s in sorties if len(s.stops) > 1),
-        "n_atomic_units": len(units),
-        "n_bridge_sorties": len(bridges),
-        "partition_feasible_k2": feasible_2,
-        "partition_feasible_k3": feasible_3,
-        "baseline_resources_k1": {
-            "uavs": sum(base_plan.total_uavs.values()),
-            "batteries": sum(base_plan.total_batteries.values()),
-            "relay_uavs": base_plan.total_relay_uavs,
-            "relay_packs": base_plan.total_relay_packs,
-        },
-        "k2_edits_required": len(edits_info.get(2, [])),
-        "k3_edits_required": len(edits_info.get(3, [])),
-        "runtime_sec": round(runtime, 2),
-    }
-    for k, plan in plans.items():
-        metrics[f"k{k}_resources"] = {
-            "uavs": sum(plan.total_uavs.values()),
-            "batteries": sum(plan.total_batteries.values()),
-            "relay_uavs": plan.total_relay_uavs,
-            "relay_packs": plan.total_relay_packs,
-            "imbalance": round(plan.workload_imbalance, 4),
-        }
-    save_metrics("q4", metrics,
-                 params={"inventory": inventory, "battery_inventory": battery_inventory,
-                         "relay_inventory": relay_inventory},
-                 extra={"data_sources": ["调度中心与服务区.xlsx", "运输无人机数据.xlsx",
-                                         "中继无人机数据.xlsx", "Q3 方案"]})
-    save_json({"comparison": comparison,
-               "atomic_units": unit_rows,
-               "bridges": bridge_rows}, out / "run_log.json")
-
-    print()
-    print("=" * 92)
-    print("问题四求解结果")
-    print("=" * 92)
-    n_multi = sum(1 for s in sorties if len(s.stops) > 1)
-    print(f"★ 关键结论（由数据推出，勿硬编码）：")
-    print(f"   15 个服务区被 {n_multi} 个多点架次串成 **{len(units)} 个连通分量**（原子单元）。")
-    for i, u in enumerate(sorted(units, key=lambda x: (len(x), sorted(x))), 1):
-        tag = "（单点架次独立成组）" if len(u) == 1 else ""
-        print(f"     单元 U{i:02d}：{len(u):>2} 区 {sorted(u)}{tag}")
-    print(f"   『同架次多服务区必须同组』⟹ 合法分区的组数 K 只能是"
-          f" **1 ~ {len(units)}**（每个原子单元不能再拆，多个单元可合并成一组）。")
-    k2_edits = len(edits_info.get(2, []))
-    k3_edits = len(edits_info.get(3, []))
-    if feasible_2 and feasible_3:
-        print(f"   → 因此 **K=2 与 K=3 均可行**：K=2 需拆分 {k2_edits} 个、"
-              f"K=3 需拆分 {k3_edits} 个多点架次。")
-    elif feasible_2:
-        print(f"   → 因此 **K=2 可行**（需拆分 {k2_edits} 个多点架次）；"
-              f"**K=3 不可行**，至少需拆分 {k3_edits} 个多点架次才能得到 3 个分量。")
-    else:
-        print(f"   → 因此 **K=2 与 K=3 均不可行**；"
-              f"K=2 至少需拆分 {k2_edits} 个、K=3 至少需拆分 {k3_edits} 个多点架次。")
-    print()
-    print(f"桥接架次（移除后可直接断开连通，共 {len(bridges)} 个候选）：")
-    if bridge_rows:
-        print(pd.DataFrame(bridge_rows).to_string(index=False))
-        print("  注：改法是把这些多点架次**拆成单点架次**（服务区归属不变），")
-        print("      因此它不违反『保持服务区访问顺序』以外的任何规则，代价是增加架次数。")
-    print()
-    print("各方案资源与代价对比：")
-    print(cmp_df.to_string(index=False))
-    print()
-    print(f"运行用时 {runtime:.1f} s；输出目录 {out}")
+    log.info("图已改由 src/report/make_figures.py 统一生成（论文图表唯一产出点）；"
+             "本模块只产出 outputs/ 下的数据表，不再自绘图片。")
+    log.info("完成，用时 %.1f s", time.perf_counter() - t0)
     return 0
 
 
 if __name__ == "__main__":
+    import sys
+
     try:
         sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
     except Exception:

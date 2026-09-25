@@ -1,7 +1,7 @@
 {
   "question": "q3_3relay",
-  "git_commit": "cc2499735806455db46399c21224c5324ab62a8d",
-  "timestamp": "2026-09-26T01:05:56.912127+08:00",
+  "git_commit": "24387b8786fef64d0d533a97a2c979ccd0a2cc61",
+  "timestamp": "2026-09-26T02:08:30.677429+08:00",
   "seed": 42,
   "data_sources": [
     "D题_方案数据.json"
@@ -9,27 +9,38 @@
   "metrics": {
     "n_transport_sorties": 23,
     "n_relay_sorties": 3,
-    "transport_energy_kwh": 66.819785,
+    "transport_energy_kwh": 66.789867,
     "relay_energy_kwh": 4.30605,
-    "total_energy_kwh": 71.125835,
-    "transport_cmax_s": 7740.1905,
+    "total_energy_kwh": 71.095918,
+    "transport_cmax_s": 7843.2266,
     "joint_cmax_s": 7939.2924,
-    "min_transport_soc": 0.230883,
+    "min_transport_soc": 0.230867,
     "min_relay_soc": 0.278621,
     "type_usage": {
       "B": 9,
       "C": 8,
       "A": 6
     },
+    "sample_dt_s": 0.25,
+    "los_step_m": 60.0,
+    "radio_samples": 99889,
+    "n_sorties_need_relay": 18,
+    "n_sorties_covered": 19,
+    "coverage_rate": 0.8261,
+    "outage_samples": 928,
+    "mean_direct_outage_fraction": 0.011037,
+    "min_link_margin_direct_db": -6.205,
+    "min_link_margin_relay_db": 0.436,
     "independent_verification": {
       "ok": true,
       "n_checked": 23,
-      "max_energy_dev_kwh": 0.008177,
-      "max_soc_dev": 0.002044
+      "max_energy_dev_kwh": 0.003241,
+      "max_soc_dev": 0.000585
     },
     "caveats": [
       "问题二组批在 S006/S007/S008/S013 上相对问题一增开了先行小架次（18→23 架次），以满足首批与医疗时限；载荷与能耗口径继承问题一。",
-      "调度沿用给定方案数据",
+      "调度由本仓 CP-SAT 重新求解（OPTIMAL；最晚返回 7843.20 s）",
+      "完工时间 7843.20 s 是**满足全部硬时限**（首批截止 + 全部箱期望送达）下的最优值。给定方案数据的时刻表最晚返回 7740.19 s（小 103 s），但它使 S015 医疗箱在图示时刻交付（7470.0 s > 7200 s 硬时限），故不满足本仓时限约束；本仓用 CP-SAT 逐档收紧 Cmax 上界验证：Cmax ≤ 7843.2 s 对给定组批不可行、≤ 7850 s 可行。该差值属时限可行性的代价，不得写成“本方案更慢”。",
       "conditional model: planned cruise altitude=max(route DEM maximum+50 m, hover altitude); strict equality DEM maximum+50 m not certified",
       "0.25 s sampled; no mathematical continuous-time certificate"
     ]

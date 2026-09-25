@@ -2,5 +2,9 @@
 \phantomsection
 \addcontentsline{toc}{section}{参考文献}
 
+% 参考文献中偶有超长条目（长作者列表 / 长刊名），放宽断行阈值避免溢出
+\sloppy
+\setlength{\emergencystretch}{3em}
 \bibliographystyle{gbt7714-numeric}
 \bibliography{book}
+\setlength{\emergencystretch}{0pt}

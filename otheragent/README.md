@@ -91,7 +91,7 @@ foreach ($f in Get-ChildItem diagrams\*.drawio) {
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
-| `bibtex` 返回非零退出码、参考文献显示为 `[?]` | MiKTeX 自带的 bibtex 在本机**写出 `.bbl` 后**在退出阶段崩溃（0xC0000005），`.bbl` 本身是好的 | `build.cmd` 已内置重试（最多 5 次，按 `.bbl` 是否写出判断成功）。仍不行则删掉 `document.aux` / `document.bbl` 后重跑 |
+| 参考文献显示为 `[?]`，`bibtex` 报退出码 `-1073740940`（0xC0000374 堆损坏） | MiKTeX 的 `bibtex.exe` 加载较大的 `.bst`（`gbt7714-*.bst` 约 88 KB）时会**堆损坏崩溃**，`.bbl` 写不出来，且**间歇性**（同样输入时成时不成）；实测 10 个 gbt7714 变体均会触发 | `build.cmd` 已改为**优先使用 `bibtex8`**（实测连跑 5 次全稳），并保留最多 10 次重试兜底。手动排查：`bibtex8 document` |
 | `book.bib` 必须**无 BOM** | 带 BOM 会让 bibtex 直接失败 | 用 `[IO.File]::WriteAllText($p, $s, (New-Object Text.UTF8Encoding($false)))` 写回 |
 
 ---

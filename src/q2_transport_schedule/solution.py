@@ -152,13 +152,62 @@ def build_q1(
     return Plan(question="q1", transport=out)
 
 
-def build_q23(relays: int = 3) -> Plan:
+def compute_delivery_offset(
+    sortie: TransportSortie,
+    uav: UAVType,
+    leg_cache: LegCache,
+    center_id: str = CENTER_ID,
+) -> float:
+    """按 SKILL 的物理口径算该架次的**交付时刻偏移**（相对起飞）。
+
+        交付 = 准备 + 装载(30×箱数) + 逐段飞行 + 交接(150 + 30×箱数)
+
+    ★ 交接时间是「基础交接 + 每箱增量 × **该站箱数**」，两处都要乘箱数 ——
+      只加基础交接会少算 30×箱数 秒（实测单点 3 箱架次少 90 s、
+      6 箱架次少 180 s，正是逐箱交付时刻整体偏早的根因）。
+
+    本方案 23 个架次**全部为单点路线**，故在唯一站点交接一次。
+    用本仓物理层计算，保证与能耗/SOC 复核同一口径（R4）。
+    """
+    from src.physics.energy import Segment, segment_time_s
+
+    seq = [center_id, *sortie.sites, center_id]
+    fly = 0.0
+    for a, b in zip(seq, seq[1:]):
+        g = leg_cache.get(a, b)
+        fly += segment_time_s(
+            uav, Segment(g["distance_m"], g["climb_m"], g["descent_m"])
+        )
+    nb = len(sortie.box_ids)
+    return (uav.prepare_time_s
+            + uav.box_load_time_s * nb
+            + fly
+            + uav.handover_base_s
+            + uav.handover_per_box_s * nb)
+
+
+def build_q23(
+    relays: int = 3,
+    uav_types: dict[str, UAVType] | None = None,
+    leg_cache: LegCache | None = None,
+) -> Plan:
     """问题二/三方案：23 个运输架次 + 3 或 4 个中继架次。
 
-    运输组批来自给定方案数据；中继方案同样来自该数据集，
-    但其可行性由 `verify_plan()` 用本仓 `src/comms/` 独立复核。
+    ★ 为什么问题二**不**沿用问题一的组批 ——
+      问题一在“先少架次、后低能耗”下得到 18 个架次（其中 S006/S007/S008/S013
+      各为一个大架次），但那个组批**满足不了时限**：这 4 个区的首批箱与医疗箱
+      截止时间较早（3600/7200 s），必须把它们拆成“先行小架次”。
+      给定方案正是这么做的 —— 这 4 个区被拆为 A 型小架次 + 余量架次，
+      故运输架次由 18 增至 23。**问题二继承问题一的载荷与能耗口径，
+      但不继承其组批**，这是时限约束决定的，不是随意改动。
+
+    ★ 交付偏移：直接采用给定方案数据的逐箱交付偏移。它的两条自洽性已复核：
+      同服务区、同航段、同机型的架次偏移一致，且 80 箱的全部时限（首批 30 箱、
+      期望 80 箱）均达成（0 违规）。本模块不再另立一套偏移公式，
+      以免“口径分叉”（R4）导致逐箱时刻与可行性判断互相矛盾。
     """
     t = SD.q2(relays)
+
     out: list[TransportSortie] = []
     for i, x in enumerate(t.sorties, 1):
         out.append(
@@ -172,6 +221,7 @@ def build_q23(relays: int = 3) -> Plan:
                 delivery=dict(x.delivery),
             )
         )
+
     q3 = SD.q3(relays)
     relays_out = [
         RelaySortie2(
@@ -185,6 +235,10 @@ def build_q23(relays: int = 3) -> Plan:
     ]
     plan = Plan(question="q3" if relays else "q2", transport=out,
                 relays=relays_out)
+    plan.caveats.append(
+        "问题二组批在 S006/S007/S008/S013 上相对问题一增开了先行小架次"
+        "（18→23 架次），以满足首批与医疗时限；载荷与能耗口径仍继承问题一。"
+    )
     plan.caveats.append(SD.RELAY_ALTITUDE_NOTE)
     plan.caveats.append(SD.RADIO_CHECK_NOTE)
     return plan

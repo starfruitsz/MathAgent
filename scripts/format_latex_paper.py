@@ -51,7 +51,6 @@ from src.report.build_paper import (  # noqa: E402
     _header_bottom_rule,
     _no_split,
     _order_tblpr,
-    _page_number_footer,
     _repeat_header,
     _set_font,
     _three_line_borders,
@@ -188,35 +187,96 @@ def _set_col_widths(tbl: Table, texts: list[list[str]]) -> None:
     if ncol == 0 or not texts:
         return
 
-    def est(s: str) -> float:
+    # ---- 直接量化：不做幂律压缩，按"表头必须放得下、数据允许折行"分配 ----
+    #   ★ 教训：旧实现用幂律压缩按内容比例分宽，结果表 1 的"箱数"只分到
+    #     1.45 cm，被排成"箱 / 数"两行；表头的可读性是硬要求，
+    #     因此这里**以表头为下限**直接反推。
+    #   ★★ 字号必须与 build_paper.py 的表格一致（8.5 pt），否则列宽估算会偏小：
+    #     10.5 pt 时一个汉字前进宽度 ≈0.468 cm，而 8.5 pt 只有 ≈0.375 cm；
+    #     早期按 0.42 cm 估 + 漏算单元格内边距，实测"箱数"（2 字）需要
+    #     0.75 cm 文本 + 2×0.19 cm 内边距 = 1.13 cm，而分到 1.87 cm 看着够、
+    #     实际因字号偏大而折行。这里按 8.5 pt 估，并**显式计入内边距**。
+    CJK_CM = 0.375     # 8.5 pt 一个汉字宽
+    LAT_CM = 0.19      # 8.5 pt 一个西文字符宽
+    PAD_CM = 0.38      # Word 默认单元格左右内边距合计（0.19 cm × 2）
+    VAL_CAP = 9.0      # 数据列最多按 9 个西文字符宽计（更长的允许折行）
+
+    def est_cm(s: str) -> float:
         n = 0.0
         for ch in s:
-            n += 2.0 if ("\u2e80" <= ch <= "\u9fff"
-                         or "\uff00" <= ch <= "\uffef") else 1.0
-        return max(n, 2.0)
+            n += CJK_CM if ("\u2e80" <= ch <= "\u9fff"
+                            or "\uff00" <= ch <= "\uffef") else LAT_CM
+        return n
 
-    # 含公式的单元格：`cell.text` 取不到公式，会被严重低估 ⇒ 给一个下限
+    # 含公式的列：`cell.text` 取不到公式，会被低估 ⇒ 给下限
     M_NS = "{http://schemas.openxmlformats.org/officeDocument/2006/math}"
     has_math_cols = [
         any(c._tc.findall(f".//{M_NS}oMath") for c in col.cells)
         for col in tbl.columns
     ]
 
-    ests = []
+    mins: list[float] = []
+    wants: list[float] = []
     for j in range(ncol):
-        w = max((est(r[j]) for r in texts if j < len(r)), default=2.0)
+        hdr = str(texts[0][j]) if texts and j < len(texts[0]) else ""
+        vals = [str(r[j]) for r in texts[1:] if j < len(r)]
+        m = est_cm(hdr) + PAD_CM                 # 表头必须一行放得下
         if has_math_cols[j]:
-            w = max(w, 22.0)      # ≈ 11 个汉字宽，容得下"符号 / 单位"
-        ests.append(max(w, 2.0))
+            m = max(m, 2.4)                      # 容得下"符号 / 单位"
+        w = max([m] + [est_cm(v) for v in vals])
+        # 数据列封顶：长内容允许折行，避免一列吃光版心
+        w = min(w, m + VAL_CAP * LAT_CM)
+        mins.append(max(m, 1.4))
+        wants.append(max(w, m))
 
-    # 幂律压缩：列宽比不超过约 4:1
-    power = 0.55
-    comp = [e ** power for e in ests]
-    total = sum(comp)
-    widths = [TEXT_WIDTH_CM * c / total for c in comp]
-    widths = [max(w, 1.4) for w in widths]          # 每列至少 1.4 cm
-    scale = TEXT_WIDTH_CM / sum(widths)
-    widths = [w * scale for w in widths]
+    # 下限之和若超过版心，只能等比压缩（此时必然有个别表头折行，属极端情形）
+    if sum(mins) > TEXT_WIDTH_CM:
+        k = TEXT_WIDTH_CM / sum(mins)
+        mins = [m * k for m in mins]
+        wants = [max(w * k, m) for w, m in zip(wants, mins)]
+
+    # 从"期望宽度"出发做精确分配：
+    #   ① 若总宽超出，从**有余量的列**按比例削（绝不削到低于表头下限）；
+    #   ② 若总宽不足，余量按"窄列优先"补足。
+    #   —— 不用"归一化 + 夹取"（那样夹过的列会被后续归一再次压回下限之下，
+    #      实测表 7 的"架次数"因此只分到 1.30 cm）。
+    widths = list(wants)
+    tot = sum(widths)
+    if tot > TEXT_WIDTH_CM:
+        excess = tot - TEXT_WIDTH_CM
+        surplus = [max(0.0, w - m) for w, m in zip(widths, mins)]
+        tot_surplus = sum(surplus)
+        if tot_surplus > 1e-9:
+            cut = min(excess, tot_surplus)
+            widths = [w - cut * (s / tot_surplus)
+                      for w, s in zip(widths, surplus)]
+        else:
+            # 连下限都放不下（表极宽）：只能等比压缩
+            widths = [w * TEXT_WIDTH_CM / tot for w in widths]
+    else:
+        slack = TEXT_WIDTH_CM - tot
+        # 窄列优先（用名次做权重），保证视觉均衡
+        order = sorted(range(ncol), key=lambda j: widths[j])
+        weight = [0.0] * ncol
+        for rank, j in enumerate(order):
+            weight[j] = ncol - rank
+        tot_w = sum(weight)
+        widths = [w + slack * weight[j] / tot_w for j, w in enumerate(widths)]
+
+    widths = [max(w, m) for w, m in zip(widths, mins)]
+    # 收尾：把浮点残差并入"余量最大"的列，**不做整体归一**（整体归一会把
+    # 刚刚夹到下限的列再次压到下限之下）。
+    _diff = TEXT_WIDTH_CM - sum(widths)
+    if abs(_diff) > 1e-9:
+        _j = max(range(ncol), key=lambda j: widths[j] - mins[j])
+        widths[_j] += _diff
+    # 自检：任何列都不得低于其表头下限（允许 1e-6 浮点容差）
+    _bad = [j for j in range(ncol) if widths[j] < mins[j] - 1e-6]
+    if _bad:
+        import logging
+
+        logging.getLogger("latexfmt").warning(
+            "列宽低于表头下限：列 %s（表 %d 列）", _bad, ncol)
 
     # ---- ① 写 w:tblGrid（固定版式下的权威列宽）----
     grid = tbl._tbl.find(qn("w:tblGrid"))
@@ -263,6 +323,16 @@ def _set_col_widths(tbl: Table, texts: list[list[str]]) -> None:
             lay.set(qn("w:type"), "fixed")
             tblPr.append(lay)
     tbl.autofit = False
+
+    # ---- ④ 表内字号 8.5 pt（与列宽估算口径一致；中文表格用小字号更易排下）----
+    for row in tbl.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                for r in p.runs:
+                    _set_font(r, 8.5)
+                # 段落本身也设字号，避免空 run（如含公式的单元格）沿用正文 12 pt
+                p.paragraph_format.space_after = 0
+                p.paragraph_format.first_line_indent = 0
 
 
 def format_tables(doc: Document) -> int:
@@ -377,6 +447,34 @@ def ensure_chapter_breaks(doc: Document) -> int:
     return n
 
 
+def _footer_has_page_field(p) -> bool:
+    """段落里是否已存在 PAGE 域。
+
+    ★ pandoc 的参考样式已经带了一个 PAGE 页脚；若无脑再加一个，
+      页脚就会变成 "1111"/"1212" 这样的**重复页码**（实测 p11→1111、p40→4040）。
+    """
+    for instr in p._p.iter(qn("w:instrText")):
+        if "PAGE" in (instr.text or "").upper():
+            return True
+    return False
+
+
+def add_page_number_footer(doc: Document) -> None:
+    """补页脚页码（幂等：已有 PAGE 域则不重复添加）。"""
+    for section in doc.sections:
+        p = section.footer.paragraphs[0]
+        if _footer_has_page_field(p):
+            continue
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.add_run()
+        f1 = OxmlElement("w:fldChar"); f1.set(qn("w:fldCharType"), "begin")
+        it = OxmlElement("w:instrText"); it.set(qn("xml:space"), "preserve")
+        it.text = " PAGE "
+        f2 = OxmlElement("w:fldChar"); f2.set(qn("w:fldCharType"), "end")
+        run._r.append(f1); run._r.append(it); run._r.append(f2)
+        _set_font(run, 9)
+
+
 # ---------------------------------------------------------------- 主流程
 
 def main() -> int:
@@ -398,7 +496,7 @@ def main() -> int:
         n_tbl = format_tables(doc)
         n_fig, n_tab = format_captions(doc)
         n_ch = ensure_chapter_breaks(doc)
-        _page_number_footer(doc)
+        add_page_number_footer(doc)
         doc.save(str(path))
         print(f"✅ 已改造：{path.name}")
         print(f"   三线表 {n_tbl} 张 / 图题 {n_fig} 条 / 表题 {n_tab} 条 "

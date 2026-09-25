@@ -3,7 +3,9 @@
 不需要 Word，直接解析 docx 的 XML，用于快速回归。
 
 用法：
-    python scripts/check_docx_structure.py
+    python scripts/check_docx_structure.py                       # 默认检查正式提交稿
+    python scripts/check_docx_structure.py <docx 路径>            # 检查指定 docx
+    python scripts/check_docx_structure.py --latex-version       # 检查 LaTeX 公式版
 """
 
 from __future__ import annotations
@@ -19,16 +21,31 @@ sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCX = ROOT / "paper" / "山区洪涝灾害下无人机运输与通信协同优化_论文.docx"
+LATEX_DOCX = (ROOT / "paper"
+              / "山区洪涝灾害下无人机运输与通信协同优化_论文_LaTeX公式版.docx")
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 M = "{http://schemas.openxmlformats.org/officeDocument/2006/math}"
 
 
+def _resolve_target() -> Path:
+    """支持位置参数 / `--latex-version` 指定被检文件。"""
+    argv = [a for a in sys.argv[1:]]
+    if "--latex-version" in argv:
+        return LATEX_DOCX
+    for a in argv:
+        if not a.startswith("-"):
+            return Path(a)
+    return DOCX
+
+
 def main() -> int:
-    if not DOCX.exists():
-        print(f"❌ 未找到 {DOCX}")
+    docx = _resolve_target()
+    print(f"被检文件：{docx.name}\n")
+    if not docx.exists():
+        print(f"❌ 未找到 {docx}")
         return 1
-    with zipfile.ZipFile(DOCX) as z:
+    with zipfile.ZipFile(docx) as z:
         xml = z.read("word/document.xml").decode("utf-8")
         try:
             styles = z.read("word/styles.xml").decode("utf-8")
@@ -141,7 +158,7 @@ def main() -> int:
         from PIL import Image
         import io as _io
 
-        with zipfile.ZipFile(DOCX) as z:
+        with zipfile.ZipFile(docx) as z:
             pngs = sorted(n for n in z.namelist() if "mathtype_preview" in n)
             hs = [Image.open(_io.BytesIO(z.read(n))).size[1] for n in pngs]
         if hs:

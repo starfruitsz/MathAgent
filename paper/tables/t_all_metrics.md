@@ -13,7 +13,7 @@
 | 问题一  | n_pareto                    | 2         |
 | 问题一  | n_strategies                | 8         |
 | 问题一  | rho_sweep_points            | 21        |
-| 问题一  | runtime_sec                 | 0.76      |
+| 问题一  | runtime_sec                 | 0.75      |
 | 问题二  | n_sorties                   | 25        |
 | 问题二  | n_boxes                     | 80        |
 | 问题二  | total_energy_kwh            | 77.301634 |
@@ -24,7 +24,7 @@
 | 问题二  | on_time_rate                | 1.0       |
 | 问题二  | max_lateness_s              | 0.0       |
 | 问题二  | objective_penalty           | 79.305    |
-| 问题二  | runtime_sec                 | 2.34      |
+| 问题二  | runtime_sec                 | 2.01      |
 | 问题二  | iterations                  | 2         |
 | 问题二  | feasible_by_verifier        | True      |
 | 问题二  | n_verifier_violations       | 0         |
@@ -48,7 +48,7 @@
 | 问题三  | n_hover_candidates          | 1885      |
 | 问题三  | sample_dt_s                 | 2.0       |
 | 问题三  | hover_step_m                | 400.0     |
-| 问题三  | runtime_sec                 | 443.03    |
+| 问题三  | runtime_sec                 | 489.78    |
 | 问题三  | feasible_by_verifier        | False     |
 | 问题三  | n_verifier_violations       | 42        |
 | 问题四  | n_services                  | 15        |
@@ -60,4 +60,4 @@
 | 问题四  | partition_feasible_k3       | True      |
 | 问题四  | k2_edits_required           | 0         |
 | 问题四  | k3_edits_required           | 0         |
-| 问题四  | runtime_sec                 | 0.49      |
+| 问题四  | runtime_sec                 | 0.47      |

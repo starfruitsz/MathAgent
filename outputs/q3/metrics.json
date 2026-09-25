@@ -1,7 +1,7 @@
 {
   "question": "q3",
-  "git_commit": "e6e592ab541baa87c37634edfc44ad07d1eb617c",
-  "timestamp": "2026-09-25T18:17:36.855990+08:00",
+  "git_commit": "c9c857210c268d68232a8b0efb0affd28ae54265",
+  "timestamp": "2026-09-25T18:38:29.847929+08:00",
   "seed": 42,
   "data_sources": [
     "通信链路参数.xlsx",
@@ -40,7 +40,7 @@
     "n_hover_candidates": 1885,
     "sample_dt_s": 2.0,
     "hover_step_m": 400.0,
-    "runtime_sec": 443.03,
+    "runtime_sec": 489.78,
     "feasible_by_verifier": false,
     "n_verifier_violations": 42,
     "verifier_violation_types": {

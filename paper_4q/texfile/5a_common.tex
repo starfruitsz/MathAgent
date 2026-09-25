@@ -1,0 +1,183 @@
+\section{公共物理模型与通信链路模型}\label{sec:common}
+
+四问必须共用同一套物理口径，否则结果无法互相印证。本章集中给出附录 2/3 的公式实现口径：它们在本仓代码中\textbf{只实现一次}（\texttt{src/physics/}、\texttt{src/comms/}），问题一至问题四全部复用。任何一处口径分叉都会导致四问结果互相矛盾，因此本章同时给出\textbf{自检点}。
+
+\subsection{航段几何}
+
+无人机的航程与能耗随载荷的变化是任务规划的基础，已有研究从推进功率角度给出了多种能耗模型\cite{dai2022uavenergy}；山地场景下的空-地信道建模可参考文献\cite{cui2019mountainchannel}。
+
+\textbf{（1）航段水平距离。}先由 WGS84 经纬度投影到米制平面，再取直线距离 $d_{ij}$。
+
+\textbf{（2）巡航海拔。}取航段 $i\to j$ 所经过 DEM 像元的\textbf{最高地面高程}加 50\,m：
+\begin{equation}
+	H_{cruise}(i,j)=\max\{\mathrm{DEM}(p)\ :\ p\in \overline{ij}\}+50\ \text{m}
+	\label{eq:cruise}
+\end{equation}
+注意是“\textbf{沿线最高点}”，不是两端点高程的较大者。
+
+\textbf{（3）作业高度。}$H_{op}(\mathrm{O01})$ 取 O01 地面海拔；$H_{op}(S_i)$ 取该服务区地面海拔加 30\,m。
+
+\textbf{（4）爬升与下降高度。}
+\begin{equation}
+	h_{ij}^{+}=H_{cruise}(i,j)-H_{op}(i),\qquad
+	h_{ij}^{-}=H_{cruise}(i,j)-H_{op}(j)
+\end{equation}
+
+\subsection{航段飞行时间}
+
+按爬升、巡航、下降三段相加：
+\begin{equation}
+	\begin{aligned}
+		t_{gij}={}&\frac{h_{ij}^{+}}{v_{g}^{\uparrow}}
+		          +\frac{d_{ij}}{v_{g}^{c}}\\
+		        &+\frac{h_{ij}^{-}}{v_{g}^{\downarrow}}
+	\end{aligned}
+	\label{eq:segtime}
+\end{equation}
+\textbf{自检点}：当 $h^{+}=h^{-}=0$ 时式~\eqref{eq:segtime} 退化为纯巡航 $d/v_{g}^{c}$。
+
+\subsection{载荷—航程关系}\label{sec:lgrange}
+
+附录给出标准航程随载荷的 $3/2$ 次幂关系：
+\begin{equation}
+	\Lg(q)=L_{g0}-(L_{g0}-L_{gF})\left(\frac{q}{\Qg}\right)^{3/2},
+	\qquad 0\le q\le \Qg
+	\label{eq:lg}
+\end{equation}
+该关系有三条性质，本文均写入单元测试锁死：$\Lg(0)=L_{g0}$（空载标准航程）；$\Lg(\Qg)=L_{gF}$（满载标准航程）；$\Lg(q)$ 关于 $q$ \textbf{单调不增}且\textbf{下凸}（因指数 $3/2>1$）。凸性意味着载荷的边际代价递增，这解释了“重载机型在远距离优先触底”。
+
+\subsection{载荷能力与最大安全载荷}\label{sec:qmax}
+
+\textbf{模型名称}：地形约束的非线性最大安全载荷模型（根求解）。
+
+\textbf{（1）能量约束取等号定义最大安全载荷。}去程载货 $q$、回程空载，往返总能耗须恰好用尽扣除了返航安全余量的可用能量：
+\begin{equation}
+	E_{g}^{T}(q_{max};d)=(1-\rhog)\Euse
+	\label{eq:qmaxdef}
+\end{equation}
+其中 $E_{g}^{T}$ 为往返两段能耗之和（\S\ref{sec:energy}）。
+
+\textbf{（2）为什么必须数值反解。}由于式~\eqref{eq:lg} 中指数为 $3/2$，$E_{g}^{T}(q)$ 对 $q$ 非线性且\textbf{无初等反函数}。本文利用 $E_{g}^{T}(q)$ 关于 $q$ 单调递增（载荷越大、等效航程越短、能耗越高），在 $[0,\Qg]$ 上用 \textbf{Brent 法}求根。
+
+\textbf{（3）三类约束取小。}最终最大安全载荷为
+\begin{equation}
+	\qmax=\min\{\text{能量反解值},\ \Qg,\ \text{体积瓶颈对应质量上限}\}
+	\label{eq:qmaxmin}
+\end{equation}
+
+\textbf{（4）强制回代验证。}反解后必须回代断言
+$\left|E_{g}^{T}(\qmax)-(1-\rhog)\Euse\right|<\varepsilon$。
+本文实测\textbf{相对误差 $5.6\times10^{-15}$}，达到机器精度。工程上以“近似公式代替反解”是常见失分点，本文避免了该陷阱。
+
+\subsection{航段能耗}\label{sec:energy}
+
+\textbf{（1）能量结构。}附录明确 $E=E^{hor}+E^{up}$，且下降能耗效率为 0：
+\begin{equation}
+	E_{gij}(q)=E_{gij}^{hor}(q)+E_{gij}^{up}(q),
+	\qquad E_{gij}^{down}\equiv 0
+	\label{eq:ecomp}
+\end{equation}
+
+\textbf{（2）水平巡航能耗（由航程反推）。}附件\textbf{未给运输机巡航功率}，本文按“飞满一个标准航程恰好耗尽一个可用能量”的口径反推：
+\begin{equation}
+	E_{gij}^{hor}(q)=\frac{d_{ij}}{\Lg(q)}\cdot \Euse
+	\label{eq:ehov}
+\end{equation}
+
+\textbf{（3）爬升附加能耗。}质量取该航段上的\textbf{实际剩余载荷}：
+\begin{equation}
+	E_{gij}^{up}(q)=\frac{(m_{g}^{empty}+q)\,g\,h_{ij}^{+}}{\eta_{up}}\cdot\frac{1}{3.6\times10^{6}}
+	\qquad(\text{kWh})
+	\label{eq:eup}
+\end{equation}
+\textbf{自检点}：$h^{+}=0$ 时爬升附加能耗为 0；下降\textbf{不}额外计一项。
+
+\textbf{（4）架次能耗与返航安全余量。}
+\begin{equation}
+	E_{p}^{T}=\sum_{(i,j)\in p}E_{gij}(q_{pij})\le(1-\rhog)\Euse
+	\label{eq:sortieen}
+\end{equation}
+
+\subsection{两阶段等效充电模型}
+
+两类能源资源统一采用两阶段等效充电：
+\begin{equation}
+	t_{chg}(s)=
+	\begin{cases}
+		\Tfull\left[0.65\cdot\dfrac{0.90-s}{0.90}+0.35\right], & 0\le s<0.90\\[6pt]
+		\Tfull\cdot 0.35\cdot\dfrac{1-s}{0.10},                & 0.90\le s\le 1
+	\end{cases}
+	\label{eq:charge}
+\end{equation}
+\textbf{三个自检点}：$t_{chg}(0)=\Tfull(0.65+0.35)=\Tfull$；$s=0.90$ 处上段为 $0.35\Tfull$、下段亦为 $0.35\Tfull$，\textbf{两段连续}；$t_{chg}(1)=0$。
+
+\textbf{资源占用规则}：同一资源的任务占用与充电时段\textbf{不得重叠}；不同资源可并行充电；初始 SOC 均为 100\%；任务结束后剩余 SOC 不得低于返航电量下限。
+
+\subsection{通信链路模型}\label{sec:comms}
+
+\textbf{（1）地形遮挡。}由两端点三维位置与 30\,m DEM 判断视线是否被地形遮挡，得 $b_{ijt}\in\{0,1\}$。
+
+\textbf{（2）双向链路预算。}接收门限为灵敏度加衰落裕量：$P_{th,b}=P_{sens,b}+M_{b}$，则单方向最大允许路径损耗为
+\begin{equation}
+	L_{\max,a\to b}=P_{t,a}+G_{t,a}+G_{r,b}-L_{sys}-P_{th,b}
+\end{equation}
+由于\textbf{运输控制与状态回传都需要通信保障}，双向门限取两方向较小值：
+\begin{equation}
+	L_{\max,a\leftrightarrow b}=\min\left(L_{\max,a\to b},\ L_{\max,b\to a}\right)
+	\label{eq:bidir}
+\end{equation}
+
+\textbf{（3）传播损耗（单位陷阱）。}自由空间损耗为
+\begin{equation}
+	L_{FSPL,ijt}=32.45+20\log_{10}f+20\log_{10}D_{ijt}
+	\label{eq:fspl}
+\end{equation}
+其中 $f$ 单位 \textbf{MHz}、$D_{ijt}$ 单位 \textbf{km}，且 $D_{ijt}$ 为含高度差的\textbf{三维直线距离}。本文内部一律使用 SI 单位（距离以 m 存储），代入前必须除以 1000，否则将产生约 \SI{60}{dB} 的系统性偏差。计入遮挡后
+\begin{equation}
+	L_{path,ijt}=L_{FSPL,ijt}+L_{obs}\cdot b_{ijt}
+\end{equation}
+
+\textbf{（4）链路可用性与三态判定。}$A_{ijt}=1$ 当且仅当 $L_{path,ijt}\le L_{\max,i\leftrightarrow j}$。任一时刻的通信状态按优先级判定为三态：
+\begin{equation}
+	\text{状态}=
+	\begin{cases}
+		\text{直连}, & A(\text{运输机}\leftrightarrow G01)=1\\
+		\text{中继}, & \text{直连不可用}\ \wedge\ A(\text{运输机}\leftrightarrow\text{中继})=1\\
+		            & \qquad\wedge\ A(\text{中继}\leftrightarrow G01)=1\\
+		\text{中断}, & \text{其余情况}
+	\end{cases}
+	\label{eq:tristate}
+\end{equation}
+即中继状态要求\textbf{接入段与回传段在同一时刻同时可用}，且不允许多跳转发、每架运输机在任一时刻只由 G01 或一架中继保障。
+
+\subsection{中继无人机时间与能耗}
+
+中继由 O01 出发，到达悬停位置并完成建链后提供服务，服务结束后返回：
+\begin{equation}
+	\begin{aligned}
+		t_{link}&=t_{prep}+t_{fly}(O01\to P)+t_{setup},\\
+		t_{svc}&=[\,t_{link},\ T_{win}^{end}\,]
+	\end{aligned}
+	\label{eq:relaytime}
+\end{equation}
+架次能耗由爬升、巡航与悬停（含通信）三部分构成，其中爬升附加能耗的质量取\textbf{计划起飞总质量}：
+\begin{equation}
+	\begin{aligned}
+		E_{R}={}&E_{up}\big(m_{takeoff},h^{+}\big)+P_{cruise}\cdot t_{cruise}\\
+		       &+\big(P_{hover}+P_{comms}\big)\cdot t_{svc}
+	\end{aligned}
+	\label{eq:relayen}
+\end{equation}
+通信服务能耗由悬停功率与通信附加功率共同确定（\SI{1.05}{}+\SI{0.05}{}=\SI{1.10}{kW}）。中继同样须满足返航电量要求，且其可用能量决定了\textbf{单次在站时长上限}：
+\begin{equation}
+	\begin{aligned}
+		t_{\text{hover}}^{\max}&=\frac{(1-\rho_{R})E_{R}^{use}}{P_{hover}+P_{comms}}\\
+		                       &=\frac{2.56\ \text{kWh}}{1.10\ \text{kW}}\approx 140\ \text{min}
+	\end{aligned}
+	\label{eq:hovermax}
+\end{equation}
+式~\eqref{eq:hovermax} 是问题三覆盖率结论的\textbf{关键定量依据}，将在 \S\ref{sec:q3gap} 使用。
+
+\subsection{保障需求的时间口径（易错点）}
+
+需要中继驻留的时段应取该架次的\textbf{中断区间集合}，而\textbf{不是}整条轨迹、也不是“首个中断样本到末个中断样本”的\textbf{包络}。原因是一个架次的中断可能分成好几段（实测 2$\sim$10 段），中间夹着\textbf{直连本身可用}的时段，那些时段并不需要中继。实测包络会把站岗时长\textbf{虚高 39.3\%}（\SI{277.4}{min} 对 \SI{168.5}{min}），从而无谓消耗续航并把本可保障的架次误判为不可行。故本文按区间集合建模：中继须在\textbf{每个区间起点之前}完成建链，服务能耗按各区间被覆盖时长之和计算，重叠区间先合并以免重复计费。

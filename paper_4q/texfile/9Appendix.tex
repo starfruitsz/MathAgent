@@ -1,0 +1,86 @@
+\newpage
+\appendix
+\begin{center}
+	{\zihao{4}\bfseries 附\quad 录}
+\end{center}
+
+\section*{附录 A\quad 程序与数据文件说明}
+\addcontentsline{toc}{section}{附录 A\quad 程序与数据文件说明}
+
+本文的全部程序、数据与结果文件按“\textbf{公共层—问题层—校验层}”三层组织。公共层实现附录 2/3 的物理与通信公式，问题一至问题四共用，保证口径唯一；问题层按问题分文件组织，每问有独立入口脚本，可单独运行；校验层独立于求解器。
+
+\begin{table}[htbp]
+	\caption{程序与数据文件清单}
+	\label{tab:files}
+	\centering
+	\zihao{-5}
+	\begin{tabular}{p{6.2cm}p{8.4cm}}
+		\toprule
+		路径 & 说明 \\
+		\midrule
+		\texttt{src/physics/} & 附录 2 物理公式的\textbf{唯一实现}：载荷—航程、能耗、两阶段充电、航段缓存 \\
+		\texttt{src/comms/}   & 附录 3 通信公式的\textbf{唯一实现}：链路预算、地形遮挡、三态判定 \\
+		\texttt{src/geo/}     & 坐标投影、DEM 采样、航段几何 \\
+		\texttt{src/q0\_data/} & 附件解析（唯一入口），产出 \texttt{data/processed/*.csv} \\
+		\texttt{src/q1\_payload\_grouping/} & 问题一：载荷表、FFD 组批、解析下界、$\rhog$ 敏感性 \\
+		\texttt{src/q2\_transport\_schedule/} & 问题二：多点串飞模型、资源池与充电周转、时段驱动派发 \\
+		\texttt{src/q3\_comms\_relay/} & 问题三：轨迹采样、悬停选址、窗口硬约束排班 \\
+		\texttt{src/q4\_partitioning/} & 问题四：连通分量、桥接架次、组内资源核算 \\
+		\texttt{src/verify/} & \textbf{独立可行性校验器}（18 类约束 $+$ 负样本测试） \\
+		\texttt{src/report/} & 图表生成与论文装配 \\
+		\texttt{outputs/q1..q4/} & 各问的 \texttt{metrics.json}、\texttt{params.json}、图表与校验报告（证据链） \\
+		\texttt{tests/} & 251 项测试（物理公式逐条锁死 $+$ 校验器负样本） \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\section*{附录 B\quad 可复现性说明}
+\addcontentsline{toc}{section}{附录 B\quad 可复现性说明}
+
+\subsection*{B.1 复现步骤}
+
+在仓库根目录依次执行：
+
+\begin{verbatim}
+python -m src.q0_data.discover          # 附件清点
+python -m src.q0_data.build_processed   # 解析附件 -> data/processed/*.csv
+python -m src.physics.leg_cache         # 240 条航段缓存
+python -m src.q1_payload_grouping.run_q1   # 问题一
+python -m src.q2_transport_schedule.run_q2 # 问题二（约 30-60 min）
+python -m src.q3_comms_relay.run_q3        # 问题三（约 7 min）
+python -m src.q4_partitioning.run_q4       # 问题四
+python -m pytest tests\ -q                 # 251 passed
+\end{verbatim}
+
+\subsection*{B.2 关键中间结果}
+
+\begin{table}[htbp]
+	\caption{关键中间结果索引}
+	\label{tab:evidence}
+	\centering
+	\zihao{-5}
+	\begin{tabular}{p{7.4cm}p{7.2cm}}
+		\toprule
+		结论 & 证据文件 \\
+		\midrule
+		45 组最大安全载荷与生效约束 & \texttt{outputs/q1/tables/q1\_1\_max\_safe\_payload.csv} \\
+		逐服务区架次数与解析下界 & \texttt{outputs/q1/tables/q1\_3\_sortie\_lower\_bounds.csv} \\
+		$\rhog$ 扫描与临界值 & \texttt{outputs/q1/tables/q1\_4\_rho\_sweep.csv} \\
+		25 个架次明细与逐箱交付时刻 & \texttt{outputs/q2/tables/q2\_运输架次.csv}、\texttt{q2\_逐箱交付.csv} \\
+		问题二独立校验报告 & \texttt{outputs/q2/feasibility.json} \\
+		直连中断诊断与中继架次 & \texttt{outputs/q3/tables/q3\_直连状态诊断.csv}、\texttt{q3\_中继架次.csv} \\
+		\textbf{时间轴覆盖复核} & \texttt{outputs/q3/tables/q3\_中继时间覆盖复核.csv} \\
+		原子单元与桥接架次 & \texttt{outputs/q4/tables/q4\_原子单元.csv}、\texttt{q4\_桥接架次.csv} \\
+		资源缺口逐项 & \texttt{outputs/q4/tables/q4\_资源缺口.csv} \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\subsection*{B.3 可复现性保障}
+
+\begin{enumerate}[label=(\arabic*),leftmargin=2em]
+	\item \textbf{固定种子}：全部随机过程固定 \texttt{SEED}=42；问题一/二/三/四的求解过程本身不含随机性，重复运行结果\textbf{逐位一致}。
+	\item \textbf{单位唯一}：内部一律使用 SI 单位，进出附件时统一换算并登记，避免“m/km”“MHz”混用。
+	\item \textbf{口径唯一}：附录 2/3 的公式只在 \texttt{src/physics/}、\texttt{src/comms/} 实现一次，四问共用。
+	\item \textbf{证据链}：每问产出 \texttt{metrics.json}（含 git commit、时间戳、种子、运行时长）、\texttt{params.json} 与 \texttt{feasibility.json}，可逐项追溯到求解时刻的代码版本。
+\end{enumerate}

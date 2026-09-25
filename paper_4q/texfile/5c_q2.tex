@@ -1,0 +1,150 @@
+\section{问题二：异构无人机多点多架次运输调度}\label{sec:q2}
+
+\subsection{模型名称}
+
+本问在结构上属于\textbf{多趟车辆路径问题}（multi-trip VRP）的无人机变体\cite{choi2019multitrip,luo2017twoechelon,yang2025lodbo}。
+
+\textbf{异构多架次带时间窗车辆路径问题}（Heterogeneous Multi-trip VRPTW）结合\textbf{资源约束调度模型}。与问题一相比新增三类强耦合：\textbf{①架次可访问多个服务区}，载荷沿航段\textbf{逐段递减}；\textbf{②三种机型异构}，容量、速度与能耗各不相同，机型本身成为决策变量；\textbf{③共享电池与两阶段充电周转}使资源可用性成为真正的瓶颈。
+
+\subsection{决策变量（六元组，须联合确定）}
+
+\begin{enumerate}[label=(\arabic*),leftmargin=2em]
+	\item 货箱组批：货箱到架次的分配；
+	\item 服务区访问顺序：每个架次的站点序列 $(S_a,S_b,\dots)$；
+	\item 运输机型 $g$；
+	\item 具体执行的实体无人机（8 架中的哪一架）；
+	\item 共享电池分配与充电周转；
+	\item 各架次的开始时刻。
+\end{enumerate}
+
+\subsection{约束}
+
+\textbf{（1）多点串飞的前缀容量约束。}设架次 $p$ 的访问顺序为 $(S_a,S_b,\dots)$，则当无人机飞到第 $m$ 站时，机上仍载有第 $m$ 站及之后各站的货物。因此容量约束必须对\textbf{每一个前缀}成立：
+\begin{equation}
+	\forall m:\quad\sum_{k\ge m}m_{k}\le \Qg,\qquad
+	\sum_{k\ge m}v_{k}\le V_{g}
+	\label{eq:prefix}
+\end{equation}
+式中的求和下标含义是“从第 $m$ 站起仍留在机上的货”，\textbf{而非全架次总量}。
+
+\textbf{（2）逐段能耗。}由于能耗关于距离\textbf{非线性}（经由 $\Lg(q)$）、且载荷逐段递减，架次能耗必须\textbf{逐段累加}：
+\begin{equation}
+	E_{p}^{T}=\sum_{m}E_{g}\big(seg_{m},\,q_{m}\big)\le(1-\rhog)\cdot \Euse
+	\label{eq:q2energy}
+\end{equation}
+其中 $q_{m}$ 为第 $m$ 段上的实际机上载荷，最后一段（返程）取 0。\textbf{不能把多段距离相加当作一段}——那会丢失载荷递减的阶梯信息而显著失真。
+
+\textbf{（3）架次总作业时间。}交接时间必须\textbf{按站累加}，即每站各计一次基础交接时间加该站箱数的增量时间：
+\begin{equation}
+	\begin{aligned}
+		t_{p}={}&t_{prep}+n_{box}\cdot t_{load}+\sum_{m}t_{g}(seg_{m})\\
+		      &+\sum_{s\in stops}\big(t_{h0}+k_{s}\cdot t_{h1}\big)
+	\end{aligned}
+	\label{eq:q2time}
+\end{equation}
+这里 $k_{s}$ 为在第 $s$ 站投送的箱数。若误写成“（基础交接 $+$ 每箱时间 $\times$ 总箱数）$\times$ 站数”，会把基础交接重复乘上总箱数，\textbf{严重高估}时间窗。
+
+\textbf{（4）时限约束。}两类时限需严格区分：\textbf{首批保障箱}须满足首批截止时间 $d_{b}^{fb}$，\textbf{全部货箱}须衡量是否满足期望送达时间 $d_{b}^{exp}$：
+\begin{equation}
+	\begin{aligned}
+		t_{b}^{deliver}&\le d_{b}^{fb}\quad(\text{仅首批保障箱}),\\
+		t_{b}^{deliver}&\le d_{b}^{exp}\quad(\text{全部货箱})
+	\end{aligned}
+	\label{eq:q2due}
+\end{equation}
+
+\textbf{（5）资源与周转约束。}同一实体机的任务时段不重叠；电池单架次独占，返航后按实际 SOC 充满至 100\% 才能复用（式~\eqref{eq:charge}），且同型电池可换机但\textbf{不可跨机型混用}\cite{kim2018batterycharging,mitici2022batteryswap}。
+
+\subsection{目标：字典序多目标}
+
+本文采用\textbf{字典序}目标，依次为
+\begin{equation}
+	\min_{\text{lex}}\ \Bigl(\underbrace{\text{配送及时性惩罚}}_{J_T},\
+	\underbrace{N}_{\text{架次数}},\
+	\underbrace{\textstyle\sum_p E_{p}^{T}}_{\text{能耗}},\
+	\underbrace{T_{\max}}_{\text{完工时间}}\Bigr)
+	\label{eq:q2obj}
+\end{equation}
+其中\textbf{全部任务完成时间}定义为
+\begin{equation}
+	T_{\max}=\max_{p}\ t_{p}^{return}
+\end{equation}
+即所有运输无人机完成最后一个架次并返回 O01 的最晚时刻。其依据是应急场景下“\textbf{送达与否}”的优先级远高于成本，而架次数直接决定机队与电池的周转压力。多目标应急调度亦可采用 NSGA-II 等进化算法求取 Pareto 前沿\cite{deb2002nsga2}，本文因其解集规模小、且时限优先级明确而选择字典序处理。
+
+\subsection{求解方法：构造—选序—局部搜索—时段驱动派发}
+
+\textbf{（1）构造。}货箱按“首批优先 $\to$ 期望送达升序 $\to$ 应急优先系数降序 $\to$ 体积降序”排序，依次尝试并入已有架次或新开架次，并入时校验式~\eqref{eq:prefix} 的前缀容量约束。
+
+\textbf{（2）选序。}站点数 $\le6$ 时枚举全排列，$>6$ 时用最近邻构造再用 2-opt 改进。
+
+\textbf{（3）局部搜索。}以“搬箱、合并架次”为邻域算子，按式~\eqref{eq:q2obj} 的字典序目标接受改进解。
+
+\textbf{（4）时段驱动贪心派发。}在每个决策时刻，从“资源已就绪”的未调度架次中，选择“新增首批违规最少 $\to$ 首批迟到量最少 $\to$ 期望违规最少”者派发；当上述三项指标全部相同时，按\textbf{最小松弛量}
+\begin{equation}
+	\text{slack}=\min_{b}\bigl(d_{b}-t_{b}^{deliver}\bigr)
+	\label{eq:slack}
+\end{equation}
+打破平局（\textbf{而非按能耗升序}），即优先放出截止时间最紧的架次。
+
+\subsection{两个必须避免的建模陷阱}\label{sec:q2traps}
+
+\textbf{陷阱 1：异构机队被退化成单一机型。}题目原文即“\textbf{异构}无人机多点多架次运输调度”，机队为 A$\times$4 $+$ B$\times$2 $+$ C$\times$2 $=$ \textbf{8 架}；而四个目标里的“配送及时性”直接由\textbf{并行架数}决定。若只评估同构机队，等于自己砍掉 $3/4$ 的并行能力。实测同构 C 型方案虽架次数最少（15 个），但完工 \SI{5.51}{h}、准时率仅 47.5\%；采用 8 架混编后完工降至 \SI{3.02}{h}、准时率 \textbf{100.0\%}。因此\textbf{候选机队必须包含真实的混合机队}，并由真实调度结果统一评分取优。
+
+\textbf{陷阱 2：派发准则在“还没人违规”时退化为能耗优先。}首轮开工时所有架次都尚未违规，及时性四项指标\textbf{全为 0}，排序实际由能耗决定，于是稀缺的首轮机位被“顺路的小架次”占满。实测 $t=0$ 的 8 个机位中有 2 个给了 S001 的第二个架次，而 S002/S012/S013 的首批箱被推到 5800$\sim$7800\,s，\textbf{凭空多出 5 箱超时}。修法是引入式~\eqref{eq:slack} 的\textbf{最小松弛优先}。
+
+\subsection{首批时限的可行性论证（定量）}
+
+\textbf{结论：首批时限完全可以满足，但需要两个条件同时成立。}
+
+\begin{enumerate}[label=\textbf{条件 \arabic*},leftmargin=2em]
+	\item \textbf{机队槽位铺开}：首批专架次必须按 4A$\to$2B$\to$2C \textbf{轮转}挑机型。8 个服务区的首批截止均为 3600\,s，而每区首批仅 2 箱（约 \SI{17}{kg}，任何机型都装得下）⇒ \textbf{瓶颈不是载重，而是“能同时起飞几架”}。若一律取最大机型 C，则只有 2 架能起飞，另外 6 区必然超时。
+	\item \textbf{最小松弛优先派发}：见式~\eqref{eq:slack}。
+\end{enumerate}
+
+\textbf{定量依据}：60\,min 档服务区恰为 \textbf{8 个}（S001/S002/S006/S007/S010/S012/S013/S014），与题目机队 \textbf{8 架}一一对应；初始 SOC 均为 100\%，14 组共享电池足够 8 架同时起飞（首轮不受充电周转限制）。故\textbf{供给上界 8 架次 $=$ 需求 8 架次，恰好可行}。实测最晚首批交付 \SI{3587}{s} $<$ \SI{3600}{s}（S006，裕度仅 \SI{12}{s}）。
+
+\textbf{机队规模与并行能力的对偶}：这一“8 架 $\leftrightarrow$ 8 区”的对应关系说明，首批时限是\textbf{机队利用率与派发规则共同决定的可达目标}，而非“资源硬约束下的物理必然”。
+
+\subsection{一条重要的方法论结论：压架次数不能靠调权重}\label{sec:q2weight}
+
+本文曾试图通过提高目标函数中的架次权重来压缩架次数。实测发现这是一个\textbf{陷阱}：权重法确实能把架次数压到 25，但真实排程会\textbf{冒出 4 箱超期}（准时率降至 95.0\%），而目标函数完全看不见。更直接的证据是：把“每违规箱权重”取 $1$ 与取 $10^{3}$ 得到\textbf{逐位相同}的结果，证明该目标对真实违规是盲的。
+
+根因是\textbf{两套判定口径并存}：局部搜索的目标函数用乐观的\textbf{代理派发}估计开工时刻（估得偏早 ⇒ 低估违规），而上报结果用\textbf{真实调度器}判定。修法是改用以“\textbf{真实调度器判定 0 违规}”为\textbf{硬前提}、以“\textbf{架次数最少}”为唯一方向的合并流程：对每一次两两合并（容量/能量不可行时升级机型重试）与单服务区整装，\textbf{每个候选方案都过一遍真实调度器}，不通过即回退。
+
+本文还修复了一处真实缺陷：局部搜索的 relocate 走法\textbf{漏了 frozen 判断}，会把货箱从硬期限专架次里搬走——这正是提高架次权重后立刻出现首批超时的直接原因。
+
+\subsection{数值结果（本文结果）}
+
+\begin{table}[htbp]
+	\caption{问题二调度结果（本文结果）}
+	\label{tab:q2result}
+	\centering
+	\zihao{-5}
+	\begin{tabular}{lc}
+		\toprule
+		指标 & 数值 \\
+		\midrule
+		运输架次 $N$                & \textbf{25}（A 型 8 $+$ B 型 10 $+$ C 型 7） \\
+		投入使用实体机              & \textbf{8 / 8}（全部） \\
+		总运输能耗                  & \textbf{77.30}\,kWh \\
+		全部任务完成时间 $T_{\max}$ & \textbf{10855.1}\,s（3.02\,h） \\
+		期望送达准时率              & \textbf{100.0\%}（80 / 80 箱） \\
+		首批违规 / 期望违规         & \textbf{0 箱} / \textbf{0 箱} \\
+		质量装载率                  & \textbf{79\%} \\
+		理论下界                    & 24 架次（3 轮 $\times$ 8 架） \\
+		独立校验器                  & \textbf{违规 0 条}（18 类全通过） \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\textbf{关于最优性的表述}：25 架次距理论下界 24 仅高 1 个，但\textbf{尚未证明最优}，故本文只称其为“经验证的可行解”。下界 24 的推导为：总需求 \SI{758}{kg} / \SI{2.011}{m^3}，机队单轮容量 \SI{320}{kg} / \SI{0.886}{m^3}，故至少 $\lceil 758/320\rceil=3$ 轮 $\times$ 8 架 $=24$ 架次。
+
+\subsection{独立验证}
+
+\textbf{（1）逐段独立复算。}本文用 240 条航段缓存对全部 25 个架次\textbf{逐段重算}能耗与 SOC，与求解器上报值一致（总能耗均为 \SI{77.3016}{kWh}）。
+
+\textbf{（2）资源占用核对。}全部架次的无人机与电池占用区间\textbf{零冲突}；架次结束时刻自洽偏差最大 \SI{0.078}{s}。
+
+\textbf{（3）独立校验器。}校验器不导入求解器模块，从附件与 DEM 重算全部物理量，18 类约束全部通过、\textbf{违规 0 条}（含时限类）；并配有负样本测试，确保其确实具备发现错误的能力。
+
+\textbf{本问适用条件}：结论依赖“首批 30 箱的截止时间为 3600\,s、且 60\,min 档服务区为 8 个”这一附件事实；若首批箱数或时限档位改变，需重新做供给—需求对偶分析。25 架次的\textbf{最优性未证明}，仅在 18 类约束下验证可行。

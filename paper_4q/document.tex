@@ -1,0 +1,83 @@
+% 山区洪涝灾害下无人机运输与通信协同优化 —— 四问完整论文
+%
+% 版式基准：otheragent/document.pdf
+%   （cumcmthesis 类；中文数字编号章节「一、引言与问题重述」；图题在下、表题在上；
+%     公式右侧编号；正文宋体 + Times 西文；页脚页码）
+% 写作框架：按“模型名称 → 决策变量 → 约束 → 求解方法 → 数值结果 → 独立验证 → 适用条件”
+%           组织；并严格区分「附件核对的输入」/「本文复现的结果」/「仅作对照的候选结果」。
+%
+% 编译：xelatex → bibtexu → xelatex ×2
+%   pwsh -File scripts/build_fourq_pdf.ps1
+%
+\documentclass[withoutpreface,bwprint]{../otheragent/cumcmthesis}
+
+\usepackage{graphicx}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{geometry}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{xcolor}
+\usepackage{multicol}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{array}
+\usepackage{siunitx}
+\usepackage[numbers,sort&compress]{natbib}
+
+\hypersetup{hidelinks, colorlinks=true, allcolors=black,
+            pdfstartview=Fit, breaklinks=true}
+
+% ★ 圈码 ①②③ 必须声明为 CJK 字符类，否则走 Times New Roman 变成豆腐块
+%   （`"2460` 里的 " 是 TeX 十六进制前缀，不是引号）
+\xeCJKDeclareCharClass{CJK}{"2460 -> "24FF}
+\xeCJKDeclareCharClass{CJK}{"3000 -> "303F}
+
+% ★ 中文断行标点避头尾：默认情况下中文可在任意两字之间断行，
+%   容易把“最小松弛优先”断成“最小松弛优 / 先”，出现孤字行。
+%   开启 CJK 标点挤压与标点悬挂，排版更接近版式基准。
+\xeCJKsetup{PunctStyle=plain, CheckSingle=true}
+\XeTeXlinebreaklocale "zh"
+\XeTeXlinebreakskip = 0pt plus 1pt
+
+% 常用记号简写（与正文口径一致）
+\newcommand{\Euse}{E_{g}^{use}}
+\newcommand{\Lg}{L_{g}}
+\newcommand{\Qg}{Q_{g}}
+\newcommand{\rhog}{\rho_{g}}
+\newcommand{\qmax}{q_{max}^{safe}}
+\newcommand{\Tfull}{T_{full}}
+
+\title{山区洪涝灾害下无人机运输与通信协同优化}
+\tihao{D}
+\baominghao{MCxxxxxxx}
+
+\begin{document}
+
+\pagenumbering{arabic}
+
+\maketitle
+\thispagestyle{plain}
+
+\input{texfile/1abstract}
+
+\newpage
+
+\input{texfile/2ProblemRestatement}
+\input{texfile/3ProblemAnalysis}
+\input{texfile/4AssumptionAndSign}
+\input{texfile/5MakeModel}
+\input{texfile/6ErrorAnalysis}
+\input{texfile/7ModelEvaluation}
+\input{texfile/7b_conclusion}
+\input{texfile/8AIUsageStatement}
+\input{texfile/8Reference}
+\input{texfile/9Appendix}
+
+\end{document}

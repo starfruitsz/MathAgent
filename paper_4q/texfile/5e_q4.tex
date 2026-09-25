@@ -1,0 +1,106 @@
+\section{问题四：救援任务分区与资源配置优化}\label{sec:q4}
+
+\subsection{模型名称：图连通分量划分}
+
+带连通性约束的图划分问题在运筹学中有系统研究\cite{lari2015connectedpartition}，本问是其“硬等价关系”特例。
+
+题目规定了一条\textbf{硬规则}：\textbf{若同一运输架次同时涉及多个服务区，则这些服务区应划入同一任务组}。这条规则在服务区之间建立了\textbf{等价关系}，因此问题四自然建模为\textbf{图与连通分量}问题：
+
+\begin{itemize}[leftmargin=2em]
+	\item \textbf{顶点}：15 个服务区；
+	\item \textbf{边}：若两个服务区出现在\textbf{同一个运输架次}中，则在它们之间连一条边；
+	\item \textbf{原子单元}：图的\textbf{连通分量}——同一分量内的服务区\textbf{不可再拆}，因为它们被某个跨区架次绑定在一起。
+\end{itemize}
+
+\subsection{求解方法：先求分量，再对分量划分}
+
+\textbf{（1）求连通分量。}对问题三方案的 25 个架次构图，其中 \textbf{12 个是访问 $\ge2$ 个服务区的多点架次}，这些边把 15 个服务区串成 \textbf{3 个连通分量}：
+
+\begin{table}[htbp]
+	\caption{原子单元（连通分量）划分（本文结果）}
+	\label{tab:q4units}
+	\centering
+	\zihao{-5}
+	\begin{tabular}{ccp{7.4cm}}
+		\toprule
+		单元 & 服务区数 & 成员 \\
+		\midrule
+		U01 & 1  & S010（单点架次独立成组） \\
+		U02 & 1  & S014（单点架次独立成组） \\
+		U03 & 13 & S001--S009, S011--S013, S015 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\textbf{（2）合法组数判据。}\textbf{必须先求分量、再对分量划分}——若先对 15 个服务区直接枚举或聚类，几乎必然产生违反规则的方案。由于每个原子单元不可再拆、而多个单元可合并成一组，故合法组数满足
+\begin{equation}
+	K\in[\,1,\ \text{原子单元数}\,]=[\,1,\ 3\,]
+	\label{eq:krange}
+\end{equation}
+因此 $\mathbf{K=2}$ \textbf{与} $\mathbf{K=3}$ \textbf{均可由原子单元直接合并得到，改动 0 个架次}。这是一个\textbf{结构性结论}（精确图论计算，不含启发式近似）。
+
+\textbf{（3）桥接架次。}逐条试“移除该架次后分量数是否增加”，得到 \textbf{6 个桥接架次}。本方案下 $K=2$/$K=3$ 无需拆分，桥接清单作为\textbf{进一步细化分区粒度的备用依据}（每拆一个桥接架次可多得到 1 个可选分组粒度）。
+
+\subsection{资源核算方法}
+
+各组\textbf{独立执行、资源不得跨组调配}，因此需按组内架次核算四类资源的\textbf{峰值需求}：
+
+\begin{enumerate}[label=(\arabic*),leftmargin=2em]
+	\item \textbf{运输无人机}：按组内架次的\textbf{时间区间求并行峰值}。注意\textbf{“首尾相接不算重叠”}——排序键取 $(t,\ \Delta)$ 并令 $-1$ 先于 $+1$，否则会把“刚返回即可接下一架次”误报为缺 1 架；
+	\item \textbf{共享电池}：在并行峰值基础上计入\textbf{充电周转}（式~\eqref{eq:charge}）；
+	\item \textbf{中继无人机}：按组内中继架次同法求并行峰值；
+	\item \textbf{中继能源组件}：同法并计入充电周转。
+\end{enumerate}
+
+\textbf{口径说明}：上述核算是“\textbf{独立执行所需储备}”，与问题二/三顺序贪心派发的\textbf{实际占用}是两个不同口径，两者须分别说明，不可混用。
+
+\subsection{数值结果（本文结果）}
+
+\begin{table}[htbp]
+	\caption{分区方案对比（本文结果）}
+	\label{tab:q4compare}
+	\centering
+	\zihao{-5}
+	\begin{tabular}{lccccccc}
+		\toprule
+		方案 & 改动架次数 & 运输机 & 电池 & 中继机 & 中继组件 & 资源总量 & 不均衡度 \\
+		\midrule
+		$K=1$（全部 15 区一组） & 0 & 8  & 17 & 4 & 4 & \textbf{33} & 0.0000 \\
+		$K=2$（直接可行）      & \textbf{0} & 9  & 17 & 4 & 4 & \textbf{34} & 1.8517 \\
+		$K=3$（直接可行）      & \textbf{0} & 10 & 18 & 5 & 5 & \textbf{38} & 2.7035 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\textbf{两条反直觉但可解释的结论}：
+
+\textbf{（1）分区越多，资源需求越大}：$K=1\to2\to3$ 的资源总量为 $33\to34\to38$。原因是整队一组时调度是\textbf{全局最优}的（问题二、三的派发在全体资源上取最早可用时刻，实现了资源的完全共享与错峰利用）；而分组后每组必须\textbf{独立储备}满足自身峰值的资源，跨组的错峰调节能力丧失，\textbf{规模效应不复存在}。
+
+\textbf{（2）分区的收益在于削峰而非省资源}：组间不均衡度由 $0$ 升至 $1.8517$、$2.7035$（$K=2$ 时 S014 仅由单点架次服务、作业量仅 \SI{0.52}{h}，而大组承担 \SI{13.43}{h}），但\textbf{单组最大工作量}由 \SI{13.95}{h} 降至 \SI{13.00}{h}。因此分区的真正价值是\textbf{降低单组峰值工作量}——这对“多支救援队同时作业、各自独立补给”的现场组织方式有利，是一条\textbf{有工程指导意义}的结论。
+
+\subsection{资源缺口}
+
+\begin{table}[htbp]
+	\caption{资源缺口（需求与库存对比，本文结果）}
+	\label{tab:q4gap}
+	\centering
+	\zihao{-5}
+	\begin{tabular}{lcccc}
+		\toprule
+		资源 & 附件库存 & $K=1$ & $K=2$ & $K=3$ \\
+		\midrule
+		运输无人机（A4/B2/C2） & 8  & 8          & 9（\textbf{缺 1}）  & 10（\textbf{缺 2}） \\
+		共享电池（A6/B4/C4）   & 14 & 17（\textbf{缺 3}） & 17（\textbf{缺 3}） & 18（\textbf{缺 4}） \\
+		\textbf{中继无人机}    & \textbf{2} & \textbf{4（缺 2）} & \textbf{4（缺 2）} & \textbf{5（缺 3）} \\
+		中继能源组件           & 6  & 4          & 4          & 5 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\textbf{最关键的缺口在中继}：库存仅 2 架而需 4$\sim$5 架，缺口 2$\sim$3 架（按问题三实际开出的 6 个中继架次计，缺口为 \textbf{4 架}）。该缺口在 $K=1/2/3$ 三种分区下\textbf{都存在}，且\textbf{分区无法缓解}——因为它源于 \S\ref{sec:q3gap} 所述的\textbf{题目资源配置与通信需求之间的矛盾}，与如何分组无关。
+
+\textbf{缺口的原因}分两层：\textbf{①}三类共享电池在整队一组时就已经偏紧（需求 A 型 7 组 / 库存 6 组，B 型 5/4，C 型 5/4），这是\textbf{机队配置本身带来的}，与分组无关；\textbf{②}工作量高度集中在由大需求服务区构成的主分量上，分组后各组必须按自身峰值储备资源，无法跨组借用，于是缺口随 $K$ 单调扩大。
+
+\textbf{缓解途径}：\textbf{最关键}的是把中继无人机由 2 架增至 4$\sim$6 架（直接消除问题三的 55\% 覆盖瓶颈）；其次是增加共享电池组，或允许组间借用备用电池（放宽“资源不得跨组调配”）。
+
+\textbf{本问适用条件}：$K$ 的取值范围由\textbf{问题三方案的架次划分}决定，\textbf{不得硬编码}——上游架次一变，原子单元数与 $K$ 上限都要重算（本文在 \S\ref{sec:changes} 记录了这样一次传导）。

@@ -1,0 +1,158 @@
+\section{问题一：单点往返运输能力与货箱组批}\label{sec:q1}
+
+\subsection{模型名称与问题结构}
+
+问题一不含实体无人机与电池调度，可拆为两层：
+
+\begin{itemize}[leftmargin=2em]
+	\item \textbf{载荷层}——确定每种机型在每个服务区的\textbf{最大安全载荷}（\S\ref{sec:qmax} 已给出模型，本问只是把它实例化到 $3\times15$ 个组合上）。
+	\item \textbf{组批层}——把该服务区的货箱装入最少的架次。
+\end{itemize}
+
+每个架次的形式固定为 $O01\to S_i\to O01$，\textbf{仅服务一个服务区、不得跨服务区组批}；同一服务区可由多个架次分批服务。
+
+\subsection{模型 1：集合划分模型（组批层）}
+
+\textbf{决策变量。}设服务区 $S_i$ 的货箱集合为 $\mathcal{B}_i$，其一个\textbf{可行子集}（即一个架次的载货组合）称为一个“模式” $p\subseteq\mathcal{B}_i$。定义二元变量
+\begin{equation}
+	x_{p}=
+	\begin{cases}
+		1, & \text{选用模式 } p \text{ 作为一个架次}\\
+		0, & \text{否则}
+	\end{cases}
+	\qquad p\in\mathcal{P}_i
+\end{equation}
+其中 $\mathcal{P}_i$ 为 $S_i$ 上全部\textbf{可行模式}之集。
+
+\textbf{约束。}每个货箱恰好被一个模式覆盖（不可拆分、恰好一次）：
+\begin{equation}
+	\sum_{p\ni k}x_{p}=1,\qquad \forall k\in\mathcal{B}_i
+	\label{eq:partition}
+\end{equation}
+模式的可行性由\textbf{三条硬约束}同时定义：
+\begin{equation}
+	\begin{aligned}
+		\text{质量：}&\quad \sum_{b\in p}m_{b}\le \qmax(g,i)\\
+		\text{体积：}&\quad \sum_{b\in p}v_{b}\le V_{g}\\
+		\text{能量：}&\quad E_{g}^{T}\!\left(\textstyle\sum_{b\in p}m_{b};\,i\right)\le(1-\rhog)\Euse
+	\end{aligned}
+	\label{eq:patternfeas}
+\end{equation}
+其中机型 $g$ 本身也是模式的属性（\textbf{机型参与决策}）。
+
+\textbf{目标：字典序。}按“先架次数、再累计作业时间、再能耗”逐级锁定最优：
+\begin{equation}
+	\min_{\text{lex}}\ \Bigl(\underbrace{\textstyle\sum_{p}x_{p}}_{N_i},\
+	\underbrace{\textstyle\sum_{p}t_{p}x_{p}}_{T_i},\
+	\underbrace{\textstyle\sum_{p}E_{p}x_{p}}_{E_i}\Bigr)
+	\label{eq:lex}
+\end{equation}
+即先求最少架次 $N_i^{*}$，在其最优解集内求最小累计时间，再在其内求最小能耗。
+
+\textbf{累计作业时间的口径（易错）}：$T_i$ 是\textbf{所有架次时长之和}，不是 8 架实体机并行后的最晚完成时刻——后者属于问题二。
+
+\subsection{质量—体积二维装箱}
+
+式~\eqref{eq:patternfeas} 的质量与体积两式构成\textbf{质量—体积二维装箱问题}，且机型 $g$ 为决策变量。由于同一类物资的单箱质量与体积取值唯一，问题实例具有良好的结构：体积往往是比质量更紧的瓶颈。这是典型的\textbf{装箱问题}\cite{martello1990binpacking,lodi2002threedim}，例如 A 型 $\Qg=25$\,kg、$V_{g}=0.06$\,\si{m^3}，而生活卫生用品单箱 \SI{6}{kg}/\SI{0.035}{m^3}——按质量可装 4 箱、\textbf{按体积只能装 1 箱}。因此\textbf{必须逐箱同时检查质量与体积两个约束}，不能只看质量。
+
+\textbf{求解方法（本文实际采用）}：按体积降序的 \textbf{FFD（First-Fit Decreasing）}\cite{martello1990binpacking,lodi2002threedim} 构造，并\textbf{按服务区独立求解}；同时实现“单一机型优先/最大机型优先/按附件顺序”等 8 种策略作为对照，由真实指标统一评分取优。
+
+\subsection{模型 2：Martello--Toth 型解析下界（最优性依据）}
+
+仅给出一个启发式方案不足以称“最优”。本文按\textbf{质量}与\textbf{体积}两个维度，分别用该服务区可获得的最佳机型容量估计所需架次数，取二者较大值作为下界：
+\begin{equation}
+	\begin{aligned}
+		LB_i=\max\Bigg(&\left\lceil\frac{\sum_{b\in\mathcal{B}_i}m_{b}}{\max_{g}\qmax(g,i)}\right\rceil,\\
+		              &\left\lceil\frac{\sum_{b\in\mathcal{B}_i}v_{b}}{\max_{g}V_{g}}\right\rceil\Bigg)
+	\end{aligned}
+	\label{eq:lb}
+\end{equation}
+\textbf{最优性判据}：若启发式解的架次数等于 $LB_i$，则该服务区上\textbf{架次数维度可证最优}——这正是“下界 $+$ 可行构造”构成最优性证明的标准形式。
+
+\subsection{求解流程}
+
+\begin{enumerate}[label=\textbf{步骤 \arabic*}]
+	\item 由 DEM 沿航段采样最高地面高程，得到 240 条航段的 $d_{ij}$、$h_{ij}^{+}$、$h_{ij}^{-}$；
+	\item 按式~\eqref{eq:qmaxdef}--\eqref{eq:qmaxmin} 反解三种机型在 15 个服务区的最大安全载荷，并强制回代验证；
+	\item 记录每个“服务区 $\times$ 机型”组合\textbf{实际起作用的约束类型}（结构/体积/能量）；
+	\item 对每个服务区独立做 FFD 二维装箱；
+	\item 用式~\eqref{eq:lb} 的解析下界校验最优性，若存在差距则回到局部搜索继续合并重排。
+\end{enumerate}
+
+\subsection{数值结果（本文结果）}
+
+\subsubsection{最大安全载荷与生效约束}
+
+结果表明\textbf{结构载重而非能量才是主导约束}：
+
+\begin{table}[htbp]
+	\caption{最大安全载荷的生效约束统计（本文结果）}
+	\label{tab:q1bound}
+	\centering
+	\zihao{-5}
+	\begin{tabular}{lccc}
+		\toprule
+		机型 & 受结构上限 $\Qg$ 约束的服务区数 & 受能量约束的服务区数 & 说明 \\
+		\midrule
+		A 型 & \textbf{15 / 15} & 0 & 全部受结构约束，$\qmax\equiv 25$\,kg \\
+		B 型 & \textbf{14 / 15} & 1（S008） & 仅最远服务区转为能量约束 \\
+		C 型 & \textbf{10 / 15} & 5 & S002/S003/S004/S008/S012 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+其中 S008（单向距离 \SI{8.079}{km}，为 15 个服务区中最远）对 C 型构成能量约束，反解得 $\qmax=\SI{58.99}{kg}<\Qg=\SI{80}{kg}$，是问题一中最需要真正反解的情形之一。反解的能量约束紧性实测相对误差 $5.6\times10^{-15}$。
+
+\textbf{建模含义}：A 型与 B 型在全部（或几乎全部）服务区都受结构载重上限约束，即 $\qmax=\Qg$，\textbf{不需要反解}；能量约束只在 C 型且距离较远时才起作用。因此问题一的组批方案主要由 $\Qg$ 与装载体积决定，\textbf{能量约束是“少数派约束”}。若误以为瓶颈在能量，会得出完全不同的敏感性结论。
+
+\subsubsection{组批方案与最优性}
+
+\begin{table}[htbp]
+	\caption{问题一组批结果（本文结果）}
+	\label{tab:q1result}
+	\centering
+	\zihao{-5}
+	\begin{tabular}{lc}
+		\toprule
+		指标 & 数值 \\
+		\midrule
+		最优架次数 $N$            & \textbf{18}（全部为 C 型） \\
+		解析下界合计 $\sum_i LB_i$ & \textbf{18} \\
+		总运输能耗 $\sum_p E_p^{T}$ & \textbf{75.07}\,kWh \\
+		累计作业时间 $\sum_p t_p$   & \textbf{33729.5}\,s（9.37\,h） \\
+		是否达到下界               & \textbf{是}（逐服务区相等） \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+由于 15 个服务区的启发式架次数\textbf{全部等于其解析下界}，故 18 架次这一结果在\textbf{架次数维度上可证最优}，而非“启发式得到的较好解”。
+
+\subsubsection{三目标权衡}
+
+三目标（架次数、总能耗、累计作业时间）并不总是同向。本文构造了 8 种策略并给出 Pareto 前沿：若单纯最小化能耗，会出现“用更小机型拆更多架次”的方案（架次增加、能耗略降），说明\textbf{架次数与能耗存在轻微冲突}；而累计作业时间与架次数\textbf{同向}（架次越多、累计时间越长）。
+
+\subsubsection{返航安全余量敏感性}
+
+扫描 $\rhog\in[0,0.50]$（步长 0.025），每个取值都重算最大安全载荷并重跑组批：
+
+\begin{table}[htbp]
+	\caption{$\rhog$ 敏感性（本文结果，节选）}
+	\label{tab:q1rho}
+	\centering
+	\zihao{-5}
+	\begin{tabular}{lccc}
+		\toprule
+		$\rhog$ & 架次数 & 总能耗 / kWh & 说明 \\
+		\midrule
+		0.20（附件取值） & \textbf{18} & \textbf{75.07}  & 效率最优区间 \\
+		0.25             & 19          & 78.56           & 架次开始上升 \\
+		0.30             & 20          & 83.20           & \\
+		0.35             & 25          & 106.60          & 能耗较 0.20 上升 42\% \\
+		$\ge0.375$       & \textbf{无可行解} & ---        & 远距离服务区空载亦无法返航 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\textbf{物理解释}：$\rhog$ 增大直接压缩可用能量，使部分远距离服务区（如 S003、S014）\textbf{即使空载也无法返回}，问题从“架次变多”退化为“\textbf{无可行解}”。附件取值 0.20 恰在效率最优区间，该结论支持附件参数设置的合理性。
+
+\textbf{本问适用条件}：结论依赖“能量由航程反推”这一口径（假设 4）；若题面给出巡航功率，应以题面为准重算。此外 $LB_i$ 是按\textbf{单一维度}估计的下界，多机型混编时该下界仍然有效（取最大容量即为最乐观情形），但可能不是紧的。

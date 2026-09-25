@@ -169,7 +169,21 @@ def _cell_texts(tbl: Table) -> list[list[str]]:
 
 
 def _set_col_widths(tbl: Table, texts: list[list[str]]) -> None:
-    """按内容自适应列宽（幂律压缩，避免等宽列把中文表头逐字换行）。"""
+    """按内容自适应列宽，并**同步写入 `w:tblGrid`**（幂律压缩，避免等宽列换行）。
+
+    ★★ 两个必须同时做对的地方（否则表格会溢出/被裁剪）：
+
+    1. **`w:tblGrid` 才是"固定版式"下的权威列宽**。
+       本仓表一律带 `w:tblLayout type="fixed"`，此时 Word 按 `w:gridCol/@w:w`
+       布局，`w:tcW` 只是单元格的"期望值"。只改 `cell.width`（写到 `tcW`）
+       而不同步 `tblGrid`，两者就会打架——
+       实测表 2：`gridCol` 各 1980 twips（3.49 cm）而 `tcW` 首列 3792 twips
+       （6.69 cm），合计 8958 twips > 版心 7920 twips ⇒ 表格溢出、
+       公式上标被裁掉、长文本列被压成竖排单字。
+    2. **单位必须是 twips**。`docx` 的 `cell.width = Cm(x)` 存的是 **EMU**；
+       而 `w:tcW/@w:w` 与 `w:gridCol/@w:w` 要求 **twips**（1 twip = 635 EMU）。
+       务必用 `Cm(x).twips`，不要用 `int(Cm(x))`。
+    """
     ncol = len(tbl.columns)
     if ncol == 0 or not texts:
         return
@@ -181,26 +195,74 @@ def _set_col_widths(tbl: Table, texts: list[list[str]]) -> None:
                          or "\uff00" <= ch <= "\uffef") else 1.0
         return max(n, 2.0)
 
+    # 含公式的单元格：`cell.text` 取不到公式，会被严重低估 ⇒ 给一个下限
+    M_NS = "{http://schemas.openxmlformats.org/officeDocument/2006/math}"
+    has_math_cols = [
+        any(c._tc.findall(f".//{M_NS}oMath") for c in col.cells)
+        for col in tbl.columns
+    ]
+
     ests = []
     for j in range(ncol):
         w = max((est(r[j]) for r in texts if j < len(r)), default=2.0)
+        if has_math_cols[j]:
+            w = max(w, 22.0)      # ≈ 11 个汉字宽，容得下"符号 / 单位"
         ests.append(max(w, 2.0))
+
     # 幂律压缩：列宽比不超过约 4:1
     power = 0.55
     comp = [e ** power for e in ests]
     total = sum(comp)
     widths = [TEXT_WIDTH_CM * c / total for c in comp]
-    # 每列至少 1.2cm
-    widths = [max(w, 1.2) for w in widths]
+    widths = [max(w, 1.4) for w in widths]          # 每列至少 1.4 cm
     scale = TEXT_WIDTH_CM / sum(widths)
     widths = [w * scale for w in widths]
 
-    # 关闭自动调整，写死列宽
+    # ---- ① 写 w:tblGrid（固定版式下的权威列宽）----
+    grid = tbl._tbl.find(qn("w:tblGrid"))
+    if grid is not None:
+        tbl._tbl.remove(grid)
+    grid = OxmlElement("w:tblGrid")
+    for w in widths:
+        gc = OxmlElement("w:gridCol")
+        gc.set(qn("w:w"), str(Cm(w).twips))
+        grid.append(gc)
+    # tblGrid 必须紧跟在 tblPr 之后（schema 要求）
+    tblPr = tbl._tbl.find(qn("w:tblPr"))
+    if tblPr is not None:
+        tblPr.addnext(grid)
+    else:
+        tbl._tbl.insert(0, grid)
+
+    # ---- ② 写每个单元格的 tcW（同一套 twips）----
+    for row in tbl.rows:
+        for j, cell in enumerate(row.cells):
+            if j >= len(widths):
+                continue
+            tcPr = cell._tc.get_or_add_tcPr()
+            old = tcPr.find(qn("w:tcW"))
+            if old is not None:
+                tcPr.remove(old)
+            tcW = OxmlElement("w:tcW")
+            tcW.set(qn("w:type"), "dxa")
+            tcW.set(qn("w:w"), str(Cm(widths[j]).twips))
+            tcPr.append(tcW)
+
+    # ---- ③ 表格总宽 + 固定版式 ----
+    tblPr = tbl._tbl.find(qn("w:tblPr"))
+    if tblPr is not None:
+        old_w = tblPr.find(qn("w:tblW"))
+        if old_w is not None:
+            tblPr.remove(old_w)
+        tblW = OxmlElement("w:tblW")
+        tblW.set(qn("w:type"), "dxa")
+        tblW.set(qn("w:w"), str(Cm(TEXT_WIDTH_CM).twips))
+        tblPr.append(tblW)
+        if tblPr.find(qn("w:tblLayout")) is None:
+            lay = OxmlElement("w:tblLayout")
+            lay.set(qn("w:type"), "fixed")
+            tblPr.append(lay)
     tbl.autofit = False
-    for j, col in enumerate(tbl.columns):
-        w = Cm(widths[j])
-        for cell in col.cells:
-            cell.width = w
 
 
 def format_tables(doc: Document) -> int:
@@ -374,9 +436,39 @@ def main() -> int:
         if t._tbl.tblPr.find(qn("w:tblBorders")) is not None
     )
     print(f"  三线表 {three}/{len(after.tables)} 张")
+
+    # ★ 列宽一致性：tblGrid 与 tcW 必须一致（不一致会导致表格溢出/裁剪）
+    bad = []
+    for ti, t in enumerate(after.tables, 1):
+        grid = t._tbl.find(qn("w:tblGrid"))
+        gw = [int(g.get(qn("w:w"))) for g in grid.findall(qn("w:gridCol"))] \
+            if grid is not None else []
+        if not gw:
+            bad.append(f"表{ti}:无 tblGrid")
+            continue
+        for row in t.rows[:1]:
+            tw = []
+            for c in row.cells:
+                tcPr = c._tc.find(qn("w:tcPr"))
+                e = tcPr.find(qn("w:tcW")) if tcPr is not None else None
+                tw.append(int(e.get(qn("w:w"))) if e is not None else -1)
+            if len(tw) == len(gw) and any(abs(a - b) > 2 for a, b in zip(gw, tw)):
+                bad.append(f"表{ti}: grid={gw} vs tcW={tw}")
+        total = sum(gw)
+        limit = Cm(TEXT_WIDTH_CM).twips
+        if total > limit + 2:
+            bad.append(f"表{ti}: 总宽 {total} twips > 版心 {int(limit)}")
+    if bad:
+        print("  ⚠️  列宽一致性检查未通过：")
+        for b in bad[:8]:
+            print(f"      {b}")
+    else:
+        print(f"  列宽一致性：{len(after.tables)} 张表 tblGrid 与 tcW 一致、"
+              f"总宽均 ≤ {TEXT_WIDTH_CM} cm ✅")
+
     h1 = sum(1 for p in after.paragraphs if p.style.name == "Heading 1")
     print(f"  一级标题 {h1} 个（样式 + 段落均设 pageBreakBefore）")
-    return 0
+    return 1 if bad else 0
 
 
 if __name__ == "__main__":

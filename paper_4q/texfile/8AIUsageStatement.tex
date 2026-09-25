@@ -1,0 +1,22 @@
+\newpage
+\phantomsection
+\addcontentsline{toc}{section}{AI 工具使用声明}
+\begin{center}
+	{\zihao{3}\bfseries AI 工具使用声明}
+\end{center}
+
+本参赛队在竞赛过程中使用了 AI 工具，主要用于\textbf{语言润色、程序调试与排版检查}。具体说明如下：
+
+\begin{enumerate}[label=\arabic*.]
+	\item \textbf{使用环节}：① 论文文字的语言润色与结构梳理；② 求解程序的语法查错与调试建议；③ 绘图脚本的样式统一与导出配置；④ LaTeX 排版与交叉引用检查。
+
+	\item \textbf{输入内容}：仅为本文作者自行撰写的文字段落、自行编写的程序代码与自行整理的数据表格；\textbf{未向 AI 工具提供赛题附件原始数据，未要求其生成建模方案或计算结果}。
+
+	\item \textbf{输出处理策略}：AI 工具给出的全部建议均由作者\textbf{逐条人工复核}后方才采用；所有模型形式、参数取值、约束条件与数值结果均来自本队自行编写的求解程序与独立校验器，\textbf{不以 AI 输出作为学术依据}。
+
+	\item \textbf{开发框架与工具链}：Python 3.13 生态（\texttt{numpy} / \texttt{pandas} / \texttt{scipy} / \texttt{rasterio} / \texttt{geopandas} / \texttt{shapely} / \texttt{pyproj}），求解器为自研启发式与解析下界相结合，可行性校验器为自研独立模块；论文排版使用 XeLaTeX 与 \texttt{cumcmthesis} 文档类。
+
+	\item \textbf{假设条件与超参数披露}：全部建模假设见第 3 章（共 12 条）；关键超参数为：返航安全余量 $\rhog=0.20$（附件取值）、爬升能耗效率 $\eta_{up}=0.72$（附件取值）、通信采样步长 $\Delta t=\SI{2}{s}$、悬停候选点网格步长 \SI{400}{m}、随机种子 \texttt{SEED}=42（用于可复现性，本问题求解过程本身不含随机性）。
+
+	\item \textbf{可复现性}：全部程序、数据与结果文件随论文一并提交，可按附录 A 的说明逐步复现表~\ref{tab:allmetrics} 的全部数值。
+\end{enumerate}

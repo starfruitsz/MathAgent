@@ -109,6 +109,102 @@ def fix_part(xml_text: str) -> tuple[str, dict[str, int]]:
     return out, found
 
 
+def fix_empty_math_bases(root) -> int:
+    """★ 修复 pandoc 生成的"空底数"上下标（Word 里渲染成 □ 的另一个根因）。
+
+    源码写作 `m$^3$`、`(m$\\cdot$s$^{-1}$)` 时，pandoc 会产出**底数为空**的
+    `m:sSup` / `m:sSubSup`：
+
+        <w:t>/ m</w:t>
+        <m:oMath><m:sSup><m:e><m:r><m:t/></m:r></m:e>
+          <m:sup><m:r><m:t>3</m:t></m:r></m:sup></m:sSup></m:oMath>
+
+    底数 `m:e` 里只有一个**空的** `<m:t/>`，Word 会把它渲染成一个 `□`
+    （实测表 2「可用装载体积 V_g / m□³」「巡航速度 v_g^c /(m·s□⁻¹)」）。
+
+    修法：把**紧邻在前的最后一个可见字符**搬进空底数 —— 这正是 LaTeX
+    书写 `m$^3$` 的本意（`m` 是底数，`3` 是上标）。
+    只处理"底数确实为空"的情形，不触碰任何正常公式。
+
+    返回修好的数量。
+    """
+    fixed = 0
+    for math in list(root.iter(f"{M}oMath")):
+        for tag in ("sSup", "sSubSup"):
+            for node in list(math.iter(f"{M}{tag}")):
+                base = node.find(f"{M}e")
+                if base is None or _base_text(base).strip():
+                    continue
+                prev = _prev_char_source(node)
+                if prev is None:
+                    continue
+                container, text_el = prev
+                text = text_el.text or ""
+                last = text[-1]
+                # 从原位置摘掉该字符
+                text_el.text = text[:-1]
+                if not text_el.text:
+                    # 元素空了：若是公式内的 m:r，整段删除；若是 w:r，留着无害
+                    pass
+                # 写进空底数
+                for r in list(base.findall(f"{M}r")):
+                    base.remove(r)
+                r = _mk_run(last)
+                base.append(r)
+                fixed += 1
+    return fixed
+
+
+def _base_text(base) -> str:
+    return "".join(t.text or "" for t in base.iter(f"{M}t"))
+
+
+def _mk_run(ch: str):
+    """构造一个只含单个字符的 `m:r`。"""
+    from lxml import etree
+
+    NS_M = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+    r = etree.SubElement(etree.Element("{%s}tmp" % NS_M), "{%s}r" % NS_M)
+    t = etree.SubElement(r, "{%s}t" % NS_M)
+    t.text = ch
+    return r
+
+
+def _prev_char_source(node):
+    """向前找"最后一个可见字符"所在的文本元素。
+
+    ★ 关键：pandoc 把公式包在 `w:r` 里，`m:oMath` 往往是该 `w:r` 的**第一个子元素**，
+    因此在公式这一层**没有前置兄弟**。必须**逐层向上**找到第一个有"前置兄弟"的祖先，
+    再在那个兄弟里取最后一个可见字符。
+
+    返回 `(容器元素, m:t 或 w:t 元素)`；找不到返回 None。
+    """
+    NS_W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    cur = node
+    while cur is not None:
+        parent = cur.getparent()
+        if parent is None:
+            return None
+        kids = list(parent)
+        try:
+            idx = kids.index(cur)
+        except ValueError:
+            return None
+        for k in range(idx - 1, -1, -1):
+            sib = kids[k]
+            # 普通文本 run（w:t）
+            for wt in reversed(list(sib.iter(f"{{{NS_W}}}t"))):
+                if (wt.text or "").strip():
+                    return sib, wt
+            # 公式文本（m:t）
+            for mt in reversed(list(sib.iter(f"{M}t"))):
+                if (mt.text or "").strip():
+                    return sib, mt
+        # 本层没有可用前置兄弟 → 上溯一层
+        cur = parent
+    return None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="清理 OMML 中不可渲染的空白字符")
     ap.add_argument("docx", nargs="?", default=str(DEFAULT_DOCX))
@@ -128,11 +224,27 @@ def main() -> int:
                if n.startswith("word/") and n.endswith(".xml")]
     total: dict[str, int] = {}
     changed: dict[str, str] = {}
+    n_base_fixed = 0
+
     for n in targets:
         try:
             txt = parts[n].decode("utf-8")
         except UnicodeDecodeError:
             continue
+
+        # ---- ① 文件级修复：空底数上下标（必须走 XML 树）----
+        if n == "word/document.xml":
+            from lxml import etree
+
+            root = etree.fromstring(txt.encode("utf-8"))
+            n_base_fixed = fix_empty_math_bases(root)
+            if n_base_fixed:
+                txt = etree.tostring(
+                    root, xml_declaration=True, encoding="UTF-8",
+                    standalone=True,
+                ).decode("utf-8")
+
+        # ---- ② 文本级修复：不可渲染的空白字符 ----
         new, found = fix_part(txt)
         for k, v in found.items():
             total[k] = total.get(k, 0) + v
@@ -141,18 +253,21 @@ def main() -> int:
 
     print(f"被检文件：{path.name}")
     print(f"检查 XML 部件 {len(targets)} 个")
-    if not total:
-        print("✅ 未发现不可渲染的空白字符（无需修改）")
+    if n_base_fixed:
+        print(f"★ 修复空底数上下标（Word 里会渲染成 □）：{n_base_fixed} 处")
+    if not total and not n_base_fixed:
+        print("✅ 未发现需要修复的问题（无需修改）")
         return 0
 
-    print("\n=== 发现并处理的字符 ===")
-    import unicodedata
+    if total:
+        print("\n=== 发现并处理的字符 ===")
+        import unicodedata
 
-    for k, v in sorted(total.items(), key=lambda kv: -kv[1]):
-        ch = chr(int(k[2:], 16))
-        print(f"  {k} ×{v:4}  {unicodedata.name(ch, '?'):26}"
-              f" → {REPLACEMENTS[ch]!r}")
-    print(f"  合计 {sum(total.values())} 个字符，涉及部件：{list(changed)}")
+        for k, v in sorted(total.items(), key=lambda kv: -kv[1]):
+            ch = chr(int(k[2:], 16))
+            print(f"  {k} ×{v:4}  {unicodedata.name(ch, '?'):26}"
+                  f" → {REPLACEMENTS[ch]!r}")
+        print(f"  合计 {sum(total.values())} 个字符，涉及部件：{list(changed)}")
 
     if args.report:
         print("\n(--report：未写回文件)")
@@ -176,8 +291,22 @@ def main() -> int:
                     left.update(count_offenders(z.read(n).decode("utf-8")))
                 except UnicodeDecodeError:
                     pass
+        # 再查一遍空底数
+        from lxml import etree
+
+        _doc_bytes = z.read("word/document.xml")
+        root = etree.fromstring(_doc_bytes)
+        left_bases = sum(
+            1
+            for math in root.iter(f"{M}oMath")
+            for tag in ("sSup", "sSubSup")
+            for node in math.iter(f"{M}{tag}")
+            if (b := node.find(f"{M}e")) is not None
+            and not _base_text(b).strip()
+        )
     print("复检残留：", left if left else "无 ✅")
-    return 1 if left else 0
+    print("复检空底数：", left_bases if left_bases else "无 ✅")
+    return 1 if (left or left_bases) else 0
 
 
 if __name__ == "__main__":

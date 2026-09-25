@@ -24,7 +24,10 @@
 \textbf{（3）航段飞行时间。}按爬升、巡航、下降三段相加：
 \begin{equation}
 	\label{eq:3}
-	t_{gij}=\frac{h^{+}_{ij}}{v_{g}^{\uparrow}}+\frac{d_{ij}}{v_{g}^{c}}+\frac{h^{-}_{ij}}{v_{g}^{\downarrow}}
+	\begin{aligned}
+		t_{gij}={}&\frac{h^{+}_{ij}}{v_{g}^{\uparrow}}+\frac{d_{ij}}{v_{g}^{c}}\\
+		        &+\frac{h^{-}_{ij}}{v_{g}^{\downarrow}}
+	\end{aligned}
 \end{equation}
 其中 $d_{ij}$ 为投影平面上的水平直线距离。
 
@@ -122,8 +125,10 @@
 这里存在一个\textbf{单位陷阱}：$f$ 的单位是 MHz，而 $D_{ijt}$ 的单位必须是 \textbf{km}。本文内部一律使用 SI 单位（距离以 m 存储），代入前必须除以 1000，否则将产生约 60\,dB 的系统性偏差。$D_{ijt}$ 为链路两端的\textbf{三维直线距离}（含高度差）。计入地形遮挡附加损耗后：
 \begin{equation}
 	\label{eq:17}
-	L_{path,ijt}=L_{FSPL,ijt}+L_{obs}\cdot b_{ijt},\qquad
-	A_{ijt}=1\iff L_{path,ijt}\le L_{max,i\leftrightarrow j}
+	\begin{aligned}
+		L_{path,ijt}&=L_{FSPL,ijt}+L_{obs}\cdot b_{ijt},\\
+		A_{ijt}&=1\iff L_{path,ijt}\le L_{max,i\leftrightarrow j}
+	\end{aligned}
 \end{equation}
 
 \textbf{（4）通信三态判定。}综合上述判据，任一时刻的通信状态按优先级判定为三态：
@@ -131,7 +136,8 @@
 	\label{eq:18}
 	\text{状态}=\begin{cases}
 		\text{直连}, & A(\text{运输机}\leftrightarrow G01)=1\\
-		\text{中继}, & \text{直连不可用}\ \wedge\ A(\text{运输机}\leftrightarrow\text{中继})=1\ \wedge\ A(\text{中继}\leftrightarrow G01)=1\\
+		\text{中继}, & \text{直连不可用}\ \wedge\ A(\text{运输机}\leftrightarrow\text{中继})=1\\
+		            & \qquad\wedge\ A(\text{中继}\leftrightarrow G01)=1\\
 		\text{中断}, & \text{其余情况}
 	\end{cases}
 \end{equation}

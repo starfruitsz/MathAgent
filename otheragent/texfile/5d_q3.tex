@@ -6,20 +6,26 @@
 问题三在问题二的运输调度之上引入\textbf{连续通信约束}：运输无人机在\textbf{爬升、巡航、下降及物资投送}四个阶段均应保持通信。形式化地，设架次 $p$ 的轨迹为 $\mathrm{Traj}_{p}(t)$，则要求
 \begin{equation}
 	\label{eq:25}
-	\forall t\in[t_{start}(p),\,t_{end}(p)]:\quad \mathrm{comm\_state}\big(\mathrm{Traj}_{p}(t)\big)\neq\text{中断}
+	\forall t\in[t_{start}(p),\,t_{end}(p)]:\quad
+	\mathrm{comm\_state}\big(\mathrm{Traj}_{p}(t)\big)\neq\text{中断}
 \end{equation}
 其中通信状态按式~\eqref{eq:18} 的三态规则判定。这一约束带来两个新难点：\textbf{①判定必须逐时刻}——只检查服务区一点或航段两端点会漏掉“中途被山体遮挡”的时段（见 ADR-007）；\textbf{②选址是连续三维变量}——悬停位置含平面坐标与飞行海拔，若逐时刻独立选址，问题退化为难解的连续最优控制。
 
 新增的决策变量为中继无人机的悬停位置、服务时段与能源组件分配\cite{zeng2016uavcomm,alhourani2014lap}。中继架次的建链时刻与服务时段为
 \begin{equation}
 	\label{eq:26}
-	t_{link}=t_{prep}+t_{fly}(O01\to P)+t_{setup},\qquad
-	t_{svc}=[\,t_{link},\ T_{win}^{end}\,]
+	\begin{aligned}
+		t_{link}&=t_{prep}+t_{fly}(O01\to P)+t_{setup},\\
+		t_{svc}&=[\,t_{link},\ T_{win}^{end}\,]
+	\end{aligned}
 \end{equation}
 中继架次能耗由爬升、巡航与悬停（含通信）三部分构成：
 \begin{equation}
 	\label{eq:27}
-	E_{R}=E_{up}\big(m_{takeoff},h^{+}\big)+P_{cruise}\cdot t_{cruise}+\big(P_{hover}+P_{comms}\big)\cdot t_{svc}
+	\begin{aligned}
+		E_{R}={}&E_{up}\big(m_{takeoff},h^{+}\big)+P_{cruise}\cdot t_{cruise}\\
+		       &+\big(P_{hover}+P_{comms}\big)\cdot t_{svc}
+	\end{aligned}
 \end{equation}
 中继的约束包括：悬停位置须位于 DEM 覆盖范围内；悬停\textbf{离地高度不超过附件规定的 300\,m}；往返悬停位置的地形净空按航段规则确定；须满足返航电量要求。
 
@@ -59,7 +65,8 @@
 \textbf{（1）连续选址的降维。}本文采用一个\textbf{可验证的充分条件}来替代连续最优控制：对某架次，若存在\textbf{某一个}悬停点 $P$，使得轨迹上每一时刻都满足
 \begin{equation}
 	\label{eq:28}
-	\text{直连可用}\ \vee\ \big(\text{接入}(P)\ \text{可用}\ \wedge\ \text{回传}(P)\ \text{可用}\big)
+	\text{直连可用}\ \vee\ \big(\text{接入}(P)\ \text{可用}
+	\ \wedge\ \text{回传}(P)\ \text{可用}\big)
 \end{equation}
 则该架次由一架中继在 $P$ 处全程保障即可。这样只需“离散候选点 $\times$ 时间采样”两次扫描。若单点无法覆盖全程，则退化为\textbf{按时段分段接力}——题目允许不同时刻由不同中继保障，只要每一时刻仅由一架中继服务。
 
@@ -129,8 +136,10 @@
 
 \textbf{缺口是题目资源配置的结果，而非算法缺陷。}中继无人机的在站时长受能量预算约束：可继续悬停的时间上限约为
 \begin{equation}
-	t_{\text{hover}}^{\max}=\frac{(1-\rho_R)E_R}{P_{\text{hover}}+P_{\text{comm}}}
-	=\frac{2.56\ \text{kWh}}{1.10\ \text{kW}}\approx 140\ \text{min},
+	\begin{aligned}
+		t_{\text{hover}}^{\max}&=\frac{(1-\rho_R)E_R}{P_{\text{hover}}+P_{\text{comm}}}\\
+		                       &=\frac{2.56\ \text{kWh}}{1.10\ \text{kW}}\approx 140\ \text{min},
+	\end{aligned}
 \end{equation}
 且实际还需扣除往返悬停点的飞行能耗。而 20 个需保障架次的\textbf{真实中断时长合计约 168.5\,min}，\textbf{最大并发 6 个架次}，仅 2 架中继在时间轴上无法同时满足。因此本问覆盖率必然低于几何可达覆盖率。
 

@@ -22,15 +22,20 @@
 \textbf{（3）架次总作业时间。}交接时间必须\textbf{按站累加}，即每站各计一次基础交接时间加该站箱数的增量时间：
 \begin{equation}
 	\label{eq:23}
-	t_{p}=t_{prep}+n_{box}\cdot t_{load}+\sum_{m}t_{g}(seg_{m})+\sum_{s\in stops}\big(t_{h0}+k_{s}\cdot t_{h1}\big)
+	\begin{aligned}
+		t_{p}={}&t_{prep}+n_{box}\cdot t_{load}+\sum_{m}t_{g}(seg_{m})\\
+		      &+\sum_{s\in stops}\big(t_{h0}+k_{s}\cdot t_{h1}\big)
+	\end{aligned}
 \end{equation}
 这里 $k_{s}$ 为在第 $s$ 站投送的箱数。若误写成“（基础交接 $+$ 每箱时间 $\times$ 总箱数）$\times$ 站数”，会把基础交接重复乘上总箱数，严重高估时间窗。
 
 \textbf{（4）时限约束。}两类时限需严格区分：\textbf{首批保障箱}须满足首批截止时间 $d_{b}^{fb}$，\textbf{全部货箱}须衡量是否满足期望送达时间 $d_{b}^{exp}$：
 \begin{equation}
 	\label{eq:24}
-	t_{b}^{deliver}\le d_{b}^{fb}\quad(\text{仅首批保障箱}),\qquad
-	t_{b}^{deliver}\le d_{b}^{exp}\quad(\text{全部货箱})
+	\begin{aligned}
+		t_{b}^{deliver}&\le d_{b}^{fb}\quad(\text{仅首批保障箱}),\\
+		t_{b}^{deliver}&\le d_{b}^{exp}\quad(\text{全部货箱})
+	\end{aligned}
 \end{equation}
 
 多点多架次调度在结构上属于多趟车辆路径问题（multi-trip VRP）的无人机变体\cite{choi2019multitrip,luo2017twoechelon,yang2025lodbo}。

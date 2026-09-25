@@ -17,8 +17,10 @@
 \textbf{（3）解析下界。}构造 Martello--Toth 型下界\cite{martello1990binpacking}：分别按\textbf{质量}与\textbf{体积}两个维度，用该服务区可获得的最佳机型容量估计所需架次数，取二者较大值：
 \begin{equation}
 	\label{eq:20}
-	LB_i=\max\left(\left\lceil\frac{\sum_{b\in\mathcal{B}_i}m_{b}}{\max_{g}q_{max}^{safe}(g,i)}\right\rceil,\
-	\left\lceil\frac{\sum_{b\in\mathcal{B}_i}v_{b}}{\max_{g}V_{g}}\right\rceil\right)
+	\begin{aligned}
+		LB_i=\max\Bigg(&\left\lceil\frac{\sum_{b\in\mathcal{B}_i}m_{b}}{\max_{g}q_{max}^{safe}(g,i)}\right\rceil,\\
+		              &\left\lceil\frac{\sum_{b\in\mathcal{B}_i}v_{b}}{\max_{g}V_{g}}\right\rceil\Bigg)
+	\end{aligned}
 \end{equation}
 若启发式解的架次数等于 $LB_i$，则在该服务区上\textbf{架次数维度可证最优}。
 

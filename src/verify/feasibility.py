@@ -54,14 +54,25 @@ class ViolationType(str, Enum):
     FLEET_SIZE_EXCEEDED = "实体无人机数量超限"
     BATTERY_INVENTORY_EXCEEDED = "电池组数量超限"
     COMMS_UNSUPPORTED = "通信中断时段未获中继保障"
+    COMMS_RELAY_INSUFFICIENT = "中继资源不足，部分架次通信中断未获保障"
 
 
 SOFT_VIOLATION_TYPES: frozenset[ViolationType] = frozenset({
     ViolationType.FIRST_BATCH_DEADLINE_MISSED,
     ViolationType.EXPECTED_TIME_MISSED,
+    ViolationType.COMMS_RELAY_INSUFFICIENT,
 })
-"""**时限类**违规：题目允许无法全部满足（本文已论证为资源约束下的物理不可行），
-因此不阻断产出，但必须写入报告并在论文中论证。"""
+"""**可如实上报的资源性缺口**：不阻断产出，但必须写入报告并在论文中论证。
+
+- 时限类（`FIRST_BATCH_DEADLINE_MISSED` / `EXPECTED_TIME_MISSED`）：题目允许无法全部满足。
+- ★ `COMMS_RELAY_INSUFFICIENT`（ADR-031）：题目只配置 **2 架**中继无人机，
+  而按时间轴复核需要保障的架次多于中继可提供的站岗能力 ⇒ 必然有架次在部分时段
+  无中继可用。这是**题目资源与需求的矛盾**（应如实报告并给出缺口），
+  不同于"排班写错了"（那由 `COMMS_UNSUPPORTED` 拦截）。
+
+> ⚠️ 这条区分很关键：把资源缺口误判为硬违规会让求解器**直接中止、什么都不产出**，
+> 结果是"因为无法满足就干脆不报告"，违反"不得把几何可达当作已保障上报"的红线。
+> 反之，把排班缺陷误判为软违规，会放过"中继晚到"这类真 bug —— 两者必须分开。"""
 
 HARD_VIOLATION_TYPES: frozenset[ViolationType] = frozenset(ViolationType) - SOFT_VIOLATION_TYPES
 """**物理 / 资源 / 通信类**违规：说明方案本身不可行，**不得进入论文与交付文件**。
@@ -640,6 +651,21 @@ def _check_comms(plan: TransportPlan, rep: VerifyReport) -> None:
       若其并集能覆盖中断区间，则视为已保障。
       这对应题目"运输机在任一时刻只能由 G01 或**一架**中继保障" ——
       同一时刻只需一架，但不同时刻可以由不同中继接力。
+
+    ★★ ADR-031：区分两种"没覆盖"，二者处置不同 ——
+
+    | 情形 | 判定 | 理由 |
+    |---|---|---|
+    | 该架次**没有可用的**中继空窗（无中继任务，或窗口是零长度"未建链就到点"） | `COMMS_RELAY_INSUFFICIENT`（软） | 中继站岗能力不足这一**资源缺口**，应如实报告并给缺口数字 |
+    | 有**正长度**的中继窗口，但没盖住中断区间 | `COMMS_UNSUPPORTED`（硬） | 排班/校验缺陷，必须修 |
+
+    历史教训：修复前 `_check_comms` 只检查"中断区间是否落在中继窗口内"，
+    而 `run_q3.py` 对**已安排中继的架次不填 `outage_windows`** ⇒ 本函数直接跳过，
+    "中继在运输机返航之后才到场"（实测服务窗口退化成零长度）被静默放过、报 0 违规。
+    现在 `run_q3.py` 一律如实上报真实中断窗口，本函数才真正生效。
+
+    ⚠️ 零长度窗口必须算作"没有保障"：否则中继晚到（甚至运输机返航后才到）
+    会因"存在一个中继条目"而被当作已覆盖，正是 ADR-031 的原始缺陷形态。
     """
     for s in plan.sorties:
         if not s.outage_windows:
@@ -649,9 +675,11 @@ def _check_comms(plan: TransportPlan, rep: VerifyReport) -> None:
             for r in plan.relays
             if s.sortie_id in r.sortie_ids
         )
+        # ★ 零长度的中继窗口（未建链即结束）**不算**提供了保障
+        effective = [(a, b) for a, b in windows if b > a + 1e-9]
         # 合并窗口
         merged: list[list[float]] = []
-        for a, b in windows:
+        for a, b in effective:
             if merged and a <= merged[-1][1] + 1e-9:
                 merged[-1][1] = max(merged[-1][1], b)
             else:
@@ -659,12 +687,24 @@ def _check_comms(plan: TransportPlan, rep: VerifyReport) -> None:
 
         for (t0, t1) in s.outage_windows:
             covered = any(a <= t0 + 1e-9 and b >= t1 - 1e-9 for a, b in merged)
-            if not covered:
+            if covered:
+                continue
+            if not effective:
+                # 没有可用的中继空窗 ⇒ 资源缺口（软违规，如实报告）
+                rep.violations.append(
+                    Violation(
+                        ViolationType.COMMS_RELAY_INSUFFICIENT, s.sortie_id,
+                        f"中断时段 [{t0:.1f}, {t1:.1f}] 无可用中继空窗"
+                        f"（该架次共 {len(windows)} 个中继条目，其中可用 0 个）",
+                    )
+                )
+            else:
+                # 有正长度中继窗口但没盖住 ⇒ 排班缺陷，硬违规
                 rep.violations.append(
                     Violation(
                         ViolationType.COMMS_UNSUPPORTED, s.sortie_id,
                         f"中断时段 [{t0:.1f}, {t1:.1f}] 未被中继完整覆盖"
-                        + (f"（已有窗口 {len(merged)} 个）" if merged else "（无中继）"),
+                        f"（已有窗口 {len(merged)} 个）",
                     )
                 )
 

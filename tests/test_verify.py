@@ -390,13 +390,19 @@ def test_rejects_battery_inventory_exceeded(uav_types, boxes) -> None:
 # ================================================================ 负样本：通信
 
 def test_rejects_unsupported_outage_window(uav_types, boxes) -> None:
-    """★ 负样本：存在通信中断时段却没有中继保障覆盖。"""
+    """★ 负样本：存在通信中断时段却没有中继保障覆盖。
+
+    ★ ADR-031：**完全没有中继条目**属于"资源缺口"，记为
+    `COMMS_RELAY_INSUFFICIENT`（软违规，如实报告）；若已有正长度中继窗口
+    却盖不住中断区间，则记为 `COMMS_UNSUPPORTED`（硬违规）。
+    见 `test_q3.py::test_verifier_flags_outage_before_relay_arrives`。
+    """
     s = _good_sortie(
         outage_windows=((100.0, 200.0),),
     )
     rep = verify_transport_plan(TransportPlan(sorties=(s,)), uav_types, boxes)
     assert not rep.ok
-    assert rep.has(ViolationType.COMMS_UNSUPPORTED)
+    assert rep.has(ViolationType.COMMS_RELAY_INSUFFICIENT)
 
 
 def test_accepts_outage_covered_by_relay(uav_types, boxes_s1) -> None:
@@ -438,10 +444,17 @@ class TestHardGate:
         assert not (HARD_VIOLATION_TYPES & SOFT_VIOLATION_TYPES)
 
     def test_only_timing_types_are_soft(self) -> None:
-        """软（放行）类必须**只有**时限两类 —— 别把物理类误放进白名单。"""
+        """软（放行）类必须**只有**时限两类 + 中继资源缺口一类。
+
+        ★ ADR-031 新增 `COMMS_RELAY_INSUFFICIENT`：题目只给 2 架中继无人机，
+        时间轴复核后必然有架次无中继可用 —— 这是**题目资源与需求的矛盾**，
+        应如实报告缺口，而不是让求解器中止产出（那等于"不够就不报告"）。
+        ⚠️ 但"有正长度中继窗口却没盖住"仍是硬违规 `COMMS_UNSUPPORTED`。
+        """
         assert SOFT_VIOLATION_TYPES == {
             ViolationType.FIRST_BATCH_DEADLINE_MISSED,
             ViolationType.EXPECTED_TIME_MISSED,
+            ViolationType.COMMS_RELAY_INSUFFICIENT,
         }
 
     @pytest.mark.parametrize("t", [

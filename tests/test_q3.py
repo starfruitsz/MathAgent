@@ -265,15 +265,18 @@ def test_relay_sortie_time_order(lc: LegCache) -> None:
     o01 = Node("O01", 109.230852, 23.008509, "center", ground_elev_m=127.7)
     h = HoverCandidate(109.2365, 23.0165, 100.0, 350.0, 250.0)
     spec = RelaySpec()
-    link_ready, svc_end, ret, e, soc, t_fly = evaluate_relay_sortie(
-        spec, h, FLAT, o01, lc, (0.0, 1000.0), 0.0, sample_step_m=50.0
+    ev = evaluate_relay_sortie(
+        spec, h, FLAT, o01, lc, (3600.0, 5000.0), 0.0,
+        sample_step_m=50.0, strict=True,
     )
-    assert link_ready <= svc_end <= ret
-    assert e > 0 and 0.0 <= soc <= 1.0
-    assert t_fly > 0
+    assert ev is not None
+    assert ev.link_ready_s <= ev.service_end_s <= ev.return_s
+    assert ev.energy_kwh > 0 and 0.0 <= ev.soc_end <= 1.0
+    assert ev.flight_time_s > 0
     # 建链完成 = 到达 + 建链时间
-    assert link_ready == pytest.approx(
-        0.0 + spec.prepare_time_s + t_fly / 2 + spec.link_setup_time_s, rel=0.05
+    assert ev.link_ready_s == pytest.approx(
+        0.0 + spec.prepare_time_s + ev.flight_time_s / 2 + spec.link_setup_time_s,
+        rel=0.05,
     )
 
 
@@ -285,9 +288,13 @@ def test_relay_energy_includes_hover_service(lc: LegCache) -> None:
     o01 = Node("O01", 109.230852, 23.008509, "center", ground_elev_m=127.7)
     h = HoverCandidate(109.2365, 23.0165, 100.0, 350.0, 250.0)
     spec = RelaySpec()
-    _, _, _, e1, _, _ = evaluate_relay_sortie(spec, h, FLAT, o01, lc, (0.0, 600.0), 0.0)
-    _, _, _, e2, _, _ = evaluate_relay_sortie(spec, h, FLAT, o01, lc, (0.0, 3600.0), 0.0)
-    assert e2 > e1
+    e1 = evaluate_relay_sortie(spec, h, FLAT, o01, lc, (3600.0, 4200.0), 0.0,
+                               strict=True)
+    e2 = evaluate_relay_sortie(spec, h, FLAT, o01, lc, (3600.0, 7200.0), 0.0,
+                               strict=True)
+    assert e1 is not None and e2 is not None
+    assert e1.full_coverage and e2.full_coverage
+    assert e2.energy_kwh > e1.energy_kwh
 
 
 def test_relay_spec_matches_attachment() -> None:
@@ -302,10 +309,230 @@ def test_relay_spec_matches_attachment() -> None:
     assert s.service_power_kw == pytest.approx(1.10)
 
 
+# ================================================================ 中继服务窗口（ADR-031）
+
+def test_relay_sortie_full_coverage_when_ready_in_time(lc: LegCache) -> None:
+    """★ 建链早于窗口起点 → 完整覆盖，`full_coverage=True` 且无缺口。"""
+    from src.geo.leg import Node
+    from src.q3_comms_relay.coverage import HoverCandidate
+
+    o01 = Node("O01", 109.230852, 23.008509, "center", ground_elev_m=127.7)
+    h = HoverCandidate(109.2365, 23.0165, 100.0, 350.0, 250.0)
+    spec = RelaySpec()
+    ev = evaluate_relay_sortie(spec, h, FLAT, o01, lc, (3600.0, 5000.0), 0.0,
+                               sample_step_m=50.0, strict=True)
+    assert ev is not None
+    assert ev.full_coverage
+    assert ev.gap_s == pytest.approx(0.0)
+    assert ev.link_ready_s <= 3600.0
+    assert ev.service_start_s == pytest.approx(3600.0)
+    assert ev.service_end_s == pytest.approx(5000.0)
+    # 服务时长 = 窗口长度（没有截短）
+    assert ev.service_end_s - ev.service_start_s == pytest.approx(1400.0)
+
+
+def test_relay_sortie_strict_fails_when_arriving_late(lc: LegCache) -> None:
+    """★★ ADR-031 核心负样本：中继无法在窗口起点前建链 → **必须显式失败**。
+
+    修复前：`svc_end = max(svc_start, window[1])` 会把服务区间**截短到零长**
+    （`svc_end == svc_start`）且不报错，于是"中继在运输机返航之后才到场"
+    被静默当成已保障。
+    """
+    from src.geo.leg import Node
+    from src.q3_comms_relay.coverage import HoverCandidate
+
+    o01 = Node("O01", 109.230852, 23.008509, "center", ground_elev_m=127.7)
+    h = HoverCandidate(109.2365, 23.0165, 100.0, 350.0, 250.0)
+    spec = RelaySpec()
+    # 窗口从 0 开始，而中继至少需要 准备(180) + 飞行 + 建链(30) 才能到站
+    assert evaluate_relay_sortie(spec, h, FLAT, o01, lc, (0.0, 1000.0), 0.0,
+                                 sample_step_m=50.0, strict=True) is None
+
+
+def test_relay_sortie_nonstrict_reports_truncation_explicitly(lc: LegCache) -> None:
+    """★ 非严格模式：允许截短，但必须**如实报告**覆盖不完整与缺口时长。"""
+    from src.geo.leg import Node
+    from src.q3_comms_relay.coverage import HoverCandidate
+
+    o01 = Node("O01", 109.230852, 23.008509, "center", ground_elev_m=127.7)
+    h = HoverCandidate(109.2365, 23.0165, 100.0, 350.0, 250.0)
+    spec = RelaySpec()
+    ev = evaluate_relay_sortie(spec, h, FLAT, o01, lc, (0.0, 1000.0), 0.0,
+                               sample_step_m=50.0, strict=False)
+    assert ev is not None
+    assert not ev.full_coverage
+    assert ev.gap_s > 0.0
+    assert ev.service_start_s > 0.0          # 晚到 ⇒ 服务从建链后开始
+    assert ev.service_start_s == pytest.approx(ev.link_ready_s)
+    # 缺口 = 窗口起点到建链完成之间未获保障的时长
+    assert ev.gap_s == pytest.approx(ev.service_start_s - 0.0)
+
+
+def test_relay_sortie_max_service_duration_reflects_energy(lc: LegCache) -> None:
+    """★ 续航上限：可用能量 ÷ 服务功率 —— 用于判定"窗口是否本就不可行"。"""
+    from src.geo.leg import Node
+    from src.q3_comms_relay.coverage import HoverCandidate
+
+    o01 = Node("O01", 109.230852, 23.008509, "center", ground_elev_m=127.7)
+    h = HoverCandidate(109.2365, 23.0165, 100.0, 350.0, 250.0)
+    spec = RelaySpec()
+    ev = evaluate_relay_sortie(spec, h, FLAT, o01, lc, (3600.0, 5000.0), 0.0,
+                               sample_step_m=50.0, strict=True)
+    assert ev is not None
+    assert ev.max_service_s == pytest.approx(
+        spec.energy_budget_kwh / spec.service_power_kw * 3600.0
+    )
+    # 2.56 kWh / 1.10 kW ≈ 8381 s ≈ 140 min
+    assert ev.max_service_s == pytest.approx(8381.0, rel=0.01)
+
+
 # ================================================================ 校验器：通信覆盖
 
+def test_verifier_flags_outage_before_relay_arrives() -> None:
+    """★★ ADR-031 负样本：中断发生在中继建链**之前** → 必须报违规。
+
+    这条用例锁死"中继晚到"必须被校验器抓到（修复前该情形会被静默放过）。
+    """
+    uav = UAVType(
+        code="B", name="B", empty_mass_kg=65.0, max_payload_kg=30.0, volume_m3=0.073,
+        cruise_speed_ms=15.0, range_empty_m=28000.0, range_full_m=16000.0,
+        energy_kwh=4.0, reserve_ratio=0.20,
+        climb_speed_ms=3.0, descent_speed_ms=2.5, climb_efficiency=0.72,
+        descent_efficiency=0.0,
+    )
+    boxes = {"b1": BoxBatch("b1", "S1", 5.0, 0.01)}
+    s = Sortie(
+        sortie_id="T01", uav_id="U01", type_code="B", battery_id="B-B01",
+        start_s=0.0, service_sequence=("S1",), box_ids=("b1",),
+        legs=(Leg(4000.0, 120.0, 120.0), Leg(4000.0, 120.0, 120.0)),
+        boxes_per_stop={"S1": 1},
+        outage_windows=((100.0, 200.0),),          # 100~200 s 就断了
+    )
+    relays = (RelayAssignment("R01", 900.0, 2000.0, ("T01",)),)  # 900 s 才建链
+    rep = verify_transport_plan(
+        TransportPlan(sorties=(s,), relays=relays), {"B": uav}, boxes
+    )
+    assert rep.has(ViolationType.COMMS_UNSUPPORTED), rep.summary()
+
+
+def test_verifier_flags_outage_after_relay_leaves() -> None:
+    """★ 中继提前离站（服务结束早于中断结束）→ 必须报违规。"""
+    uav = UAVType(
+        code="B", name="B", empty_mass_kg=65.0, max_payload_kg=30.0, volume_m3=0.073,
+        cruise_speed_ms=15.0, range_empty_m=28000.0, range_full_m=16000.0,
+        energy_kwh=4.0, reserve_ratio=0.20,
+        climb_speed_ms=3.0, descent_speed_ms=2.5, climb_efficiency=0.72,
+        descent_efficiency=0.0,
+    )
+    boxes = {"b1": BoxBatch("b1", "S1", 5.0, 0.01)}
+    s = Sortie(
+        sortie_id="T01", uav_id="U01", type_code="B", battery_id="B-B01",
+        start_s=0.0, service_sequence=("S1",), box_ids=("b1",),
+        legs=(Leg(4000.0, 120.0, 120.0), Leg(4000.0, 120.0, 120.0)),
+        boxes_per_stop={"S1": 1},
+        outage_windows=((1000.0, 3000.0),),
+    )
+    relays = (RelayAssignment("R01", 900.0, 2000.0, ("T01",)),)  # 2000 s 就走
+    rep = verify_transport_plan(
+        TransportPlan(sorties=(s,), relays=relays), {"B": uav}, boxes
+    )
+    assert rep.has(ViolationType.COMMS_UNSUPPORTED), rep.summary()
+
+
+def test_verifier_flags_relay_deficit_as_soft_violation() -> None:
+    """★★ 负样本：中断**完全没有**中继任务 → 记为资源缺口（软违规）。
+
+    区分两种"没覆盖"：
+      - 没有任何中继任务 ⇒ `COMMS_RELAY_INSUFFICIENT`（软，如实报告资源缺口）
+      - 有中继但窗口没盖住 ⇒ `COMMS_UNSUPPORTED`（硬，排班缺陷）
+
+    若把前者也当硬违规，求解器会直接中止、什么都不产出 ——
+    等于"因为资源不够就干脆不报告"，反而违反 ADR-031 的红线。
+    """
+    uav = UAVType(
+        code="B", name="B", empty_mass_kg=65.0, max_payload_kg=30.0, volume_m3=0.073,
+        cruise_speed_ms=15.0, range_empty_m=28000.0, range_full_m=16000.0,
+        energy_kwh=4.0, reserve_ratio=0.20,
+        climb_speed_ms=3.0, descent_speed_ms=2.5, climb_efficiency=0.72,
+        descent_efficiency=0.0,
+    )
+    boxes = {"b1": BoxBatch("b1", "S1", 5.0, 0.01)}
+    s = Sortie(
+        sortie_id="T01", uav_id="U01", type_code="B", battery_id="B-B01",
+        start_s=0.0, service_sequence=("S1",), box_ids=("b1",),
+        legs=(Leg(4000.0, 120.0, 120.0), Leg(4000.0, 120.0, 120.0)),
+        boxes_per_stop={"S1": 1},
+        outage_windows=((1000.0, 2000.0),),
+    )
+    rep = verify_transport_plan(TransportPlan(sorties=(s,)), {"B": uav}, boxes)
+    assert rep.has(ViolationType.COMMS_RELAY_INSUFFICIENT), rep.summary()
+    assert not rep.has(ViolationType.COMMS_UNSUPPORTED), rep.summary()
+    # 软违规不阻断产出
+    rep.assert_deliverable()
+
+
+def test_verifier_rejects_zero_length_relay_window() -> None:
+    """★ 零长度的中继窗口（未建链即返回）不算提供保障 → 仍应报缺口。"""
+    uav = UAVType(
+        code="B", name="B", empty_mass_kg=65.0, max_payload_kg=30.0, volume_m3=0.073,
+        cruise_speed_ms=15.0, range_empty_m=28000.0, range_full_m=16000.0,
+        energy_kwh=4.0, reserve_ratio=0.20,
+        climb_speed_ms=3.0, descent_speed_ms=2.5, climb_efficiency=0.72,
+        descent_efficiency=0.0,
+    )
+    boxes = {"b1": BoxBatch("b1", "S1", 5.0, 0.01)}
+    s = Sortie(
+        sortie_id="T01", uav_id="U01", type_code="B", battery_id="B-B01",
+        start_s=0.0, service_sequence=("S1",), box_ids=("b1",),
+        legs=(Leg(4000.0, 120.0, 120.0), Leg(4000.0, 120.0, 120.0)),
+        boxes_per_stop={"S1": 1},
+        outage_windows=((1000.0, 2000.0),),
+    )
+    # 中继建链于 3409.8、服务结束也是 3409.8 —— 正是修复前那类"静默截短"
+    relays = (RelayAssignment("R01", 3409.8, 3409.8, ("T01",)),)
+    rep = verify_transport_plan(
+        TransportPlan(sorties=(s,), relays=relays), {"B": uav}, boxes
+    )
+    assert rep.has(ViolationType.COMMS_RELAY_INSUFFICIENT), rep.summary()
+
+
+def test_verifier_accepts_one_relay_serving_two_sorties() -> None:
+    """★★ A 口径正样本：**一架中继同时保障两架运输机**（悬停点可共享）。
+
+    题目附录 3 只限制"每架运输无人机在任一时刻只能由 G01 或**一架**中继保障"，
+    未限制一架中继的服务对象数量，故同一中继窗口可写入多个架次。
+    """
+    uav = UAVType(
+        code="B", name="B", empty_mass_kg=65.0, max_payload_kg=30.0, volume_m3=0.073,
+        cruise_speed_ms=15.0, range_empty_m=28000.0, range_full_m=16000.0,
+        energy_kwh=4.0, reserve_ratio=0.20,
+        climb_speed_ms=3.0, descent_speed_ms=2.5, climb_efficiency=0.72,
+        descent_efficiency=0.0,
+    )
+    boxes = {"b1": BoxBatch("b1", "S1", 5.0, 0.01), "b2": BoxBatch("b2", "S1", 5.0, 0.01)}
+    def _sortie(sid: str, box: str, win: tuple[float, float]) -> Sortie:
+        return Sortie(
+            sortie_id=sid, uav_id=f"U{sid[-1]}", type_code="B",
+            battery_id="B-B01", start_s=0.0, service_sequence=("S1",),
+            box_ids=(box,),
+            legs=(Leg(4000.0, 120.0, 120.0), Leg(4000.0, 120.0, 120.0)),
+            boxes_per_stop={"S1": 1}, outage_windows=(win,),
+        )
+    s1 = _sortie("T01", "b1", (1000.0, 2000.0))
+    s2 = _sortie("T02", "b2", (1500.0, 2500.0))
+    relays = (RelayAssignment("R01", 900.0, 2600.0, ("T01", "T02")),)
+    rep = verify_transport_plan(
+        TransportPlan(sorties=(s1, s2), relays=relays), {"B": uav}, boxes
+    )
+    assert not rep.has(ViolationType.COMMS_UNSUPPORTED), rep.summary()
+
+
 def test_verifier_flags_uncovered_outage() -> None:
-    """★ 负样本：存在中断时段且无中继 → 必须报违规。"""
+    """★ 负样本：存在中断时段且**完全没有中继** → 记为资源缺口（软违规）。
+
+    ADR-031：无中继可用 ⇒ `COMMS_RELAY_INSUFFICIENT`；
+    有正长度中继窗口但未盖住 ⇒ `COMMS_UNSUPPORTED`（见下一条用例）。
+    """
     uav = UAVType(
         code="B", name="B", empty_mass_kg=65.0, max_payload_kg=30.0, volume_m3=0.073,
         cruise_speed_ms=15.0, range_empty_m=28000.0, range_full_m=16000.0,
@@ -322,7 +549,7 @@ def test_verifier_flags_uncovered_outage() -> None:
         outage_windows=((100.0, 200.0),),
     )
     rep = verify_transport_plan(TransportPlan(sorties=(s,)), {"B": uav}, boxes)
-    assert rep.has(ViolationType.COMMS_UNSUPPORTED)
+    assert rep.has(ViolationType.COMMS_RELAY_INSUFFICIENT)
 
 
 def test_verifier_accepts_relay_handover() -> None:

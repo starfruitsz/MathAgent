@@ -51,3 +51,7 @@ paper/~$*
 Thumbs.db
 # pandoc 中间产物（LaTeX → Word 转换的临时目录）
 otheragent/_pandoc/
+# PDF→Word 转换的切片中间产物
+paper/_reflow_chunks/
+outputs/diag/reflow/
+outputs/diag/_probe_small.pdf

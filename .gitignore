@@ -56,14 +56,12 @@ paper/_reflow_chunks/
 outputs/diag/reflow/
 outputs/diag/_probe_small.pdf
 
-# 论文产物：仅保留 PDF→Word(pdf2docx) 一份入库，其余（Python 管线论文与
-# LaTeX 公式版、Word 重排版）不入库 —— 它们可由管线随时重新生成：
-#   python -m src.report.build_paper         # 生成 _论文.docx
-#   python scripts/check_paper.py --pdf      # 导出 _论文.pdf
-#   pwsh -File scripts/build_word_from_latex.ps1                 # LaTeX 公式版
-#   python scripts/diag/pdf_to_docx_chunked.py                   # Word 重排版
+# 论文产物：入库 PDF→Word(pdf2docx) 与 LaTeX 公式版两份；
+# 以下三类不入库 —— 它们可由管线随时重新生成：
+#   python -m src.report.build_paper            # → _论文.docx（Python 管线）
+#   python scripts/check_paper.py --pdf         # → _论文.pdf
+#   python scripts/diag/pdf_to_docx_chunked.py  # → _PDF转Word.docx（Word PDF 重排）
+#   pwsh -File scripts/build_word_from_latex.ps1  # → _LaTeX公式版.docx（已入库，保留此命令备查）
 paper/山区洪涝灾害下无人机运输与通信协同优化_论文.docx
 paper/山区洪涝灾害下无人机运输与通信协同优化_论文.pdf
-paper/山区洪涝灾害下无人机运输与通信协同优化_论文_LaTeX公式版.docx
-paper/山区洪涝灾害下无人机运输与通信协同优化_论文_LaTeX公式版.pdf
 paper/山区洪涝灾害下无人机运输与通信协同优化_论文_PDF转Word.docx

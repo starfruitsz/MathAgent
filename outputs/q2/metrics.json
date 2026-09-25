@@ -1,7 +1,7 @@
 {
   "question": "q2",
-  "git_commit": "24387b8786fef64d0d533a97a2c979ccd0a2cc61",
-  "timestamp": "2026-09-26T02:08:32.288178+08:00",
+  "git_commit": "0c63f7877edc1fff4034d64f32cd390aba1064bd",
+  "timestamp": "2026-09-26T02:23:57.255643+08:00",
   "seed": 42,
   "data_sources": [
     "物资需求与配送时限.xlsx",
@@ -37,7 +37,7 @@
       "conditional model: planned cruise altitude=max(route DEM maximum+50 m, hover altitude); strict equality DEM maximum+50 m not certified",
       "0.25 s sampled; no mathematical continuous-time certificate"
     ],
-    "runtime_sec": 146.12,
+    "runtime_sec": 162.23,
     "n_first_batch": 30,
     "n_first_batch_on_time": 30,
     "n_expected_on_time": 80,

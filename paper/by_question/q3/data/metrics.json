@@ -1,7 +1,7 @@
 {
   "question": "q3",
-  "git_commit": "24387b8786fef64d0d533a97a2c979ccd0a2cc61",
-  "timestamp": "2026-09-26T02:08:30.728574+08:00",
+  "git_commit": "0c63f7877edc1fff4034d64f32cd390aba1064bd",
+  "timestamp": "2026-09-26T02:23:55.684495+08:00",
   "seed": 42,
   "data_sources": [
     "D题_方案数据.json"
@@ -25,10 +25,10 @@
     "los_step_m": 60.0,
     "radio_samples": 99889,
     "n_sorties_need_relay": 18,
-    "n_sorties_covered": 19,
-    "coverage_rate": 0.8261,
-    "outage_samples": 928,
-    "mean_direct_outage_fraction": 0.011037,
+    "n_sorties_covered": 20,
+    "coverage_rate": 0.8696,
+    "outage_samples": 790,
+    "mean_direct_outage_fraction": 0.009424,
     "min_link_margin_direct_db": -6.205,
     "min_link_margin_relay_db": 0.436,
     "independent_verification": {

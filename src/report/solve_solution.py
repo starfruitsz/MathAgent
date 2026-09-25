@@ -274,6 +274,15 @@ def main() -> int:
                                            sample_dt_s=COMM_SAMPLE_DT_S,
                                            los_step_m=LOS_STEP_M))
         save_table(sdf, ddir / "tables" / "q3_通信状态序列.csv")
+        # ★ 一致性闸门：状态序列（0.25 s）与汇总诊断必须同源同数。
+        #   踩过的坑：回传裕量的进程级缓存让同一进程内**第二个中继方案**
+        #   复用了第一个方案的几何，实测把 3 中继的中断样本由 790 变成 928，
+        #   而汇总诊断（先算）仍是 790 —— 同一问的"明细表"与"汇总数"互相矛盾。
+        n_state_out = int((sdf["状态"] == "中断").sum())
+        if n_state_out != diag.total_outage:
+            raise AssertionError(
+                f"Q3({relays} 中继) 诊断不一致：汇总 {diag.total_outage} 个中断样本，"
+                f"状态序列 {n_state_out} 个 —— 说明两处用了不同的物理口径或缓存污染")
         if relays == 3:
             save_table(mdf, REPO_ROOT / "paper" / "tables" / "t_q3_margin_series.csv")
             save_table(sdf, REPO_ROOT / "paper" / "tables" / "t_q3_state_series.csv")

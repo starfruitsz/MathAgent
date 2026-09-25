@@ -161,6 +161,7 @@ def diagnose(
         时间采样步长（s）。最终方案取 0.25 s。
     """
     p = params or DEFAULT_PARAMS
+    _clear_backhaul_cache()
     out: list[SortieTimeline] = []
 
     for s in plan.transport:
@@ -230,6 +231,19 @@ def diagnose(
 
 
 _BACKHAUL_CACHE: dict[tuple, float] = {}
+
+
+def _clear_backhaul_cache() -> None:
+    """清空回传裕量缓存。
+
+    ★ 踩过的坑：缓存的 key 含 `gateway_pos` 等几何量，看起来"同一中继的几何固定"，
+      但**不同中继方案（3 中继 / 4 中继）在同一进程里也会命中同名的
+      `relay_sortie_id`**（R01-1 两边都有），于是 4 中继方案算出的回传裕量
+      会被 3 中继方案复用 —— 实测使 3 中继的中断样本由 790 变成 928。
+      因此每次调用入口都必须清空，缓存只在**单次调用内部**有效。
+    """
+    _BACKHAUL_CACHE.clear()
+
 
 
 def _backhaul_margin_cached(relay, gateway_pos, params, provider, los_step_m,
@@ -336,6 +350,7 @@ def to_min_margin_series(plan, uav_types, leg_cache, nodes_xy, provider,
         其余                → 记录直连裕量（负值）并标为中断
     """
     p = params or DEFAULT_PARAMS
+    _clear_backhaul_cache()
     rows: list[dict] = []
     for s in plan.transport:
         uav = uav_types[s.type_code]

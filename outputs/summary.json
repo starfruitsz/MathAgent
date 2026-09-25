@@ -29,7 +29,7 @@
       "S014": 1,
       "S015": 1
     },
-    "runtime_sec": 0.65
+    "runtime_sec": 0.59
   },
   "q2": {
     "n_sorties": 23,
@@ -59,7 +59,7 @@
       "conditional model: planned cruise altitude=max(route DEM maximum+50 m, hover altitude); strict equality DEM maximum+50 m not certified",
       "0.25 s sampled; no mathematical continuous-time certificate"
     ],
-    "runtime_sec": 146.12,
+    "runtime_sec": 162.23,
     "n_first_batch": 30,
     "n_first_batch_on_time": 30,
     "n_expected_on_time": 80,
@@ -85,10 +85,10 @@
     "los_step_m": 60.0,
     "radio_samples": 99889,
     "n_sorties_need_relay": 18,
-    "n_sorties_covered": 19,
-    "coverage_rate": 0.8261,
-    "outage_samples": 928,
-    "mean_direct_outage_fraction": 0.011037,
+    "n_sorties_covered": 20,
+    "coverage_rate": 0.8696,
+    "outage_samples": 790,
+    "mean_direct_outage_fraction": 0.009424,
     "min_link_margin_direct_db": -6.205,
     "min_link_margin_relay_db": 0.436,
     "independent_verification": {

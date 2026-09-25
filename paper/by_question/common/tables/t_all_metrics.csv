@@ -7,7 +7,7 @@
 问题一,chosen_serial_total_time_s,32676.333
 问题一,lower_bound_total_sorties,18
 问题一,at_lower_bound,True
-问题一,runtime_sec,0.65
+问题一,runtime_sec,0.59
 问题二,n_sorties,23
 问题二,n_boxes,80
 问题二,total_energy_kwh,66.789867
@@ -17,7 +17,7 @@
 问题二,min_return_soc,0.230867
 问题二,n_verifier_violations,0
 问题二,feasible_by_verifier,True
-问题二,runtime_sec,146.12
+问题二,runtime_sec,162.23
 问题二,n_first_batch,30
 问题二,n_first_batch_on_time,30
 问题二,n_expected_on_time,80
@@ -36,10 +36,10 @@
 问题三,los_step_m,60.0
 问题三,radio_samples,99889
 问题三,n_sorties_need_relay,18
-问题三,n_sorties_covered,19
-问题三,coverage_rate,0.8261
-问题三,outage_samples,928
-问题三,mean_direct_outage_fraction,0.011037
+问题三,n_sorties_covered,20
+问题三,coverage_rate,0.8696
+问题三,outage_samples,790
+问题三,mean_direct_outage_fraction,0.009424
 问题三,min_link_margin_direct_db,-6.205
 问题三,min_link_margin_relay_db,0.436
 问题四,n_services,15

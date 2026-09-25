@@ -1706,7 +1706,7 @@ def build_body(doc: Document, D: dict) -> None:
     P(doc, f"（1）直连诊断。对问题二的 {int(m3.get('n_transport_sorties', 23))} 个架次"
            f"沿完整轨迹按 **{m3.get('sample_dt_s', 0.25):g} s 步长**逐时刻采样"
            f"（地形遮挡沿线判定步长 {m3.get('los_step_m', 60):g} m），"
-           f"合计 **{int(m3.get('radio_samples', 0)):,} 个采样点**，判定直连 / 中继 / 中断三态。"
+           f"合计 **{int(m3.get('radio_samples', 0))} 个采样点**，判定直连 / 中继 / 中断三态。"
            f"结果显示 **{int(m3.get('n_sorties_need_relay', 0))} 个架次存在直连中断**，"
            f"按架次平均的中断样本占比 {m3.get('mean_direct_outage_fraction', 0):.2%}。"
            f"这直接证明**中继无人机是必需项而非可选项**——"
@@ -1789,7 +1789,7 @@ def build_body(doc: Document, D: dict) -> None:
                 f"{m3.get('radio_samples', 0):,} 个采样点"
                 f"（步长 {m3.get('sample_dt_s', 0.25):g} s）的**有限采样**，"
                 f"不构成连续时间上的数学证明；本文另做了采样步长重采样对照"
-                f"（图 24a，0.5~30 s 中断占比稳定在 1.05%~1.12%），"
+                f"（图 24a，0.5~30 s 中断占比稳定在 0.91%~0.98%），"
                 f"确认结论对采样步长稳健。", False)], indent=False)
 
 
@@ -1956,7 +1956,7 @@ def build_body(doc: Document, D: dict) -> None:
         f"{int(m3.get('radio_samples', 0)):,} 个采样点），"
         "并做了**真实重采样对照**（图 24a）：对 0.25 s 的基准状态序列"
         "按点抽稀到 0.5 / 1 / 2 / 5 / 10 / 20 / 30 s 后重新统计中断占比，"
-        "结果在 **1.05%~1.12%** 之间小幅波动、**无单调趋势**"
+        "结果在 **0.91%~0.98%** 之间小幅波动、**无单调趋势**"
         "（对照表见 `paper/tables/t_q3_sample_dt_sweep.csv`）。"
         "这说明本方案的**长时中断（T10 达 615 个 0.25 s 样本 ≈ 154 s 连续中断）**"
         "在粗步长下依然会被判到，结论对采样步长稳健；"

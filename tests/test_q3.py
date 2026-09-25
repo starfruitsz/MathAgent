@@ -386,6 +386,64 @@ def test_relay_sortie_max_service_duration_reflects_energy(lc: LegCache) -> None
     assert ev.max_service_s == pytest.approx(8381.0, rel=0.01)
 
 
+def test_relay_sortie_interval_set_avoids_envelope_padding(lc: LegCache) -> None:
+    """★★ 中断区间集合 ≠ 包络：中间"直连可用"的时段不该要求中继驻留。
+
+    同一架次断两次（1000~1100 与 2000~2100），中间 1100~2000 直连可用。
+    - 区间集合口径：服务时长 = 200 s
+    - 包络口径 [1000, 2100]：服务时长 = 1100 s（虚高 5.5 倍）
+    实测全题 20 个架次的包络比真实中断虚高 **39%** 的站岗时长（277 vs 168 min），
+    用包络会显著浪费续航并压低可保障的架次数。
+    """
+    from src.geo.leg import Node
+    from src.q3_comms_relay.coverage import HoverCandidate
+
+    o01 = Node("O01", 109.230852, 23.008509, "center", ground_elev_m=127.7)
+    h = HoverCandidate(109.2365, 23.0165, 100.0, 350.0, 250.0)
+    spec = RelaySpec()
+
+    ivs = ((1000.0, 1100.0), (2000.0, 2100.0))
+    ev = evaluate_relay_sortie(spec, h, FLAT, o01, lc, ivs, 0.0,
+                               sample_step_m=50.0, strict=True)
+    assert ev is not None and ev.full_coverage
+    assert ev.service_windows == ivs
+    assert ev.service_end_s == pytest.approx(2100.0)
+    assert ev.gap_s == pytest.approx(0.0)
+    # 服务能耗只按两段真实中断计（各 100 s）
+    e_ivs = ev.energy_kwh
+
+    env = evaluate_relay_sortie(spec, h, FLAT, o01, lc, (1000.0, 2100.0), 0.0,
+                                sample_step_m=50.0, strict=True)
+    assert env is not None
+    assert env.service_end_s == pytest.approx(2100.0)
+    # 包络口径把中间 900 s 也算成服务，能耗必然明显更大
+    assert env.energy_kwh > e_ivs
+    expected_pad = spec.service_power_kw * 900.0 / 3600.0
+    assert env.energy_kwh - e_ivs == pytest.approx(expected_pad, rel=1e-6)
+
+
+def test_relay_sortie_strict_fails_when_any_interval_is_late(lc: LegCache) -> None:
+    """★ 多区间时，**任一段**来不及建链即判不可行（连续通信不能有缺口）。"""
+    from src.geo.leg import Node
+    from src.q3_comms_relay.coverage import HoverCandidate
+
+    o01 = Node("O01", 109.230852, 23.008509, "center", ground_elev_m=127.7)
+    h = HoverCandidate(109.2365, 23.0165, 100.0, 350.0, 250.0)
+    spec = RelaySpec()
+    # 第二段从 100 s 开始，而中继至少需要 准备+飞行+建链 才到站
+    assert evaluate_relay_sortie(spec, h, FLAT, o01, lc,
+                                 ((3600.0, 3700.0), (100.0, 200.0)), 0.0,
+                                 sample_step_m=50.0, strict=True) is None
+    # 非严格模式：如实报告有几段没赶上
+    ev = evaluate_relay_sortie(spec, h, FLAT, o01, lc,
+                               ((3600.0, 3700.0), (100.0, 200.0)), 0.0,
+                               sample_step_m=50.0, strict=False)
+    assert ev is not None
+    assert not ev.full_coverage
+    assert ev.n_gaps == 1
+    assert ev.gap_s > 0.0
+
+
 # ================================================================ 校验器：通信覆盖
 
 def test_verifier_flags_outage_before_relay_arrives() -> None:

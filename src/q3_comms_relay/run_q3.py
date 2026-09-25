@@ -68,6 +68,22 @@ DEM = (
 )
 
 
+def _outage_intervals(targets, sample_dt_s: float) -> tuple[tuple[float, float], ...]:
+    """把中断样本合并成**互不相交的中断区间**（相邻样本间隔 ≤1.5×步长视为连续）。
+
+    ★ 这是保障需求的正确口径：一个架次可能断好几次，中间夹着直连可用的时段，
+    那些时段**不需要**中继。用包络 `(首, 末)` 会多算出约 39% 的站岗时长。
+    """
+    ts = sorted(x.t_s for x in targets)
+    ivs: list[list[float]] = []
+    for t in ts:
+        if ivs and t - ivs[-1][1] <= sample_dt_s * 1.5:
+            ivs[-1][1] = t
+        else:
+            ivs.append([t, t])
+    return tuple((float(a), float(b)) for a, b in ivs)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="D 题问题三求解器")
     ap.add_argument("--hover-step", type=float, default=400.0,
@@ -173,11 +189,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         if not targets:
             continue
-        # ★★ ADR-031 修复点：需要中继驻留的窗口是**中断区间的包络**
-        #    （不是整条轨迹！）。旧实现用 win = (samples[0].t_s, samples[-1].t_s)
-        #    把"全程服务"当需求，既高估了能耗，也掩盖了"中继到底有没有在
-        #    中断发生的那一刻在站"这个真问题。
-        need_win = (min(x.t_s for x in targets), max(x.t_s for x in targets))
+        # ★★ ADR-031 修复点（之二）：保障需求是**真实中断区间集合**，
+        #    不是整条轨迹、也不是"首末中断样本的包络"。
+        #    包络会把中间"其实直连可用"的时段也算成需要中继驻留，
+        #    实测虚高 39% 的站岗时长（277 min vs 168 min），
+        #    既浪费续航又压低可保障的架次数。
+        need_ivs = _outage_intervals(targets, args.sample_dt)
+        need_env = (need_ivs[0][0], need_ivs[-1][1])
+        need_s = sum(b - a for a, b in need_ivs)
 
         # 本阶段（5）只判"几何上能不能被单个悬停点覆盖"，
         # 真正的挑点与排班放到第 6 节统一做（那里才知道窗口与资源）。
@@ -223,15 +242,18 @@ def main(argv: list[str] | None = None) -> int:
                 "悬停纬度": (round(segs[0]["hover"].lat, 6) if segs else None),
                 "悬停海拔m": (round(segs[0]["hover"].alt_m, 1) if segs else None),
                 "离地m": (round(segs[0]["hover"].agl_m, 1) if segs else None),
-                "服务窗口起": round(need_win[0], 1),
-                "服务窗口止": round(need_win[1], 1),
+                "服务窗口起": round(need_env[0], 1),
+                "服务窗口止": round(need_env[1], 1),
+                "中断区间数": len(need_ivs),
+                "需保障时长s": round(need_s, 1),
                 "说明": (f"需 {len(segs)} 架中继分段覆盖"
                         + (f"（仍余 {frac:.0%} 未覆盖）" if remaining_pts else "")),
             })
             for k, sg in enumerate(segs, start=1):
                 relay_plans.append({
                     "sortie": f"{sid}#{k}", "hover": sg["hover"],
-                    "window": sg["window"], "transport": s, "covers_id": sid,
+                    "window": sg["window"], "windows": (sg["window"],),
+                    "transport": s, "covers_id": sid,
                 })
             continue
         plan_rows.append({
@@ -241,11 +263,14 @@ def main(argv: list[str] | None = None) -> int:
             "悬停纬度": round(covering[0].lat, 6),
             "悬停海拔m": round(covering[0].alt_m, 1),
             "离地m": round(covering[0].agl_m, 1),
-            "服务窗口起": round(need_win[0], 1), "服务窗口止": round(need_win[1], 1),
+            "服务窗口起": round(need_env[0], 1), "服务窗口止": round(need_env[1], 1),
+            "中断区间数": len(need_ivs),
+            "需保障时长s": round(need_s, 1),
             "说明": "单点可覆盖全部中断样本",
         })
         relay_plans.append({"sortie": sid, "hover": covering[0],
-                            "window": need_win, "transport": s, "covers_id": sid})
+                            "window": need_env, "windows": need_ivs,
+                            "transport": s, "covers_id": sid})
 
     plan_df = pd.DataFrame(plan_rows)
     save_table(plan_df, out / "tables" / "q3_中继选址.csv")
@@ -266,12 +291,11 @@ def main(argv: list[str] | None = None) -> int:
     requests = []
     for rp in relay_plans:
         sid = rp["covers_id"]
-        s = rp["transport"]
         samples = traj[sid]
         targets = outage_samples(
             samples, DEFAULT_PARAMS, provider, gateway_pos, los_step_m=args.los_step
         )
-        win_r = rp["window"]
+        win_ivs = rp["windows"]
         # 几何上能覆盖全部中断样本的点（分段覆盖时各段窗口不同）
         covering = [
             h for h in cands
@@ -283,15 +307,17 @@ def main(argv: list[str] | None = None) -> int:
         scored = []
         for h in covering:
             t_fly = _flight_time(spec, h, provider, o01, args.los_step)
-            ev = evaluate_relay_sortie(spec, h, provider, o01, leg_cache, win_r,
-                                       max(0.0, win_r[0] - spec.prepare_time_s - t_fly
-                                           - spec.link_setup_time_s),
-                                       sample_step_m=args.los_step)
+            ev = evaluate_relay_sortie(
+                spec, h, provider, o01, leg_cache, win_ivs,
+                max(0.0, win_ivs[0][0] - spec.prepare_time_s - t_fly
+                    - spec.link_setup_time_s),
+                sample_step_m=args.los_step,
+            )
             if ev is not None:
                 scored.append((ev.energy_kwh, h))
         scored.sort(key=lambda x: x[0])
         requests.append(RelayRequest(
-            sortie_id=sid, window=win_r,
+            sortie_id=sid, windows=win_ivs,
             candidates=tuple(h for _, h in scored) or (rp["hover"],),
         ))
 
@@ -425,18 +451,7 @@ def main(argv: list[str] | None = None) -> int:
             traj[_sid], DEFAULT_PARAMS, provider, gateway_pos,
             los_step_m=args.los_step,
         )
-        if not _tgt:
-            outage_by_sortie[_sid] = ()
-            continue
-        # 连续的中断样本合并为若干区间
-        _ts = sorted(x.t_s for x in _tgt)
-        _ivs: list[list[float]] = []
-        for _t in _ts:
-            if _ivs and _t - _ivs[-1][1] <= args.sample_dt * 1.5:
-                _ivs[-1][1] = _t
-            else:
-                _ivs.append([_t, _t])
-        outage_by_sortie[_sid] = tuple((a, b) for a, b in _ivs)
+        outage_by_sortie[_sid] = _outage_intervals(_tgt, args.sample_dt) if _tgt else ()
 
     for s in q2.sorties:
         nodes = [CENTER_ID, *s.stops, CENTER_ID]

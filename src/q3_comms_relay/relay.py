@@ -154,13 +154,29 @@ class RelayEvaluation:
     flight_time_s: float
     """悬停点往返飞行时间。"""
     window: tuple[float, float]
-    """被要求保障的服务窗口。"""
+    """被要求保障的服务窗口（全部区间的包络；单区间时即该区间本身）。"""
     full_coverage: bool
-    """★ 中继是否在窗口起点**之前**已建链完毕（即整窗被覆盖）。"""
+    """★ 中继是否在**每個**区间的起点之前已建链完毕（即整窗被覆盖）。"""
     gap_s: float
-    """未获保障的时长：max(0, 建链完成 − 窗口起点)。0 表示覆盖完整。"""
+    """未获保障的时长合计：Σ max(0, 建链完成 − 各区间起点)。0 表示覆盖完整。"""
     max_service_s: float
     """★ 续航上限（可用能量 ÷ 服务功率，不含往返飞行），用于判定窗口本身是否可行。"""
+    n_gaps: int = 0
+    """未能按时到站的中断区间个数。"""
+    service_windows: tuple[tuple[float, float], ...] = ()
+    """实际被保障的区间集合（`strict=False` 时可能少于要求）。"""
+
+
+def _merge_intervals(windows: Sequence[tuple[float, float]]
+                     ) -> tuple[tuple[float, float], ...]:
+    """把可能重叠/相接的区间合并成互不相交的升序区间。"""
+    out: list[list[float]] = []
+    for a, b in sorted(windows):
+        if out and a <= out[-1][1] + 1e-9:
+            out[-1][1] = max(out[-1][1], b)
+        else:
+            out.append([a, b])
+    return tuple((a, b) for a, b in out)
 
 
 def evaluate_relay_sortie(
@@ -169,24 +185,47 @@ def evaluate_relay_sortie(
     provider: ElevationProvider,
     o01: Node,
     leg_cache: LegCache,
-    service_window: tuple[float, float],
-    start_s: float,
+    service_window: tuple[float, float]
+    | Sequence[tuple[float, float]] | None = None,
+    start_s: float = 0.0,
     sample_step_m: float = 30.0,
     strict: bool = False,
+    *,
+    service_windows: Sequence[tuple[float, float]] | None = None,
 ) -> RelayEvaluation | None:
     """评估中继架次。
 
+    `service_window` 可以是**单个区间** `(a, b)`，也可以是**区间集合**
+    `[(a1,b1), (a2,b2), ...]`。★★ 区间集合是正确口径：一个架次的中断可能分成
+    好几段，中间夹着"直连本身可用"的时段 —— 那里**不需要**中继。
+    若用包络 `(首段起点, 末段终点)` 当需求，中继会被迫多悬停 39%（实测），
+    既浪费续航又压低可保障的架次数。见 `service_windows` 关键字参数（等价写法）。
+
     返回 `RelayEvaluation`（含 `full_coverage` / `gap_s`）。
 
-    `strict=True` 时，若中继**无法在窗口起点前完成建链**，返回 `None`
+    `strict=True` 时，若中继**无法在任一区间起点前完成建链**，返回 `None`
     表示该架次不可行（不再静默截短服务区间）—— 这是排班必须遵守的硬约束。
 
     时间：
         start → 准备 → 爬升 → 巡航 → 下降 （到达悬停点）
-              → 建链(link_setup) → 服务 window → 返航
-    能耗 = 去程(爬升附加 + 水平巡航) + 悬停服务 + 回程(水平巡航 + 爬升附加)
+              → 建链(link_setup) → 服务各区间 → 返航
+    能耗 = 去程(爬升附加 + 水平巡航) + 悬停服务(各区间时长之和) + 回程(水平巡航 + 爬升附加)
     """
     from src.physics.energy import climb_energy_kwh, segment_energy_kwh
+
+    if service_windows is None:
+        if service_window is None:
+            raise TypeError("必须给出 service_window 或 service_windows")
+        raw = service_window
+        # 区分"单区间"与"区间集合"
+        if raw and isinstance(raw[0], (int, float)):
+            windows = _merge_intervals([(float(raw[0]), float(raw[1]))])  # type: ignore[index]
+        else:
+            windows = _merge_intervals([(float(a), float(b)) for a, b in raw])  # type: ignore[misc]
+    else:
+        windows = _merge_intervals([(float(a), float(b)) for a, b in service_windows])
+    if not windows:
+        raise ValueError("服务窗口集合不能为空")
 
     out_g, back_g = relay_leg_geometry(provider, o01, hover, sample_step_m)
     seg_out = Segment(out_g.distance_m, out_g.climb_m, out_g.descent_m)
@@ -198,16 +237,22 @@ def evaluate_relay_sortie(
     reach_s = t
     link_ready = reach_s + spec.link_setup_time_s
 
-    # ★★ ADR-031 修复点：服务窗口是否真的被覆盖？
-    #   建链必须**早于**窗口起点，否则该窗口的前段无人保障。
-    gap = max(0.0, link_ready - service_window[0])
-    full_coverage = gap <= 1e-9
+    # ★★ ADR-031 修复点：每个中断区间都必须被覆盖
+    #   建链必须**早于**各区间起点，否则该区间的前段无人保障。
+    gaps = [(a, b) for a, b in windows if link_ready > a + 1e-9]
+    full_coverage = not gaps
     if strict and not full_coverage:
         # 硬约束：中继来不及到站 ⇒ 该架次不可行（绝不静默截短）
         return None
 
-    svc_start = max(link_ready, service_window[0])
-    svc_end = max(svc_start, service_window[1])
+    # 实际在站服务时长 = 各区间被覆盖部分之和（中继最多在站到最后一个区间终点）
+    service_s = sum(max(0.0, b - max(link_ready, a)) for a, b in windows)
+    gap_s = sum(max(0.0, link_ready - a) for a, b in windows)
+    covered_windows = tuple(
+        (max(link_ready, a), b) for a, b in windows if b > max(link_ready, a) + 1e-9
+    )
+    svc_start = max(link_ready, windows[0][0])
+    svc_end = max(windows[-1][1], link_ready)
     t = svc_end + segment_time_s(_relay_as_uav(spec), seg_back)
     return_s = t
 
@@ -221,7 +266,7 @@ def evaluate_relay_sortie(
         m * 9.80665 * seg_back.climb_m / spec.climb_efficiency / JOULE_PER_KWH
         + seg_back.distance_m / spec.cruise_speed_ms * spec.cruise_power_kw / 3600.0
     )
-    e_service = spec.service_power_kw * (svc_end - svc_start) / 3600.0
+    e_service = spec.service_power_kw * service_s / 3600.0
     e_total = e_out + e_back + e_service
     soc = max(0.0, 1.0 - e_total / spec.energy_kwh)
     flight_time = segment_time_s(_relay_as_uav(spec), seg_out) + segment_time_s(
@@ -235,10 +280,12 @@ def evaluate_relay_sortie(
         energy_kwh=e_total,
         soc_end=soc,
         flight_time_s=flight_time,
-        window=(service_window[0], service_window[1]),
+        window=(windows[0][0], windows[-1][1]),
         full_coverage=full_coverage,
-        gap_s=gap,
+        gap_s=gap_s,
         max_service_s=spec.energy_budget_kwh / spec.service_power_kw * 3600.0,
+        n_gaps=len(gaps),
+        service_windows=covered_windows,
     )
 
 
@@ -260,15 +307,23 @@ def _relay_as_uav(spec: RelaySpec) -> UAVType:
 
 @dataclass(frozen=True)
 class RelayRequest:
-    """一个运输架次的**保障需求**：必须在 `window` 整段内被中继覆盖。
+    """一个运输架次的**保障需求**：必须在 `windows` 各段内被中继覆盖。
+
+    ★ `windows` 是**真实中断区间集合**（可能多段，中间夹着直连可用的时段）。
+    用包络当需求会让中继多悬停约 39%（实测），既浪费续航又压低可保障架次数。
 
     `candidates` 是能覆盖该架次全部中断样本的悬停点（按能耗升序），
     由选址阶段给出 —— 排班只负责挑点与排时间，不重做几何搜索。
     """
 
     sortie_id: str
-    window: tuple[float, float]
+    windows: tuple[tuple[float, float], ...]
     candidates: tuple[HoverCandidate, ...]
+
+    @property
+    def window(self) -> tuple[float, float]:
+        """全部中断区间的包络（仅用于展示/排序）。"""
+        return (self.windows[0][0], self.windows[-1][1])
 
 
 @dataclass
@@ -317,7 +372,7 @@ def plan_relay_sorties(
 
     规则
     ----
-    1. 每个需求都必须在其窗口**起点之前完成建链**（`strict=True`）。
+    1. 每个需求都必须在**其每个中断区间的起点之前**完成建链（`strict=True`）。
        资源来不及 ⇒ 记为不可行，**绝不放宽窗口**（旧实现会静默截短）。
     2. `share=True` 时（A 口径）：**同一悬停点可被多架运输机共享** ——
        若已有中继架次的悬停点也能覆盖本需求，则复用同一架次
@@ -325,6 +380,9 @@ def plan_relay_sorties(
        未限制一架中继的服务对象数量）。
     3. 同一中继无人机的相邻架次之间须留出**架次周转时间**；
        能源组件还需**充电完成**后才能再次投入。
+
+    ★ 共享时按**区间并集**评估（不取包络）：若两架次的中断区间接得上，
+    并集几乎不增加在站时长；取包络则会凭空多出中间那段"其实直连可用"的时间。
 
     返回 `(中继架次列表, 逐需求判定记录)`。
     """
@@ -335,17 +393,20 @@ def plan_relay_sorties(
     records: list[dict] = []
 
     for req in sorted(requests, key=lambda r: (r.window[0], r.sortie_id)):
-        need_a, need_b = req.window
+        need_a = req.window[0]
 
         # ---- 1. A 口径：能否并入已有中继架次（同一悬停点共享）----
         if share:
+            shared = False
             for ps in planned:
                 if ps.hover not in req.candidates:
                     continue
-                new_a = min(ps.evaluation.window[0], need_a)
-                new_b = max(ps.evaluation.window[1], need_b)
+                merged = _merge_intervals(
+                    [*ps.evaluation.service_windows, *req.windows]
+                    if ps.evaluation.service_windows else req.windows
+                )
                 ev = evaluate_relay_sortie(
-                    spec, ps.hover, provider, o01, leg_cache, (new_a, new_b),
+                    spec, ps.hover, provider, o01, leg_cache, merged,
                     ps.start_s, sample_step_m=sample_step_m, strict=True,
                 )
                 if ev is None or ev.soc_end < spec.reserve_ratio:
@@ -356,10 +417,9 @@ def plan_relay_sorties(
                                 "shared_with": ps.sortie_id,
                                 "link_ready_s": ev.link_ready_s,
                                 "window_start_s": need_a, "gap_s": 0.0})
+                shared = True
                 break
-            else:
-                pass
-            if records and records[-1]["sortie_id"] == req.sortie_id:
+            if shared:
                 continue
 
         # ---- 2. 新开一个中继架次 ----
@@ -371,10 +431,10 @@ def plan_relay_sorties(
                 for pk, pk_ready in pack_avail.items():
                     start = max(ru_ready, pk_ready)
                     if start + lead > need_a + 1e-6:
-                        # 该组合来不及在窗口起点前建链
+                        # 该组合来不及在首个区间起点前建链
                         continue
                     ev = evaluate_relay_sortie(
-                        spec, hover, provider, o01, leg_cache, (need_a, need_b),
+                        spec, hover, provider, o01, leg_cache, req.windows,
                         start, sample_step_m=sample_step_m, strict=True,
                     )
                     if ev is None or ev.soc_end < spec.reserve_ratio:
@@ -385,8 +445,9 @@ def plan_relay_sorties(
         if best is None:
             records.append({"sortie_id": req.sortie_id, "feasible": False,
                             "reason": "无可用中继资源或窗口内续航不足",
-                            "window_start_s": need_a, "window_end_s": need_b,
-                            "window_duration_s": need_b - need_a})
+                            "window_start_s": need_a,
+                            "window_end_s": req.window[1],
+                            "window_duration_s": sum(b - a for a, b in req.windows)})
             continue
 
         _, hover, ru, pk, start, ev = best

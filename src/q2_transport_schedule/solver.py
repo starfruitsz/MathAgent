@@ -629,6 +629,18 @@ class Q2Weights:
     """每 kWh 的权重。"""
     sortie_per_unit: float = 0.05
     """每个架次的权重（辅助项，避免无意义地多开架次）。"""
+    violation_point: float = 1.0
+    """★ **每个违规箱**的权重。
+
+    题目原文：医疗物资"应满足附件给出的期望送达时间要求"、首批保障货箱
+    "应满足首批截止时间要求"——时限是**要求（约束）**而非普通目标项，
+    因此违规必须在目标里占**压倒性**权重，否则求解器会拿"准时率"去换
+    "少飞几趟"或"少耗几度电"。
+
+    取 1.0 时 1 个违规箱 ≈ 1 kWh，量级太小：实测把架次权重提到 4 就会
+    用 8 个违规箱去换 3 个架次。取 1e3 后违规项在数值上不可逾越，
+    目标实际退化为"先保时限、再压架次与能耗"的字典序，与题目口径一致。
+    """
 
 
 DEFAULT_WEIGHTS = Q2Weights()
@@ -825,7 +837,7 @@ def objective_breakdown(
                         late_total += weights.first_batch_extra * lat_fb
 
     score = (
-        n_late + n_late_fb
+        weights.violation_point * (n_late + n_late_fb)
         + weights.late_per_s * late_total
         + weights.makespan_per_s * makespan
         + weights.energy_per_kwh * energy
@@ -885,6 +897,12 @@ def local_search(
 
         # --- move 1: relocate 一个箱子到另一个架次 ---
         for i, ci in enumerate(cur):
+            # ★ 受保护的硬期限专架次**只进不出**：把一个箱子从专架次里搬走，
+            #   会让该区的首批箱落到后续轮次 ⇒ 硬期限直接违反。
+            #   旧版这里漏了 frozen 判断（只有 move 2/3 有），实测在提高架次权重后
+            #   立刻用"搬走首批箱"换架次数，出现 2 箱首批超时。
+            if _plan_frozen(ci.plan):
+                continue
             for bid in list(ci.plan.all_box_ids):
                 b = boxes_by_id[bid]
                 src_plan = _remove_box(ci.plan, bid)
@@ -1100,3 +1118,164 @@ def _rebuild(
             continue
         out.append(_Cand(plan, {}, {}, dict(c.boxes), ev))
     return out
+
+
+# ---------------------------------------------------------------- 真实口径合并
+
+def real_dispatch_stats(
+    cands: list[_Cand],
+    uav_types: dict[str, UAVType],
+    leg_cache: LegCache,
+    boxes_by_id: dict[str, Box],
+    deadlines: dict[str, Deadline],
+    fleet: dict[str, list[str]],
+    battery_inventory: dict[str, int],
+    t_full: dict[str, float],
+    weights: Q2Weights | None = None,
+) -> tuple[float, int, int, int]:
+    """用**真实调度器**（`schedule_dispatch` + `build_pools`）排一遍，返回
+    `(score, n_sorties, viol_first_batch, viol_expected)`。
+
+    为什么单独做一份：`local_search` 用的是 `proxy_dispatch`（乐观下界），
+    只适合**排序**候选；而"到底有没有超时"必须用与论文口径完全一致的真实
+    调度器判定，否则会出现"目标函数认为 0 违规、上报结果却超时"的口径分叉。
+    """
+    from src.q2_transport_schedule.schedule import build_pools, schedule_dispatch
+
+    plans = [c.plan for c in cands if c.plan.stops]
+    if not plans:
+        return 0.0, 0, 0, 0
+    pools = build_pools(fleet, battery_inventory, t_full)
+    sched = schedule_dispatch(plans, uav_types, leg_cache, boxes_by_id, pools)
+    w = weights or DEFAULT_WEIGHTS
+
+    n_fb = n_exp = 0
+    late_total = 0.0
+    energy = 0.0
+    makespan = 0.0
+    for s in sched:
+        energy += s.energy_kwh
+        makespan = max(makespan, s.return_s)
+        for svc, t in s.delivery_times.items():
+            for bid in s.boxes_by_stop.get(svc, ()):
+                dl = deadlines.get(bid)
+                if dl is None:
+                    continue
+                lat = t - dl.expected_s
+                if lat > 1e-6:
+                    n_exp += 1
+                    late_total += lat
+                if dl.is_first_batch and dl.first_batch_s is not None:
+                    lat_fb = t - dl.first_batch_s
+                    if lat_fb > 1e-6:
+                        n_fb += 1
+                        late_total += w.first_batch_extra * lat_fb
+    score = (w.violation_point * (n_exp + n_fb)
+             + w.late_per_s * late_total
+             + w.makespan_per_s * makespan
+             + w.energy_per_kwh * energy
+             + w.sortie_per_unit * len(sched))
+    return score, len(sched), n_fb, n_exp
+
+
+def consolidate_real(
+    cands: list[_Cand],
+    uav_types: dict[str, UAVType],
+    leg_cache: LegCache,
+    boxes_by_id: dict[str, Box],
+    deadlines: dict[str, Deadline],
+    fleet: dict[str, list[str]],
+    battery_inventory: dict[str, int],
+    t_full: dict[str, float],
+    weights: Q2Weights | None = None,
+    max_passes: int = 40,
+) -> list[_Cand]:
+    """★ **在真实调度口径下**压架次数：反复尝试"去掉一个架次"，
+    只在真实排程**仍 0 违规且架次数真的减少**时接受。
+
+    动机
+    ----
+    `local_search` 的代理派发偏乐观：把架次权重提高后它以为仍 0 违规，
+    真实排程却出现超时（实测 25 架次时 4 箱超期）。于是本函数把
+    "**0 违规**"作为硬前提、把"**架次数最少**"作为唯一优化方向——
+    即题目"应满足时限要求"之后再看架次数，属字典序
+    `(违规箱数, 架次数, 能耗, 完工时间)` 的前两级。
+
+    走法：两两合并（必要时升级机型）→ 单区整装。每个候选方案都要过一次
+    真实调度器，通过才接受，因此**上报结果必然与判定口径一致**。
+    """
+    w = weights or DEFAULT_WEIGHTS
+    base = _rebuild(cands, uav_types, leg_cache, boxes_by_id)
+    score, n0, fb0, ex0 = real_dispatch_stats(
+        base, uav_types, leg_cache, boxes_by_id, deadlines,
+        fleet, battery_inventory, t_full, w)
+    if fb0 or ex0:                     # 起点就不合规 ⇒ 不做激进合并
+        return base
+    best, best_key = base, (n0, score)
+
+    for _ in range(max_passes):
+        improved = False
+        # ---- 走法 1：两两合并（可升级机型）----
+        for i in range(len(best)):
+            for j in range(i + 1, len(best)):
+                if not best[i].plan.stops or not best[j].plan.stops:
+                    continue
+                merged = _merge_plans(best[i].plan, best[j].plan)
+                if merged is None:
+                    continue
+                code = merged.type_code
+                ev = _eval_plan(merged, uav_types[code], leg_cache, boxes_by_id)
+                if not ev.feasible:
+                    for c2 in sorted((c for c in uav_types
+                                      if uav_types[c].volume_m3 >= uav_types[code].volume_m3),
+                                     key=lambda c: uav_types[c].volume_m3):
+                        m2 = _improve_order(replace(merged, type_code=c2),
+                                            uav_types[c2], leg_cache, boxes_by_id)
+                        ev2 = _eval_plan(m2, uav_types[c2], leg_cache, boxes_by_id)
+                        if ev2.feasible:
+                            merged, ev, code = m2, ev2, c2
+                            break
+                    else:
+                        continue
+                trial = _rebuild([c for k, c in enumerate(best) if k not in (i, j)]
+                                 + [_Cand(merged, {}, {}, {**best[i].boxes, **best[j].boxes}, ev)],
+                                 uav_types, leg_cache, boxes_by_id)
+                sc, n, fb, ex = real_dispatch_stats(
+                    trial, uav_types, leg_cache, boxes_by_id, deadlines,
+                    fleet, battery_inventory, t_full, w)
+                if fb == 0 and ex == 0 and (n, sc) < best_key:
+                    best, best_key, improved = trial, (n, sc), True
+                    break
+            if improved:
+                break
+        # ---- 走法 2：单区整装（同区货箱用更大机型装进更少架次）----
+        if not improved:
+            for svc, bids in _area_box_lists(best).items():
+                if len(bids) <= 1:
+                    continue
+                target = set(bids)
+                for code in sorted(uav_types, key=lambda c: -uav_types[c].volume_m3):
+                    rebuilt = _repack_area(bids, svc, code, uav_types[code],
+                                           boxes_by_id, leg_cache, max_group=6)
+                    if rebuilt is None:
+                        continue
+                    trial = []
+                    for c in best:
+                        stripped = _remove_boxes(c.plan, target)
+                        if not stripped.stops:
+                            continue
+                        trial.append(c if stripped is c.plan
+                                     else _Cand(stripped, {}, {}, dict(c.boxes), c.ev))
+                    trial = _rebuild(trial + rebuilt, uav_types, leg_cache, boxes_by_id)
+                    sc, n, fb, ex = real_dispatch_stats(
+                        trial, uav_types, leg_cache, boxes_by_id, deadlines,
+                        fleet, battery_inventory, t_full, w)
+                    if fb == 0 and ex == 0 and (n, sc) < best_key:
+                        best, best_key, improved = trial, (n, sc), True
+                        break
+                if improved:
+                    break
+        if not improved:
+            break
+
+    return best

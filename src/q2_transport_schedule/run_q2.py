@@ -36,6 +36,7 @@ from src.q2_transport_schedule.solver import (
     Deadline,
     Q2Result,
     clear_caches,
+    consolidate_real,
     construct,
     lateness_of,
     local_search,
@@ -156,7 +157,7 @@ def schedule_score(
     makespan = max((s.return_s for s in sched), default=0.0)
     energy = sum(s.energy_kwh for s in sched)
     score = (
-        n_late + n_late_fb
+        weights.violation_point * (n_late + n_late_fb)
         + weights.late_per_s * late_s
         + weights.makespan_per_s * makespan
         + weights.energy_per_kwh * energy
@@ -265,6 +266,10 @@ def solve(
                                       weights=weights,
                                       resources=_res(sub_f, sub_b, sub_tf),
                                       frozen_areas=_frozen)
+                # ★ 真实口径合并：local_search 的代理派发偏乐观，
+                #   这里以"真实排程 0 违规"为硬前提、以"架次数最少"为方向再压一轮。
+                ccands = consolidate_real(ccands, sub_t, leg_cache, boxes_by_id, deadlines,
+                                          sub_f, sub_b, sub_tf, weights=weights)
             plans = [c.plan for c in ccands if c.plan.stops]
             pools = build_pools(sub_f, sub_b, sub_tf)
             sched = schedule_dispatch(plans, sub_t, leg_cache, boxes_by_id, pools)

@@ -1,0 +1,52 @@
+[
+  {
+    "regime": "legacy(viol=1, sortie=.05, E=1)",
+    "n_sorties": 26,
+    "energy_kwh": 79.04,
+    "makespan_h": 2.46,
+    "on_time_rate": 1.0,
+    "viol_first_batch": 0,
+    "viol_expected": 0,
+    "type_usage": 26
+  },
+  {
+    "regime": "A(viol=1e3, sortie=1, E=.05)",
+    "n_sorties": 25,
+    "energy_kwh": 83.15,
+    "makespan_h": 2.82,
+    "on_time_rate": 0.95,
+    "viol_first_batch": 0,
+    "viol_expected": 4,
+    "type_usage": 25
+  },
+  {
+    "regime": "B(viol=1e3, sortie=2, E=.02)",
+    "n_sorties": 25,
+    "energy_kwh": 83.15,
+    "makespan_h": 2.82,
+    "on_time_rate": 0.95,
+    "viol_first_batch": 0,
+    "viol_expected": 4,
+    "type_usage": 25
+  },
+  {
+    "regime": "C(viol=1e4, sortie=1, E=.02)",
+    "n_sorties": 25,
+    "energy_kwh": 83.15,
+    "makespan_h": 2.82,
+    "on_time_rate": 0.95,
+    "viol_first_batch": 0,
+    "viol_expected": 4,
+    "type_usage": 25
+  },
+  {
+    "regime": "D(viol=1e3, sortie=1, E=.05, span=1/h)",
+    "n_sorties": 25,
+    "energy_kwh": 83.15,
+    "makespan_h": 2.82,
+    "on_time_rate": 0.95,
+    "viol_first_batch": 0,
+    "viol_expected": 4,
+    "type_usage": 25
+  }
+]

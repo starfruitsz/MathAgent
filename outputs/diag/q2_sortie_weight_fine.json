@@ -1,0 +1,200 @@
+[
+  {
+    "violation_point": 1.0,
+    "sortie_per_unit": 0.0,
+    "n_sorties": 27,
+    "energy_kwh": 82.51,
+    "makespan_h": 2.4,
+    "on_time_rate": 1.0,
+    "viol_first_batch": 0,
+    "viol_expected": 0,
+    "feasible": true
+  },
+  {
+    "violation_point": 1.0,
+    "sortie_per_unit": 0.02,
+    "n_sorties": 27,
+    "energy_kwh": 82.51,
+    "makespan_h": 2.4,
+    "on_time_rate": 1.0,
+    "viol_first_batch": 0,
+    "viol_expected": 0,
+    "feasible": true
+  },
+  {
+    "violation_point": 1.0,
+    "sortie_per_unit": 0.05,
+    "n_sorties": 27,
+    "energy_kwh": 82.51,
+    "makespan_h": 2.4,
+    "on_time_rate": 1.0,
+    "viol_first_batch": 0,
+    "viol_expected": 0,
+    "feasible": true
+  },
+  {
+    "violation_point": 1.0,
+    "sortie_per_unit": 0.1,
+    "n_sorties": 26,
+    "energy_kwh": 83.59,
+    "makespan_h": 2.57,
+    "on_time_rate": 1.0,
+    "viol_first_batch": 0,
+    "viol_expected": 0,
+    "feasible": true
+  },
+  {
+    "violation_point": 1.0,
+    "sortie_per_unit": 0.2,
+    "n_sorties": 25,
+    "energy_kwh": 83.15,
+    "makespan_h": 2.82,
+    "on_time_rate": 0.95,
+    "viol_first_batch": 0,
+    "viol_expected": 4,
+    "feasible": false
+  },
+  {
+    "violation_point": 1.0,
+    "sortie_per_unit": 0.35,
+    "n_sorties": 25,
+    "energy_kwh": 83.15,
+    "makespan_h": 2.82,
+    "on_time_rate": 0.95,
+    "viol_first_batch": 0,
+    "viol_expected": 4,
+    "feasible": false
+  },
+  {
+    "violation_point": 1.0,
+    "sortie_per_unit": 0.5,
+    "n_sorties": 25,
+    "energy_kwh": 83.15,
+    "makespan_h": 2.82,
+    "on_time_rate": 0.95,
+    "viol_first_batch": 0,
+    "viol_expected": 4,
+    "feasible": false
+  },
+  {
+    "violation_point": 1.0,
+    "sortie_per_unit": 0.75,
+    "n_sorties": 25,
+    "energy_kwh": 83.15,
+    "makespan_h": 2.82,
+    "on_time_rate": 0.95,
+    "viol_first_batch": 0,
+    "viol_expected": 4,
+    "feasible": false
+  },
+  {
+    "violation_point": 1.0,
+    "sortie_per_unit": 1.0,
+    "n_sorties": 25,
+    "energy_kwh": 83.15,
+    "makespan_h": 2.82,
+    "on_time_rate": 0.95,
+    "viol_first_batch": 0,
+    "viol_expected": 4,
+    "feasible": false
+  },
+  {
+    "violation_point": 1000.0,
+    "sortie_per_unit": 0.0,
+    "n_sorties": 27,
+    "energy_kwh": 82.51,
+    "makespan_h": 2.4,
+    "on_time_rate": 1.0,
+    "viol_first_batch": 0,
+    "viol_expected": 0,
+    "feasible": true
+  },
+  {
+    "violation_point": 1000.0,
+    "sortie_per_unit": 0.02,
+    "n_sorties": 27,
+    "energy_kwh": 82.51,
+    "makespan_h": 2.4,
+    "on_time_rate": 1.0,
+    "viol_first_batch": 0,
+    "viol_expected": 0,
+    "feasible": true
+  },
+  {
+    "violation_point": 1000.0,
+    "sortie_per_unit": 0.05,
+    "n_sorties": 27,
+    "energy_kwh": 82.51,
+    "makespan_h": 2.4,
+    "on_time_rate": 1.0,
+    "viol_first_batch": 0,
+    "viol_expected": 0,
+    "feasible": true
+  },
+  {
+    "violation_point": 1000.0,
+    "sortie_per_unit": 0.1,
+    "n_sorties": 26,
+    "energy_kwh": 83.59,
+    "makespan_h": 2.57,
+    "on_time_rate": 1.0,
+    "viol_first_batch": 0,
+    "viol_expected": 0,
+    "feasible": true
+  },
+  {
+    "violation_point": 1000.0,
+    "sortie_per_unit": 0.2,
+    "n_sorties": 25,
+    "energy_kwh": 83.15,
+    "makespan_h": 2.82,
+    "on_time_rate": 0.95,
+    "viol_first_batch": 0,
+    "viol_expected": 4,
+    "feasible": false
+  },
+  {
+    "violation_point": 1000.0,
+    "sortie_per_unit": 0.35,
+    "n_sorties": 25,
+    "energy_kwh": 83.15,
+    "makespan_h": 2.82,
+    "on_time_rate": 0.95,
+    "viol_first_batch": 0,
+    "viol_expected": 4,
+    "feasible": false
+  },
+  {
+    "violation_point": 1000.0,
+    "sortie_per_unit": 0.5,
+    "n_sorties": 25,
+    "energy_kwh": 83.15,
+    "makespan_h": 2.82,
+    "on_time_rate": 0.95,
+    "viol_first_batch": 0,
+    "viol_expected": 4,
+    "feasible": false
+  },
+  {
+    "violation_point": 1000.0,
+    "sortie_per_unit": 0.75,
+    "n_sorties": 25,
+    "energy_kwh": 83.15,
+    "makespan_h": 2.82,
+    "on_time_rate": 0.95,
+    "viol_first_batch": 0,
+    "viol_expected": 4,
+    "feasible": false
+  },
+  {
+    "violation_point": 1000.0,
+    "sortie_per_unit": 1.0,
+    "n_sorties": 25,
+    "energy_kwh": 83.15,
+    "makespan_h": 2.82,
+    "on_time_rate": 0.95,
+    "viol_first_batch": 0,
+    "viol_expected": 4,
+    "feasible": false
+  }
+]

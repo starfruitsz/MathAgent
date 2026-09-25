@@ -1,7 +1,7 @@
 {
   "question": "q3",
-  "git_commit": "196dc2bcb9f8b735b78fe9d2196ce155be8f872a",
-  "timestamp": "2026-09-25T14:01:18.891090+08:00",
+  "git_commit": "e6e592ab541baa87c37634edfc44ad07d1eb617c",
+  "timestamp": "2026-09-25T18:17:36.855990+08:00",
   "seed": 42,
   "data_sources": [
     "通信链路参数.xlsx",
@@ -10,25 +10,41 @@
   ],
   "metrics": {
     "n_transport_sorties": 25,
-    "n_relay_sorties": 20,
+    "n_relay_sorties": 6,
     "n_sorties_need_relay": 20,
-    "n_sorties_covered": 20,
-    "coverage_rate": 1.0,
+    "n_sorties_covered": 11,
+    "coverage_rate": 0.55,
     "coverage_rate_geometric": 1.0,
-    "coverage_rate_timeline": 0.0,
-    "n_sorties_covered_timeline": 0,
+    "coverage_rate_timeline": 0.55,
+    "n_sorties_covered_timeline": 11,
+    "n_relay_uavs_inventory": 2,
+    "n_relay_sorties_infeasible": 9,
+    "relay_sorties_infeasible": [
+      "T001",
+      "T002",
+      "T005",
+      "T008",
+      "T009",
+      "T010",
+      "T013",
+      "T019",
+      "T021"
+    ],
+    "relay_resource_shortage": 4,
     "transport_energy_kwh": 77.301634,
-    "relay_energy_kwh": 4.833482,
-    "total_energy_kwh": 82.135116,
-    "joint_makespan_s": 11323.3,
-    "joint_makespan_h": 3.145,
+    "relay_energy_kwh": 2.352146,
+    "total_energy_kwh": 79.65378,
+    "joint_makespan_s": 10968.7,
+    "joint_makespan_h": 3.047,
     "mean_direct_outage_fraction": 0.2838,
     "n_hover_candidates": 1885,
     "sample_dt_s": 2.0,
     "hover_step_m": 400.0,
-    "runtime_sec": 360.24,
-    "feasible_by_verifier": true,
-    "n_verifier_violations": 0,
-    "verifier_violation_types": {}
+    "runtime_sec": 443.03,
+    "feasible_by_verifier": false,
+    "n_verifier_violations": 42,
+    "verifier_violation_types": {
+      "中继资源不足，部分架次通信中断未获保障": 42
+    }
   }
 }

@@ -63,6 +63,27 @@ def main() -> int:
     def appears(v: float, nd: int = 2) -> bool:
         return f"{v:.{nd}f}" in text
 
+    def num_appears(v: float, nd: int = 2) -> bool:
+        """★ 只找**数字本身**，不要求紧跟单位。
+
+        表格里的数值与表头单位是**不同单元格**（例如表头写「联合完工（h）」、
+        单元格只写「3.05」），因此 `"3.05 h" in text` 会**假报缺失**。
+        这里改为匹配数字，并排除"更长数字的前缀"（如 3.05 不应命中 3.051）。
+        """
+        s = f"{v:.{nd}f}"
+        for i in range(len(text)):
+            j = text.find(s, i)
+            if j < 0:
+                return False
+            before = text[j - 1] if j > 0 else ""
+            after = text[j + len(s)] if j + len(s) < len(text) else ""
+            if not (before.isdigit() or before == ".") and not (
+                after.isdigit() or after == "."
+            ):
+                return True
+            i = j + 1
+        return False
+
     checks = [
         ("Q3 运输架次数 == Q2 架次数",
          m3["n_transport_sorties"] == m2["n_sorties"]),
@@ -76,7 +97,9 @@ def main() -> int:
         (f"论文出现 Q2 能耗 {m2['total_energy_kwh']:.2f}", appears(m2["total_energy_kwh"])),
         (f"论文出现 Q3 总能耗 {m3['total_energy_kwh']:.2f}", appears(m3["total_energy_kwh"])),
         (f"论文出现 Q3 联合完工 {m3['joint_makespan_h']:.2f} h",
-         f"{m3['joint_makespan_h']:.2f} h" in text),
+         num_appears(m3["joint_makespan_h"])),
+        (f"论文出现 Q3 中继架次数 {m3['n_relay_sorties']}",
+         num_appears(float(m3["n_relay_sorties"]), 0)),
         (f"论文出现 Q4 原子单元数 {m4['n_atomic_units']}",
          str(m4["n_atomic_units"]) in text),
     ]

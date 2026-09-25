@@ -960,7 +960,11 @@ def main() -> int:
       f"采用“单点全程覆盖优先、按时段分段接力兜底”的求解策略，"
       f"最终 {int(m3.get('n_relay_sorties',0))} 个中继架次实现"
       f"**{int(m3.get('n_sorties_covered',0))}/"
-      f"{int(m3.get('n_sorties_need_relay',0))} 架次全程通信覆盖（100%）**，"
+      f"{int(m3.get('n_sorties_need_relay',0))} 架次的时间轴通信保障"
+      f"（{m3.get('coverage_rate_timeline',0):.1%}）**"
+      f"（几何可达覆盖为 {m3.get('coverage_rate_geometric',0):.0%}，"
+      f"受 {int(m3.get('n_relay_uavs_inventory',0))} 架中继库存限制，"
+      f"中继缺口 {int(m3.get('relay_resource_shortage',0))} 架），"
       f"运输能耗 {m3.get('transport_energy_kwh',0):.2f} kWh + 中继能耗 "
       f"{m3.get('relay_energy_kwh',0):.2f} kWh，联合完工时间 "
       f"{m3.get('joint_makespan_h',0):.2f} h。"
@@ -975,14 +979,20 @@ def main() -> int:
       f"因此 **K=2 与 K=3 均可由原子单元直接合并得到，无需拆分任何架次**"
       f"（改动 0 个）；本文另给出 {int(m4.get('n_bridge_sorties',0))} 个桥接架次"
       f"作为进一步细化分区粒度时的备用依据。"
-      f"对比结果显示：资源总规模 K=1/2/3 分别为 32/34/37（台·组），"
-      f"组间不均衡度 0/1.8517/2.7035——**分区不省资源**（K 越大总规模越大），"
+      f"对比结果显示：资源总规模 K=1/2/3 分别为 "
+      f"{int(m4.get('baseline_resources_k1',{}).get('uavs',8)) + int(m4.get('baseline_resources_k1',{}).get('batteries',17)) + int(m4.get('baseline_resources_k1',{}).get('relay_uavs',4)) + int(m4.get('baseline_resources_k1',{}).get('relay_packs',4))}"
+      f"/{int(m4.get('k2_resources',{}).get('uavs',9)) + int(m4.get('k2_resources',{}).get('batteries',17)) + int(m4.get('k2_resources',{}).get('relay_uavs',4)) + int(m4.get('k2_resources',{}).get('relay_packs',4))}"
+      f"/{int(m4.get('k3_resources',{}).get('uavs',10)) + int(m4.get('k3_resources',{}).get('batteries',18)) + int(m4.get('k3_resources',{}).get('relay_uavs',5)) + int(m4.get('k3_resources',{}).get('relay_packs',5))}（台·组），"
+      f"组间不均衡度 0/{m4.get('k2_resources',{}).get('imbalance',1.8517):.4f}/{m4.get('k3_resources',{}).get('imbalance',2.7035):.4f}"
+      f"——**分区不省资源**（K 越大总规模越大），"
       f"但能降低单组工作量峰值（13.95→13.00 h），"
       f"这是一条具有工程指导意义的结论。")
 
     P(doc,
       f"本文全部结论均通过独立校验器复核：问题二与问题三方案的"
-      f"**硬约束与时限类违规均为 0 条**（80/80 箱按时送达、25/25 架次通信全覆盖），"
+      f"**硬约束违规均为 0 条**（80/80 箱按时送达；问题三另有 "
+      f"{int(m3.get('n_verifier_violations',0))} 条「中继资源不足」软违规，"
+      f"为题目资源缺口、已如实报告），"
       f"并对通信采样步长、悬停候选网格、DEM 高程噪声与衰落裕量做了敏感性分析，"
       f"结果表明结论在合理扰动下保持稳定。")
 
@@ -1498,10 +1508,18 @@ def build_body(doc: Document, D: dict) -> None:
 
     P(doc, f"（2）中继选址与覆盖。最终生成 "
            f"{int(m3.get('n_relay_sorties', 0))} 个中继架次，"
-           f"实现 {int(m3.get('n_sorties_covered', 0))}/"
-           f"{int(m3.get('n_sorties_need_relay', 0))} 个需保障架次的"
-           f"**全程通信覆盖（覆盖率 100%）**，其中 28 个架次由单点全程覆盖、"
-           f"1 个架次因中断时段沿轨迹分布较散而由 2 架中继分段接力覆盖。")
+           f"在**时间轴口径**下实现 {int(m3.get('n_sorties_covered', 0))}/"
+           f"{int(m3.get('n_sorties_need_relay', 0))} 个需保障架次的通信保障"
+           f"（覆盖率 {m3.get('coverage_rate_timeline', 0):.1%}），"
+           f"其中由单点全程覆盖的架次占绝大多数。"
+           f"需注意：**几何可达覆盖率为 "
+           f"{m3.get('coverage_rate_geometric', 0):.0%}**（即存在悬停点能覆盖该架次"
+           f"全部中断样本），但受题目给定的 "
+           f"{int(m3.get('n_relay_uavs_inventory', 0))} 架中继无人机库存限制，"
+           f"按时间轴复核仍有 {int(m3.get('n_relay_sorties_infeasible', 0))} 个架次"
+           f"无法在所需时段获得保障，**中继资源缺口 "
+           f"{int(m3.get('relay_resource_shortage', 0))} 架**。"
+           f"该缺口源于题目资源配置与通信需求之间的矛盾，已在 6.4 节如实讨论。")
     FIGURE(doc, "f12_q3_relay_map", "图 17  中继悬停点与通信保障关系")
     FIGURE(doc, "f13_q3_coverage", "图 18  中继选址特征")
     TABLE(doc, "t_q3_relay_sorties", "表 20  中继架次明细（交付模板列序）", max_rows=28)
@@ -1527,40 +1545,47 @@ def build_body(doc: Document, D: dict) -> None:
                    f"{(m3.get('joint_makespan_s',0) - m2.get('makespan_s',0))/max(m3.get('joint_makespan_s',1),1e-9):.1%}。"))
     FIGURE(doc, "f14_q3_joint_gantt", "图 19  运输与中继联合调度时间线")
 
-    # ★ 已知缺陷：几何可达覆盖率 ≠ 时间轴真实覆盖率。
-    #   中继排班未把服务窗口纳入约束，且 evaluate_relay_sortie 会把服务区间
-    #   静默截短（svc_start = max(link_ready, window[0])），于是「中继到场晚于
-    #   运输机返航」不会被判为未覆盖。必须如实报告，不能只写「100% 覆盖」。
+    # ★ ADR-031（P9 已修复）：几何可达覆盖率 ≠ 时间轴真实覆盖率。
+    #   修复前：中继排班未把服务窗口纳入约束，且 evaluate_relay_sortie 会把服务区间
+    #   静默截短（svc_start = max(link_ready, window[0])），于是「中继到场晚于运输机返航」
+    #   不会被判为未覆盖；更关键的是 run_q3.py 只对"未被任何中继计划覆盖"的架次填
+    #   outage_windows，导致校验器**从未执行**该项检查。
+    #   修复后：排班把窗口作为硬约束、校验器区分"资源缺口(软)"与"排班缺陷(硬)"。
+    #   剩余缺口是**题目资源配置**决定的，必须如实报告。
     _ct = m3.get("coverage_rate_timeline")
     if _ct is not None and _ct < 0.999:
-        RICH(doc, [("⚠️ 已知缺陷与口径澄清（务必如实报告）：", True),
+        RICH(doc, [("★ 覆盖率口径说明与中继资源缺口（务必如实报告）：", True),
                    (f"上文 {m3.get('coverage_rate_geometric', m3.get('coverage_rate', 0)):.0%} "
-                    f"是**几何可达覆盖率**——即「存在一个悬停点可覆盖该架次全程轨迹」，"
+                    f"是**几何可达覆盖率**——即「存在一个悬停点可覆盖该架次全部中断样本」，"
                     f"它只回答「中继能不能连上」，**不回答「中继那一刻在不在站」**。"
-                    f"按时间轴复核（中继建链完成时刻到服务结束时刻，与该架次所需保障窗口"
+                    f"按时间轴复核（中继建链完成时刻到服务结束时刻，与该架次所需中断区间"
                     f"的**时间重叠率**）后，真正被完整保障的架次为 "
                     f"{int(m3.get('n_sorties_covered_timeline', 0))}/"
                     f"{int(m3.get('n_sorties_need_relay', 0))}"
                     f"（**时间轴覆盖率 {_ct:.1%}**，见 "
                     f"`outputs/q3/tables/q3_中继时间覆盖复核.csv`）。"
-                    f"二者相差悬殊的根因有二："
-                    f"（i）中继资源排班只按「最早可用资源」定起点，"
-                    f"`start = max(无人机可用, 能源组件可用, 0)` **未把服务窗口纳入约束**；"
-                    f"（ii）`evaluate_relay_sortie` 取 "
-                    f"`svc_start = max(建链完成, 窗口起)`，中继晚到时只会把服务区间**截短**"
-                    f"（甚至截成 0 长度），**不会被判为未覆盖**，因此旧版校验器报了 0 违规。"
-                    f"本文如实报告该缺陷并给出复核脚本 "
-                    f"(`scripts/diag/q3_relay_window_audit.py`)，"
-                    f"**不把几何可达当作时间轴已保障**。", False)], indent=False)
-        P(doc, "修正方向（下一步工作）：把服务窗口作为排班硬约束"
-               "（中继须在窗口起点前完成建链），窗口冲突时按"
-               "「允许多架运输机共享同一悬停点」扩展模型，"
-               "并让中继排班与运输排班联合求解；"
-               "仅 2 架中继机能否支撑 8 个同批次运输架次，"
-               "取决于悬停点可共享的程度，是需要专门建模的问题。")
+                    f"本文的排班模型已把**服务窗口作为硬约束**（中继必须在每个中断区间"
+                    f"起点之前完成建链），并允许**多架运输机共享同一悬停点**"
+                    f"（题目只限制每架运输机同时刻至多由一个中继保障，"
+                    f"未限制一架中继的服务对象数量）；"
+                    f"校验器亦已加入「中继在站时段 ∩ 运输架次中断区间」的交叉检查，"
+                    f"不存在「静默截短服务区间」的漏洞。"
+                    f"**剩余缺口来自题目给定的资源配置**：题目仅配置 "
+                    f"{int(m3.get('n_relay_uavs_inventory', 0))} 架中继无人机，"
+                    f"其可用能量（2.56 kWh）除以服务功率（1.10 kW）决定了单次在站时长"
+                    f"上限约 140 min，而 20 个架次的真实中断时长合计约 168.5 min、"
+                    f"最大并发 6 架次，故 2 架中继在时间轴上无法保障全部架次，"
+                    f"实测缺口为 **{int(m3.get('relay_resource_shortage', 0))} 架**。"
+                    f"本文**不把几何可达当作时间轴已保障**，并对该缺口给出定量分析。", False)],
+             indent=False)
+        P(doc, "改进方向：将中继数量由 2 架增至 "
+               f"{int(m3.get('n_relay_sorties', 0))} 架即可消除该缺口；"
+               "或用时空联合优化把有限的在站时长优先投给"
+               "「单位时间可覆盖架次数最多」的悬停点，"
+               "以在现有资源下最大化获保障架次数。")
 
     P(doc, "（4）选址规律。所有中继悬停点的离地高度均取上限 250 m（离地越高视线越好），"
-           "悬停海拔介于 445~781 m；水平位置集中在服务区群中心偏西（约 109.20~109.27°E），"
+           "悬停海拔介于 440~962 m；水平位置集中在服务区群中心偏西（约 109.17~109.27°E），"
            "即**贴近作业空域而非贴近网关**。这与表 8 的门限分析完全一致："
            "中继接入段门限最低（116 dB），必须靠近运输机；而回传段门限宽松（126 dB），"
            "对位置不敏感。")
@@ -1721,9 +1746,14 @@ def build_body(doc: Document, D: dict) -> None:
            f"问题二在混合机队 + 最小松弛派发下的**时限类违规也为 0 条**"
            f"（首批 30 箱与全部 80 箱的期望送达时间全部满足），"
            f"5.4 节给出了该结论成立的两个必要条件。"
-           f"问题三的通信中断违规为 0 条，说明 "
-           f"{int(m3.get('n_sorties_covered', 0))} 个建成的中继架次"
-           f"确实实现了全程覆盖。")
+           f"问题三另有 {int(m3.get('n_verifier_violations', 0))} 条**软违规**，"
+           f"全部属于「中继资源不足」这一**题目内在的资源缺口**"
+           f"（实测 {int(m3.get('n_sorties_covered', 0))}/"
+           f"{int(m3.get('n_sorties_need_relay', 0))} 个架次获时间轴保障，"
+           f"缺口 {int(m3.get('relay_resource_shortage', 0))} 架中继）；"
+           f"校验器特意把「资源缺口」与「排班缺陷」分成两类："
+           f"前者如实上报、不阻断结果产出，后者（有中继窗口却盖不住中断区间）"
+           f"仍作为硬违规拦截，从而避免「因为资源不够就干脆不报告」。")
 
     H(doc, "8.2 敏感性分析", 2)
     P(doc, "本文对四个关键建模选择做了敏感性分析，汇总见表 26 与图 24。")
@@ -1732,8 +1762,9 @@ def build_body(doc: Document, D: dict) -> None:
     BULLETS(doc, [
         "**通信判定采样步长**：步长越粗越可能漏判短时中断，导致中断占比被低估。"
         "本文最终采用 5 s 步长（配置默认 1 s），并核对了步长加倍时结论方向不变；",
-        "**中继悬停候选网格步长**：步长 200~600 m 时覆盖率均为 100%，"
-        "800 m 时仍达 100%，1500 m 时降至约 86%。本文取 800 m 兼顾精度与耗时；",
+        "**中继悬停候选网格步长**：步长 200~600 m 时"
+        "几何可达覆盖率均为 100%（即存在可覆盖的悬停点），"
+        "800 m 时仍达 100%，1500 m 时降至约 86%。本文取 400 m 兼顾精度与耗时；",
         "**DEM 高程噪声**：在 σ = 10 m 的高程噪声下（200 次蒙特卡洛），"
         "总能耗相对偏移小于 1%，说明结论对 DEM 精度不敏感；",
         "**衰落裕量 M**：M 增大会抬高接收门限、缩短链路可达距离。"
@@ -1789,17 +1820,28 @@ def build_body(doc: Document, D: dict) -> None:
         f"与首轮按能耗 tie-break（机位被顺路小架次占用）两处建模缺陷；",
         f"**问题三**：实测 {int(m3.get('n_sorties_need_relay', 0))} 个架次存在直连中断"
         f"（平均中断占比 {m3.get('mean_direct_outage_fraction', 0):.1%}），"
-        f"证明中继为必需项。以 {int(m3.get('n_relay_sorties', 0))} 个中继架次实现"
-        f"**100% 全程通信覆盖**，运输与中继总能耗 "
+        f"证明中继为必需项。以 {int(m3.get('n_relay_sorties', 0))} 个中继架次在"
+        f"**时间轴口径**下保障 "
+        f"{int(m3.get('n_sorties_covered', 0))}/{int(m3.get('n_sorties_need_relay', 0))} "
+        f"个架次（{m3.get('coverage_rate_timeline', 0):.1%}；"
+        f"几何可达覆盖率为 {m3.get('coverage_rate_geometric', 0):.0%}），"
+        f"运输与中继总能耗 "
         f"{m3.get('total_energy_kwh', 0):.2f} kWh，联合完工 "
         f"{m3.get('joint_makespan_h', 0):.2f} h。"
-        f"选址规律为中继应贴近作业空域，与链路门限分析一致；",
+        f"选址规律为中继应贴近作业空域，与链路门限分析一致。"
+        f"**须强调**：题目仅配置 2 架中继无人机，"
+        f"按时间轴复核存在 **{int(m3.get('relay_resource_shortage', 0))} 架的中继资源缺口**"
+        f"（受在站时长上限约 140 min 与最大并发 6 架次制约），"
+        f"本文如实报告该缺口而不以几何可达覆盖率替代；",
         f"**问题四**：按“同架次服务区必须同组”把服务区关系建为图，"
         f"证明**合法组数 K 只能取 1 至连通分量数**。问题三方案下多点架次把"
         f"15 个服务区划分为 {int(m4.get('n_atomic_units', 1))} 个原子单元，"
         f"故 **K=2 与 K=3 均可由原子单元直接合并得到（改动 0 个架次）**；"
         f"另给出 {int(m4.get('n_bridge_sorties', 0))} 个桥接架次备用。"
-        f"对比显示分区越多资源需求越大（K=1/2/3 为 32/34/37 台·组）、"
+        f"对比显示分区越多资源需求越大"
+        f"（K=1/2/3 为 {int(m4.get('baseline_resources_k1', {}).get('uavs', 8)) + int(m4.get('baseline_resources_k1', {}).get('batteries', 17)) + int(m4.get('baseline_resources_k1', {}).get('relay_uavs', 4)) + int(m4.get('baseline_resources_k1', {}).get('relay_packs', 4))}"
+        f"/{int(m4.get('k2_resources', {}).get('uavs', 9)) + int(m4.get('k2_resources', {}).get('batteries', 17)) + int(m4.get('k2_resources', {}).get('relay_uavs', 4)) + int(m4.get('k2_resources', {}).get('relay_packs', 4))}"
+        f"/{int(m4.get('k3_resources', {}).get('uavs', 10)) + int(m4.get('k3_resources', {}).get('batteries', 18)) + int(m4.get('k3_resources', {}).get('relay_uavs', 5)) + int(m4.get('k3_resources', {}).get('relay_packs', 5))} 台·组）、"
         f"组间均衡越差，但单组峰值工作量下降（13.95→13.00 h），"
         f"**分区的价值在于降低单组作业压力而非节省资源**。",
     ])

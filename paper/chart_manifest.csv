@@ -38,4 +38,4 @@
 表,t_q4_gap,逐方案逐类资源缺口,问题四,tables/t_q4_gap.csv,0.8
 图,f17_q4_detail,逐组资源配置与工作量,问题四,figures/f17_q4_detail.png,85.0
 表,t_q4_group,逐组资源与工作量明细,问题四,tables/t_q4_group.csv,0.6
-表,t_all_metrics,四问关键指标汇总,结论,tables/t_all_metrics.csv,1.7
+表,t_all_metrics,四问关键指标汇总,结论,tables/t_all_metrics.csv,1.8

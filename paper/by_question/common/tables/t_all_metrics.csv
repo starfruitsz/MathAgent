@@ -21,7 +21,7 @@
 问题二,on_time_rate,1.0
 问题二,max_lateness_s,0.0
 问题二,objective_penalty,79.305
-问题二,runtime_sec,2.51
+问题二,runtime_sec,2.34
 问题二,iterations,2
 问题二,feasible_by_verifier,True
 问题二,n_verifier_violations,0
@@ -30,6 +30,9 @@
 问题三,n_sorties_need_relay,20
 问题三,n_sorties_covered,20
 问题三,coverage_rate,1.0
+问题三,coverage_rate_geometric,1.0
+问题三,coverage_rate_timeline,0.0
+问题三,n_sorties_covered_timeline,0
 问题三,transport_energy_kwh,77.301634
 问题三,relay_energy_kwh,4.833482
 问题三,total_energy_kwh,82.135116
@@ -39,7 +42,7 @@
 问题三,n_hover_candidates,1885
 问题三,sample_dt_s,2.0
 问题三,hover_step_m,400.0
-问题三,runtime_sec,394.32
+问题三,runtime_sec,360.24
 问题三,feasible_by_verifier,True
 问题三,n_verifier_violations,0
 问题四,n_services,15

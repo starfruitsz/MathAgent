@@ -328,6 +328,42 @@ def main(argv: list[str] | None = None) -> int:
         })
     save_table(pd.DataFrame(comm_rows), out / "tables" / "q3_通信保障.csv")
 
+    # ---------------- 6b. ★ 中继"在站时刻"是否真的覆盖了"需要保障的窗口" ----------------
+    # ⚠️ 已发现的缺陷（务必先看这段再解读 coverage_rate）：
+    #   中继资源调度只按"最早可用资源"排班
+    #       start = max(uav_avail[ru], pack_avail[pk], 0.0)
+    #   **没有把服务窗口 win 纳入约束**；而 `evaluate_relay_sortie` 里
+    #       svc_start = max(link_ready, window[0]);  svc_end = max(svc_start, window[1])
+    #   于是中继晚到时只会把服务区间**截短**（甚至截成 0 长度），
+    #   **不会被判为"未覆盖"**。实测 20 个需保障架次里 13 个中继在运输机
+    #   返航之后才到场、平均时间重叠率仅 14.3%。
+    #   因此下面单独按时间轴复核，并把真实覆盖率写进 metrics；
+    #   只要 < 100% 就打 ERROR 级日志，避免"声称 100% 覆盖"被静默输出。
+    _cov_rows = []
+    for _p in plan_rows:
+        _sid = _p["架次编号"]
+        _pair = next((r for r in relay_sorties if r["covers"][0] == _sid), None)
+        _need_a = float(_p["服务窗口起"] or 0.0)
+        _need_b = float(_p["服务窗口止"] or 0.0)
+        _need = max(_need_b - _need_a, 1e-9)
+        if _pair is None:
+            _ov = 0.0
+        else:
+            _got_a, _got_b = float(_pair["link_ready_s"]), float(_pair["service_end_s"])
+            _ov = max(0.0, min(_need_b, _got_b) - max(_need_a, _got_a))
+        _cov_rows.append({"架次编号": _sid, "需要起": _need_a, "需要止": _need_b,
+                          "在站起": (float(_pair["link_ready_s"]) if _pair else None),
+                          "在站止": (float(_pair["service_end_s"]) if _pair else None),
+                          "时间重叠率": round(_ov / _need, 4)})
+    _cov_df = pd.DataFrame(_cov_rows)
+    save_table(_cov_df, out / "tables" / "q3_中继时间覆盖复核.csv")
+    cover_true = float((_cov_df["时间重叠率"] >= 0.999).mean()) if len(_cov_df) else 0.0
+    log.warning("★ 中继时间覆盖复核：%d/%d 个架次的中继在站时段完整覆盖所需窗口"
+                "（真实覆盖率 %.1f%%；几何可达覆盖率见 coverage_rate）。"
+                "差异根因见本节 6b 注释（排班未纳入服务窗口 + 服务区间被静默截短）。",
+                int((_cov_df["时间重叠率"] >= 0.999).sum()), len(_cov_df),
+                100.0 * cover_true)
+
     # 运输架次（继承 Q2，保持口径一致）
     save_table(
         pd.DataFrame([
@@ -463,6 +499,12 @@ def main(argv: list[str] | None = None) -> int:
         "n_sorties_need_relay": n_need,
         "n_sorties_covered": len(relay_covered_ids),
         "coverage_rate": round(len(relay_covered_ids) / n_need, 4) if n_need else 1.0,
+        # ★ 几何可达覆盖率（"存在一个悬停点能覆盖全程"）与**时间轴真实覆盖率**
+        #   是两件事：前者只看几何，后者还要求中继在需要的那一刻确实在站。
+        #   当前排班未把服务窗口纳入约束，二者可能相差极大（见 6b 节警告）。
+        "coverage_rate_geometric": round(len(relay_covered_ids) / n_need, 4) if n_need else 1.0,
+        "coverage_rate_timeline": round(cover_true, 4),
+        "n_sorties_covered_timeline": int((_cov_df["时间重叠率"] >= 0.999).sum()),
         "transport_energy_kwh": round(transport_e, 6),
         "relay_energy_kwh": round(relay_e, 6),
         "total_energy_kwh": round(transport_e + relay_e, 6),

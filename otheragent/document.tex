@@ -70,6 +70,16 @@
 }
 \usepackage{siunitx} % 科学计数法和单位格式化
 
+% ★ 圈码 ①②③（U+2460–U+24FF）默认被 xeCJK 判为**非 CJK**，于是走西文字体
+%   （\setmainfont{Times New Roman}），而 Times New Roman 没有这些字形 ⇒
+%   排版出“豆腐块”（.notdef），PDF 里连字符都提取不到。
+%   把该区段声明为 CJK 字符类即可改由 SimSun 取字（SimSun/SimHei 均有 ①–⑳）。
+%   ⚠️ 这两行曾被第三方分支误删，导致圈码重新变豆腐块；请勿再删。
+% ★ 注意：`"2460` 里的 " 是 **TeX 十六进制数字前缀**，不是引号！
+%   批量替换中文引号时必须跳过这类写法（scripts/diag/tex_fix_quotes.py 已加护栏）。
+\xeCJKDeclareCharClass{CJK}{"2460 -> "24FF}
+\xeCJKDeclareCharClass{CJK}{"3000 -> "303F}  % CJK 标点（、。「」等）兜底
+
 \title{山区洪涝灾害下无人机运输与通信协同优化}
 \tihao{D}					%题号
 \baominghao{MCxxxxxxx}		%队伍编号（提交前按实际编号填写）

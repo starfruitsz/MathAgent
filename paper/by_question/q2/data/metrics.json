@@ -1,7 +1,7 @@
 {
   "question": "q2",
-  "git_commit": "95174fd13e5a43770f2a23bc362571a2569271b3",
-  "timestamp": "2026-09-25T13:33:18.737587+08:00",
+  "git_commit": "196dc2bcb9f8b735b78fe9d2196ce155be8f872a",
+  "timestamp": "2026-09-25T14:02:22.808678+08:00",
   "seed": 42,
   "data_sources": [
     "物资需求与配送时限.xlsx",
@@ -20,7 +20,7 @@
     "on_time_rate": 1.0,
     "max_lateness_s": 0.0,
     "objective_penalty": 79.305,
-    "runtime_sec": 2.51,
+    "runtime_sec": 2.34,
     "iterations": 2,
     "feasible_by_verifier": true,
     "n_verifier_violations": 0,

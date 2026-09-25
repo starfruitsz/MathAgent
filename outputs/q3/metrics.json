@@ -1,7 +1,7 @@
 {
   "question": "q3",
-  "git_commit": "95174fd13e5a43770f2a23bc362571a2569271b3",
-  "timestamp": "2026-09-25T13:39:58.466846+08:00",
+  "git_commit": "196dc2bcb9f8b735b78fe9d2196ce155be8f872a",
+  "timestamp": "2026-09-25T14:01:18.891090+08:00",
   "seed": 42,
   "data_sources": [
     "通信链路参数.xlsx",
@@ -14,6 +14,9 @@
     "n_sorties_need_relay": 20,
     "n_sorties_covered": 20,
     "coverage_rate": 1.0,
+    "coverage_rate_geometric": 1.0,
+    "coverage_rate_timeline": 0.0,
+    "n_sorties_covered_timeline": 0,
     "transport_energy_kwh": 77.301634,
     "relay_energy_kwh": 4.833482,
     "total_energy_kwh": 82.135116,
@@ -23,7 +26,7 @@
     "n_hover_candidates": 1885,
     "sample_dt_s": 2.0,
     "hover_step_m": 400.0,
-    "runtime_sec": 394.32,
+    "runtime_sec": 360.24,
     "feasible_by_verifier": true,
     "n_verifier_violations": 0,
     "verifier_violation_types": {}

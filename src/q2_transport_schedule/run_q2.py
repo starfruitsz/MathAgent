@@ -136,6 +136,7 @@ def schedule_score(
     n_late = 0
     n_late_fb = 0
     late_s = 0.0
+    late_box_ids: set[str] = set()
     n_on_time = 0
     n_total = 0
     for s in sched:
@@ -149,10 +150,12 @@ def schedule_score(
                     n_on_time += 1
                 else:
                     n_late += 1
+                    late_box_ids.add(bid)
                     late_s += t - dl.expected_s
                 if dl.is_first_batch and dl.first_batch_s is not None:
                     if t > dl.first_batch_s + 1e-6:
                         n_late_fb += 1
+                        late_box_ids.add(bid)
                         late_s += weights.first_batch_extra * (t - dl.first_batch_s)
     makespan = max((s.return_s for s in sched), default=0.0)
     energy = sum(s.energy_kwh for s in sched)
@@ -168,6 +171,11 @@ def schedule_score(
         "n_sorties": len(sched),
         "n_late_boxes": n_late,
         "n_late_first_batch": n_late_fb,
+        # ★ SKILL 口径：同时给出"检查条数"与"不同货箱数"。
+        #   一个既是医疗（有期望时刻）又是首批保障的箱迟到时，
+        #   n_late 与 n_late_fb 会各 +1 ⇒ 条数 2、箱数 1。
+        "n_late_check_rows": n_late + n_late_fb,
+        "n_late_boxes_distinct": len(late_box_ids),
         "on_time_rate": round(n_on_time / n_total, 4) if n_total else 1.0,
         "makespan_h": round(makespan / 3600.0, 3),
         "energy_kwh": round(energy, 4),

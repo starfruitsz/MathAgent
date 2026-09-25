@@ -1527,6 +1527,38 @@ def build_body(doc: Document, D: dict) -> None:
                    f"{(m3.get('joint_makespan_s',0) - m2.get('makespan_s',0))/max(m3.get('joint_makespan_s',1),1e-9):.1%}。"))
     FIGURE(doc, "f14_q3_joint_gantt", "图 19  运输与中继联合调度时间线")
 
+    # ★ 已知缺陷：几何可达覆盖率 ≠ 时间轴真实覆盖率。
+    #   中继排班未把服务窗口纳入约束，且 evaluate_relay_sortie 会把服务区间
+    #   静默截短（svc_start = max(link_ready, window[0])），于是「中继到场晚于
+    #   运输机返航」不会被判为未覆盖。必须如实报告，不能只写「100% 覆盖」。
+    _ct = m3.get("coverage_rate_timeline")
+    if _ct is not None and _ct < 0.999:
+        RICH(doc, [("⚠️ 已知缺陷与口径澄清（务必如实报告）：", True),
+                   (f"上文 {m3.get('coverage_rate_geometric', m3.get('coverage_rate', 0)):.0%} "
+                    f"是**几何可达覆盖率**——即「存在一个悬停点可覆盖该架次全程轨迹」，"
+                    f"它只回答「中继能不能连上」，**不回答「中继那一刻在不在站」**。"
+                    f"按时间轴复核（中继建链完成时刻到服务结束时刻，与该架次所需保障窗口"
+                    f"的**时间重叠率**）后，真正被完整保障的架次为 "
+                    f"{int(m3.get('n_sorties_covered_timeline', 0))}/"
+                    f"{int(m3.get('n_sorties_need_relay', 0))}"
+                    f"（**时间轴覆盖率 {_ct:.1%}**，见 "
+                    f"`outputs/q3/tables/q3_中继时间覆盖复核.csv`）。"
+                    f"二者相差悬殊的根因有二："
+                    f"（i）中继资源排班只按「最早可用资源」定起点，"
+                    f"`start = max(无人机可用, 能源组件可用, 0)` **未把服务窗口纳入约束**；"
+                    f"（ii）`evaluate_relay_sortie` 取 "
+                    f"`svc_start = max(建链完成, 窗口起)`，中继晚到时只会把服务区间**截短**"
+                    f"（甚至截成 0 长度），**不会被判为未覆盖**，因此旧版校验器报了 0 违规。"
+                    f"本文如实报告该缺陷并给出复核脚本 "
+                    f"(`scripts/diag/q3_relay_window_audit.py`)，"
+                    f"**不把几何可达当作时间轴已保障**。", False)], indent=False)
+        P(doc, "修正方向（下一步工作）：把服务窗口作为排班硬约束"
+               "（中继须在窗口起点前完成建链），窗口冲突时按"
+               "「允许多架运输机共享同一悬停点」扩展模型，"
+               "并让中继排班与运输排班联合求解；"
+               "仅 2 架中继机能否支撑 8 个同批次运输架次，"
+               "取决于悬停点可共享的程度，是需要专门建模的问题。")
+
     P(doc, "（4）选址规律。所有中继悬停点的离地高度均取上限 250 m（离地越高视线越好），"
            "悬停海拔介于 445~781 m；水平位置集中在服务区群中心偏西（约 109.20~109.27°E），"
            "即**贴近作业空域而非贴近网关**。这与表 8 的门限分析完全一致："

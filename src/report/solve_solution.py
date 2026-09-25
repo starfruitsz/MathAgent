@@ -183,7 +183,7 @@ def main() -> int:
 
     # ---------------- Q2 / Q3 ----------------
     for relays in (3, 4):
-        plan = build_q23(relays)
+        plan = build_q23(relays, uav_types, leg)
         rep = verify_plan(plan, uav_types, leg)
         outdir = outputs_dir("q3" if relays == 3 else "q3_alt")
         (outdir / "tables").mkdir(parents=True, exist_ok=True)

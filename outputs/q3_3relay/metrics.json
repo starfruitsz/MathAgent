@@ -1,7 +1,7 @@
 {
   "question": "q3_3relay",
-  "git_commit": "3b8350153a345d93752fe23048af2ae84f630c64",
-  "timestamp": "2026-09-26T00:51:30.462567+08:00",
+  "git_commit": "cc2499735806455db46399c21224c5324ab62a8d",
+  "timestamp": "2026-09-26T01:05:56.912127+08:00",
   "seed": 42,
   "data_sources": [
     "D题_方案数据.json"
@@ -28,7 +28,8 @@
       "max_soc_dev": 0.002044
     },
     "caveats": [
-      "问题二组批在 S006/S007/S008/S013 上相对问题一增开了先行小架次（18→23 架次），以满足首批与医疗时限；载荷与能耗口径仍继承问题一。",
+      "问题二组批在 S006/S007/S008/S013 上相对问题一增开了先行小架次（18→23 架次），以满足首批与医疗时限；载荷与能耗口径继承问题一。",
+      "调度沿用给定方案数据",
       "conditional model: planned cruise altitude=max(route DEM maximum+50 m, hover altitude); strict equality DEM maximum+50 m not certified",
       "0.25 s sampled; no mathematical continuous-time certificate"
     ]

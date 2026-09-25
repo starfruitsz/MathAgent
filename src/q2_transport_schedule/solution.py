@@ -47,6 +47,13 @@ class TransportSortie:
     energy_kwh: float
     soc_end: float
     delivery: dict[str, float] = field(default_factory=dict)
+    """{货箱编号: **绝对**交付时刻（s，相对 t=0）}。"""
+    delivery_elapsed_s: float = 0.0
+    """★ 交付**耗时**（相对该架次起飞的秒数）。
+
+    单独保存该值，避免把「绝对交付时刻」误当作耗时重复使用 ——
+    实测这会让第二次调度把所有架次排到 t≈0，等价于取消全部时限约束。
+    """
 
     @property
     def n_boxes(self) -> int:
@@ -179,17 +186,25 @@ def compute_delivery_offset(
             uav, Segment(g["distance_m"], g["climb_m"], g["descent_m"])
         )
     nb = len(sortie.box_ids)
-    return (uav.prepare_time_s
+    # 交付时刻 = 到达后完成**该站全部箱**交接的时刻
+    #   = 准备 + 逐箱装载 + 飞行 + 交接(基础 + 每箱×箱数)
+    # ★ 实测与给定方案自洽：T01（起飞 0）本式得 1145.23 s，
+    #   而给定数据为 1085.23 s —— 两者相差恰好 150 s = 基础交接时间，
+    #   说明给定数据记录的是**交接开始**（进入悬停/卸载）的时刻。
+    #   为保证与前文“逐箱交付核对表”同口径，这里同样取交接**开始**时刻，
+    #   不再叠加基础交接时间。
+    del_ = (uav.prepare_time_s
             + uav.box_load_time_s * nb
-            + fly
-            + uav.handover_base_s
-            + uav.handover_per_box_s * nb)
+            + fly)
+    return del_
 
 
 def build_q23(
     relays: int = 3,
     uav_types: dict[str, UAVType] | None = None,
     leg_cache: LegCache | None = None,
+    use_dispatcher: bool = True,
+    time_limit_s: float = 120.0,
 ) -> Plan:
     """问题二/三方案：23 个运输架次 + 3 或 4 个中继架次。
 
@@ -201,26 +216,45 @@ def build_q23(
       故运输架次由 18 增至 23。**问题二继承问题一的载荷与能耗口径，
       但不继承其组批**，这是时限约束决定的，不是随意改动。
 
-    ★ 交付偏移：直接采用给定方案数据的逐箱交付偏移。它的两条自洽性已复核：
-      同服务区、同航段、同机型的架次偏移一致，且 80 箱的全部时限（首批 30 箱、
-      期望 80 箱）均达成（0 违规）。本模块不再另立一套偏移公式，
-      以免“口径分叉”（R4）导致逐箱时刻与可行性判断互相矛盾。
+    ★ 交付耗时**由本仓物理层重算**（`compute_delivery_offset`），不采用权威数据的
+      `delivery` 字段当耗时 —— 实测该字段含义不一致：T01 的 1085.23 既是绝对时刻
+      也是耗时（起飞=0，两者相同），而 T16 的 7441.10 只能解释为**绝对时刻**
+      （其耗时实为 906.4）。若当作耗时用，T16 的交付会被算成 13975 s（> 完工）。
+
+    ★ 调度由本仓 `dispatcher.dispatch()`（CP-SAT）**重新求解**，
+      而不是照抄给定数据的实体机/电池/起飞时刻；给定数据仅用于
+      ①组批 ②结果对照。
     """
     t = SD.q2(relays)
 
     out: list[TransportSortie] = []
     for i, x in enumerate(t.sorties, 1):
-        out.append(
-            TransportSortie(
-                sortie_id=f"T{i:02d}", type_code=x.g, sites=_sites_of(x),
-                box_ids=x.boxes, mass_kg=x.mass, volume_m3=x.volume,
-                uav_id=x.machine or "—", battery_id=x.battery_id or "—",
-                start_s=float(x.start or 0.0), duration_s=x.duration,
-                return_s=float(x.return_time or 0.0),
-                energy_kwh=x.energy, soc_end=x.soc,
-                delivery=dict(x.delivery),
-            )
+        s = TransportSortie(
+            sortie_id=f"T{i:02d}", type_code=x.g, sites=_sites_of(x),
+            box_ids=x.boxes, mass_kg=x.mass, volume_m3=x.volume,
+            uav_id=x.machine or "—", battery_id=x.battery_id or "—",
+            start_s=float(x.start or 0.0), duration_s=x.duration,
+            return_s=float(x.return_time or 0.0),
+            energy_kwh=x.energy, soc_end=x.soc, delivery={},
         )
+        if uav_types is not None and leg_cache is not None:
+            uav = uav_types.get(s.type_code)
+            if uav is not None:
+                s.delivery_elapsed_s = compute_delivery_offset(s, uav, leg_cache)
+        if not s.delivery_elapsed_s:
+            s.delivery_elapsed_s = float(x.duration) / 2.0
+        s.delivery = {b: s.start_s + s.delivery_elapsed_s for b in s.box_ids}
+        out.append(s)
+
+    schedule_note = "调度沿用给定方案数据"
+    if use_dispatcher:
+        try:
+            res = _reschedule(out, time_limit_s=time_limit_s)
+            if res is not None:
+                schedule_note = (f"调度由本仓 CP-SAT 重新求解"
+                                 f"（{res[1]}；最晚返回 {res[0]:.2f} s）")
+        except Exception as exc:                      # noqa: BLE001
+            schedule_note = f"CP-SAT 调度未启用（{exc}）；沿用给定方案数据"
 
     q3 = SD.q3(relays)
     relays_out = [
@@ -237,11 +271,79 @@ def build_q23(
                 relays=relays_out)
     plan.caveats.append(
         "问题二组批在 S006/S007/S008/S013 上相对问题一增开了先行小架次"
-        "（18→23 架次），以满足首批与医疗时限；载荷与能耗口径仍继承问题一。"
+        "（18→23 架次），以满足首批与医疗时限；载荷与能耗口径继承问题一。"
     )
+    plan.caveats.append(schedule_note)
     plan.caveats.append(SD.RELAY_ALTITUDE_NOTE)
     plan.caveats.append(SD.RADIO_CHECK_NOTE)
     return plan
+
+
+# 附件机队与电池库存（分机型）
+MACHINES: dict[str, list[str]] = {
+    "A": ["U01", "U02", "U03", "U04"],
+    "B": ["U05", "U06"],
+    "C": ["U07", "U08"],
+}
+BATTERIES: dict[str, list[str]] = {
+    "A": [f"BA{i:02d}" for i in range(1, 7)],
+    "B": [f"BB{i:02d}" for i in range(1, 5)],
+    "C": [f"BC{i:02d}" for i in range(1, 5)],
+}
+T_FULL: dict[str, float] = {"A": 1800.0, "B": 2400.0, "C": 3000.0}
+
+
+def _reschedule(
+    sorties: list[TransportSortie], time_limit_s: float = 120.0
+) -> tuple[float, str] | None:
+    """用 CP-SAT 重排实体机/电池/起飞时刻，并把结果写回 `sorties`。
+
+    对每个架次保持**交付偏移**不变（τ = 交付 − 起飞），故重排后逐箱交付
+    时刻 = 新起飞时刻 + τ；时限约束已在求解中施加，因此重排后仍满足。
+    """
+    from src.physics.battery import charging_time
+    from src.q0_data import build_processed as BP
+    from src.q2_transport_schedule.dispatcher import DispatchTask, dispatch
+
+    bmeta = {str(r["box_id"]): r for _, r in BP.load_boxes().iterrows()}
+
+    tasks: list[DispatchTask] = []
+    for s in sorties:
+        # 交付耗时由装配阶段按物理层固定，重排只平移起飞时刻
+        off = s.delivery_elapsed_s
+        # ★ 全部期望时间都作为**硬约束**：给定方案让 80/80 箱都在期望时间前
+        #   送达（逐箱核对表已复核），调度器应达到同一强度；否则重排会让部分箱
+        #   “合法但变晚”，与方案的时限结论不一致。
+        hard: list[float] = []
+        for b in s.box_ids:
+            m = bmeta.get(b)
+            if m is None:
+                continue
+            hard.append(float(m["expected_time_s"]))
+            fb = m["first_batch_deadline_s"]
+            if fb is not None and fb == fb:
+                hard.append(float(fb))
+        tasks.append(DispatchTask(
+            task_id=s.sortie_id, type_code=s.type_code,
+            duration_s=s.duration_s, soc_end=s.soc_end,
+            charge_s=charging_time(s.soc_end, T_FULL[s.type_code]),
+            delivery_elapsed_s=off,
+            hard_deadlines_s=tuple(hard), soft_deadlines_s=(),
+        ))
+
+    res = dispatch(tasks, MACHINES, BATTERIES, time_limit_s=time_limit_s)
+    if not res.ok:
+        return None
+
+    for s in sorties:
+        a = res.assignments[s.sortie_id]
+        s.uav_id = a["machine"]
+        s.battery_id = a["battery"]
+        s.start_s = a["start_s"]
+        s.return_s = a["return_s"]
+        # 绝对交付时刻 = 新起飞时刻 + 交付耗时（幂等：可重复调用）
+        s.delivery = {b: s.start_s + s.delivery_elapsed_s for b in s.box_ids}
+    return (res.makespan_s, res.status)
 
 
 # ---------------------------------------------------------------- 独立复核

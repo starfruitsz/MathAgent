@@ -210,26 +210,23 @@ def emit_q23(plan: Plan, relay_dir: str = "q3") -> dict[str, pd.DataFrame]:
     _save(trans, q3t / "q3_运输架次.csv")
 
     # 逐箱交付
-    # ★ 权威数据里的 `delivery` 是**相对该架次起飞时刻的偏移**，
-    #   绝对交付时刻 = start + offset。直接当绝对时刻用会把最晚交付
-    #   错算成 1583 s（T14 实际为 5244.5+1583.5=6828.0 s）。
+    # ★ `plan.transport[i].delivery` 已是**绝对交付时刻**（= 起飞 + 交付耗时，
+    #   由 solution.py 在装配/重排时统一算好）。这里**不能再加 start_s** ——
+    #   重复相加会把 T16 的交付算成 13693 s（正确值 7719.8 s）。
     deliv = []
     for s in plan.transport:
         for b in s.box_ids:
             m = meta.get(b, {})
-            off = s.delivery.get(b)
+            act = s.delivery.get(b)
             deliv.append({
                 "货箱编号": b, "架次编号": s.sortie_id,
                 "服务区编号": m.get("service_id", s.sites[0]),
-                "交付完成时刻（s）": (round(s.start_s + off, 1)
-                                      if off is not None else None),
+                "交付完成时刻（s）": (round(act, 1) if act is not None else None),
             })
     ddf = pd.DataFrame(deliv).sort_values("货箱编号").reset_index(drop=True)
     _save(ddf, q2t / "q2_逐箱交付.csv")
-    # 供时限表复用的“绝对交付时刻”映射
-    abs_deliv = {b: s.start_s + s.delivery[b]
-                 for s in plan.transport for b in s.box_ids
-                 if b in s.delivery}
+    abs_deliv = {b: s.delivery[b] for s in plan.transport
+                 for b in s.box_ids if b in s.delivery}
 
     # 时限达成
     tl = []

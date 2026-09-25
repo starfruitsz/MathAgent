@@ -45,8 +45,13 @@ class DispatchTask:
     """返航剩余 SOC（0–1）。"""
     charge_s: float
     """返航后充满所需时间（两阶段充电模型）。"""
-    delivery_offset_s: float
-    """交付偏移：交付时刻 = 起飞 + 该偏移。"""
+    delivery_elapsed_s: float
+    """**交付耗时**：交付时刻 = 起飞时刻 + 该值（相对架次起飞的耗时，s）。
+
+    ★ 注意区分两个量：权威数据里的 `delivery` 字段是**相对起飞的耗时**，
+      而“绝对交付时刻 = 起飞 + 该耗时”。早先把绝对值当作这里的输入，
+      导致时限约束退化成 `起飞 ≤ 时限 − 交付绝对值`（常常为负），
+      结果 CP-SAT 把所有架次都排在 t≈0，等价于**取消时限约束**。"""
     hard_deadlines_s: tuple[float, ...] = ()
     """该架次任一货箱的最紧硬时限（首批截止 / 医疗期望）。"""
     soft_deadlines_s: tuple[float, ...] = ()
@@ -119,11 +124,11 @@ def dispatch(
 
         # 硬时限：t + τ ≤ F
         for dl in t.hard_deadlines_s:
-            lim = int(round((dl - t.delivery_offset_s) * TIME_SCALE))
+            lim = int(round((dl - t.delivery_elapsed_s) * TIME_SCALE))
             if lim < 0:
                 return DispatchResult(
                     False, "DEADLINE_INFEASIBLE",
-                    violations=[f"{t.task_id}: 交付偏移 {t.delivery_offset_s:.1f}s "
+                    violations=[f"{t.task_id}: 交付偏移 {t.delivery_elapsed_s:.1f}s "
                                 f"已超过时限 {dl:.0f}s"])
             m.Add(st <= lim)
 
@@ -165,7 +170,7 @@ def dispatch(
     viol: list[str] = []
     # 复核硬时限
     for i, t in enumerate(tasks):
-        act = out[t.task_id]["start_s"] + t.delivery_offset_s
+        act = out[t.task_id]["start_s"] + t.delivery_elapsed_s
         for dl in t.hard_deadlines_s:
             if act > dl + 1e-6:
                 viol.append(f"{t.task_id}: 交付 {act:.1f}s > 时限 {dl:.0f}s")

@@ -399,6 +399,41 @@ PDF 里连字符都提取不到。`document.tex` 前言已加：
 否则 xelatex 会报一片 `Missing number, treated as zero`
 （自测：`python scripts\diag\test_tex_fix_quotes.py`）。
 
+### 4.2 ★ 用 LaTeX 源生成"公式版" Word（pandoc）
+
+本仓有**两份** Word 论文，用途不同，**不要混淆**：
+
+| 文件 | 生成方式 | 公式 | 表格/图 | 页数 | 用途 |
+|---|---|---|---|---|---|
+| `paper/…_论文.docx` | **Python 管线** `src/report/build_paper.py` | 106 个 OMML（自研 LaTeX→OMML） | 29 表 / 24 图 | 53 | **正式提交稿**（结构、三线表、章页分页均按竞赛要求手工控制） |
+| `paper/…_论文_LaTeX公式版.docx` | **pandoc** 直接转 `otheragent/document.tex` | **554 个 Word 原生 OMML**（行内 + 行间全覆盖） | 15 表 / 38 图 | 75 | **公式质量基准版**：公式与 `document.pdf`（XeLaTeX）同源，全部可双击编辑 |
+
+生成命令（一条）：
+
+```powershell
+pwsh -File scripts\build_word_from_latex.ps1
+#   → paper/…_论文_LaTeX公式版.docx + .pdf
+```
+
+该脚本的要点与坑：
+
+1. **必须在 `otheragent/` 目录下运行 pandoc**。pandoc 解析 `\input{texfile/...}`
+   是**相对工作目录**的：从仓库根目录跑会把 10 个 `\input` 章节全部静默丢掉，
+   只转出封面 2 页（`--resource-path` **不能**替代 cwd）。脚本已用 `Push-Location` 处理。
+2. `--reference-doc=<本仓论文.docx>` 让产出沿用本队样式（宋体正文 / 黑体标题 / A4），
+   否则用 pandoc 默认样式（标题非中文习惯字体）。
+3. `--toc --toc-depth=2` 生成两级目录。
+4. 校验：`python scripts\diag\check_pandoc_docx.py <docx> [out.pdf]`
+   —— 会报告 `m:oMath` 数、Word 页数、并调 `OMaths(1).BuildUp()` 证明公式是
+   **原生可编辑**对象（而非图片或纯文本）。
+5. 结构对比：`python scripts\diag\docx_struct_stats.py <docx>...`
+   —— 一眼看出公式/标题/表格/图片数与样式数。
+
+> ⚠️ pandoc 转换**不做**竞赛排版控制：没有章页分页、题注与图不同页的约束，
+> 表宽/浮动体位置也与 LaTeX 原稿不同。**公式版用于核对公式，正式提交仍用
+> Python 管线那一份**；若要合并两者，请以提交稿为骨架、只把公式替换为
+> pandoc 产出的 OMML（后者已证明可 `BuildUp`）。
+
 ---
 
 ## 五、给后续 agent 的优先级建议
@@ -407,7 +442,7 @@ PDF 里连字符都提取不到。`document.tex` 前言已加：
 |:--:|---|---|
 | ~~P0~~ | ~~修 Q2 的物理硬约束违规~~ | ✅ **已完成**：Q2/Q3 物理类违规 0 条；并加硬约束闸门（16 类物理/资源/通信违规一律中止产出）。见 §2.2 |
 | **P1** | 改 Q2 后**必须重跑 Q3 → Q4 并同步论文** | Q3/Q4 继承 Q2 的方案，链式依赖。跑完用 `python scripts\diag\check_paper_numbers.py` 核对论文数字 |
-| **P2** | 论文页数 | 当前 **51 页**（要求 50~100），余量很小；删改内容后必须跑 `verify_paper.py` 复核 |
+| **P2** | 论文页数 | 当前 **53 页**（要求 50~100）；删改内容后必须跑 `verify_paper.py` 复核。另有 LaTeX 公式版（pandoc 产出）75 页，见 §4.2 |
 | **P3** | 提取 `镇龙乡地理空间数据说明.pdf` 正文 | 确认是否还有额外口径约定（OPEN-013） |
 | — | 每完成一步 | 按铁律 **R1** 立即 `commit` + `push` |
 

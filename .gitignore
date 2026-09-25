@@ -49,3 +49,5 @@ paper/~$*
 .idea/
 .DS_Store
 Thumbs.db
+# pandoc 中间产物（LaTeX → Word 转换的临时目录）
+otheragent/_pandoc/

@@ -1,0 +1,35 @@
+{
+  "question": "q3_3relay",
+  "git_commit": "3d7d5e39a2723a9e63d6fbfad7f577a7d84734e1",
+  "timestamp": "2026-09-26T00:48:14.380155+08:00",
+  "seed": 42,
+  "data_sources": [
+    "D题_方案数据.json"
+  ],
+  "metrics": {
+    "n_transport_sorties": 23,
+    "n_relay_sorties": 3,
+    "transport_energy_kwh": 66.819785,
+    "relay_energy_kwh": 4.30605,
+    "total_energy_kwh": 71.125835,
+    "transport_cmax_s": 7740.1905,
+    "joint_cmax_s": 7939.2924,
+    "min_transport_soc": 0.230883,
+    "min_relay_soc": 0.278621,
+    "type_usage": {
+      "B": 9,
+      "C": 8,
+      "A": 6
+    },
+    "independent_verification": {
+      "ok": true,
+      "n_checked": 23,
+      "max_energy_dev_kwh": 0.008177,
+      "max_soc_dev": 0.002044
+    },
+    "caveats": [
+      "conditional model: planned cruise altitude=max(route DEM maximum+50 m, hover altitude); strict equality DEM maximum+50 m not certified",
+      "0.25 s sampled; no mathematical continuous-time certificate"
+    ]
+  }
+}

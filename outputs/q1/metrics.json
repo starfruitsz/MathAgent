@@ -1,7 +1,7 @@
 {
   "question": "q1",
-  "git_commit": "c9c857210c268d68232a8b0efb0affd28ae54265",
-  "timestamp": "2026-09-25T18:30:14.828735+08:00",
+  "git_commit": "3d7d5e39a2723a9e63d6fbfad7f577a7d84734e1",
+  "timestamp": "2026-09-26T00:48:14.331901+08:00",
   "seed": 42,
   "data_sources": [
     "调度中心与服务区.xlsx",
@@ -12,15 +12,33 @@
   "metrics": {
     "n_service_areas": 15,
     "n_boxes": 80,
-    "n_uav_types": 3,
-    "chosen_strategy": "single_C",
+    "chosen_strategy": "exact_dp_lexicographic",
     "chosen_n_sorties": 18,
-    "chosen_total_energy_kwh": 75.070591,
-    "chosen_serial_total_time_s": 33729.471,
+    "chosen_total_energy_kwh": 59.087498,
+    "chosen_serial_total_time_s": 32676.333,
     "lower_bound_total_sorties": 18,
-    "n_pareto": 2,
-    "n_strategies": 8,
-    "rho_sweep_points": 21,
-    "runtime_sec": 0.75
+    "at_lower_bound": true,
+    "type_usage": {
+      "C": 9,
+      "B": 9
+    },
+    "per_area_sorties": {
+      "S001": 2,
+      "S002": 2,
+      "S003": 2,
+      "S004": 1,
+      "S005": 1,
+      "S006": 1,
+      "S007": 1,
+      "S008": 1,
+      "S009": 1,
+      "S010": 1,
+      "S011": 1,
+      "S012": 1,
+      "S013": 1,
+      "S014": 1,
+      "S015": 1
+    },
+    "runtime_sec": 0.62
   }
 }

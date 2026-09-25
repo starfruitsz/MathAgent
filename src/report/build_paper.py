@@ -1512,8 +1512,19 @@ def build_body(doc: Document, D: dict) -> None:
            f"{m3.get('relay_energy_kwh',0)/max(m3.get('total_energy_kwh',1),1e-9):.1%}），"
            f"合计 {m3.get('total_energy_kwh', 0):.2f} kWh；"
            f"联合任务完成时间（运输机与中继机全部返回 O01 的最晚时刻）为 "
-           f"{m3.get('joint_makespan_h', 0):.2f} h。"
-           f"中继服务的引入未延长完工时间，因为中继机与运输机并行作业。")
+           f"{m3.get('joint_makespan_h', 0):.2f} h"
+           f"（{m3.get('joint_makespan_s', 0):.0f} s）"
+           # ★ 中继机与运输机并行作业，但中继机需要在悬停点驻留到受保障架次结束，
+           #   因此联合完工时间**可能略长于**纯运输完工时间 —— 由数据决定，不要写死结论。
+           + (f"，与纯运输完工时间（{m3.get('transport_makespan_h', 0):.2f} h）持平，"
+              f"说明中继机与运输机完全并行作业、未成为新的时间瓶颈。"
+              if m3.get("transport_makespan_h") is not None
+              and m3["joint_makespan_s"] <= m3.get("transport_makespan_s", 0) + 1e-6
+              else f"，比纯运输完工时间（{m2.get('makespan_h', 0):.2f} h）长 "
+                   f"{(m3.get('joint_makespan_s',0) - m2.get('makespan_s',0))/60:.1f} min："
+                   f"中继机须在悬停点驻留至受保障架次结束，故其返航略晚于运输机；"
+                   f"该增量仅占联合完工时间的 "
+                   f"{(m3.get('joint_makespan_s',0) - m2.get('makespan_s',0))/max(m3.get('joint_makespan_s',1),1e-9):.1%}。"))
     FIGURE(doc, "f14_q3_joint_gantt", "图 19  运输与中继联合调度时间线")
 
     P(doc, "（4）选址规律。所有中继悬停点的离地高度均取上限 250 m（离地越高视线越好），"
